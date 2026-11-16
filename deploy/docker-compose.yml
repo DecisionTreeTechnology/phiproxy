@@ -11,7 +11,7 @@ services:
       - "127.0.0.1:4000:4000"   # local only; never expose the gateway publicly
     env_file: .env
     environment:
-      PHIVEIL_REDIS_URL: redis://vault:6379/0
+      PHIPROXY_REDIS_URL: redis://vault:6379/0
     depends_on: [vault]
 
   vault:

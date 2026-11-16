@@ -3,7 +3,7 @@
 Thanks for helping. The most valuable contributions right now:
 
 - **Benchmark data**: synthetic patient messages, call transcripts and referral notes with labelled identifiers, especially in languages other than English. All values must be invented.
-- **Detection misses**: a realistic message where phiveil leaks an identifier. Report it privately if it is a leak in a common format (see SECURITY.md); otherwise open an issue with a synthetic example.
+- **Detection misses**: a realistic message where phiproxy leaks an identifier. Report it privately if it is a leak in a common format (see SECURITY.md); otherwise open an issue with a synthetic example.
 - **Adapters** for other gateways and SDKs.
 
 ## Ground rules

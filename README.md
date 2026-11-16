@@ -1,10 +1,17 @@
-# phiveil
+# phiproxy
 
-**Reversible PHI masking for LLM traffic.** phiveil swaps patient identifiers for tokens before a prompt leaves your network, and swaps them back when the reply comes in. It runs as a [LiteLLM](https://github.com/BerriAI/litellm) guardrail (one gateway in front of every provider) or as a plain Python library.
+**Your patients' stand-in on the way to any LLM, and back.**
+
+phiproxy is a proxy in two senses:
+
+1. **A proxy for the patient.** Before a prompt leaves your network, every identifier (name, date of birth, phone, health card number...) is replaced by a stand-in such as `[NAME_1]`. The AI provider only ever sees the stand-ins.
+2. **A proxy server.** It sits between your apps and every LLM provider as a [LiteLLM](https://github.com/BerriAI/litellm) guardrail, so there is one enforcement point for OpenAI, Anthropic, Azure, Bedrock and Gemini. It also works as a plain Python library.
+
+When the reply comes back, phiproxy swaps the stand-ins for the real values, so your users and your tools see the right patient. The round trip is the point: the model can still reason about the conversation without ever seeing who it is about.
 
 ```
 "Hi, this is Sarah Chen, DOB 1990-03-05. Call me at 416-555-0142."
-        │ phiveil (inside your network)
+        │ phiproxy (inside your network)
         ▼
 "Hi, this is [NAME_1], DOB [DATE_1]. Call me at [PHONE_1]."   ──►  any LLM provider
         ▲
@@ -16,8 +23,8 @@
 
 ## Read this first
 
-- **phiveil reduces how much PHI reaches an LLM provider. It does not make an unapproved provider compliant.** No detector catches 100% of identifiers; every miss is a disclosure. Send PHI only to providers you have a BAA (HIPAA) or equivalent agreement (e.g. PHIPA agent agreement) with, and use phiveil as an extra layer on top.
-- Audio, images and files cannot be masked as text. phiveil **blocks** them by default.
+- **phiproxy reduces how much PHI reaches an LLM provider. It does not make an unapproved provider compliant.** No detector catches 100% of identifiers; every miss is a disclosure. Send PHI only to providers you have a BAA (HIPAA) or equivalent agreement (e.g. PHIPA agent agreement) with, and use phiproxy as an extra layer on top.
+- Audio, images and files cannot be masked as text. phiproxy **blocks** them by default.
 - Get privacy or legal review before relying on de-identification for any workload.
 
 ## What makes it different
@@ -32,11 +39,11 @@
 ## Quick start: library
 
 ```bash
-pip install phiveil   # not yet on PyPI; for now: pip install git+https://github.com/DecisionTreeTechnology/phiveil
+pip install phiproxy   # not yet on PyPI; for now: pip install git+https://github.com/DecisionTreeTechnology/phiproxy
 ```
 
 ```python
-from phiveil import Masker, KnownEntities
+from phiproxy import Masker, KnownEntities
 
 masker = Masker()
 known = KnownEntities(names=["Sarah Chen"], phones=["416-555-0142"], dates_of_birth=["1990-03-05"])
@@ -70,12 +77,12 @@ print(u.flush())
 ```yaml
 # config.yaml
 guardrails:
-  - guardrail_name: phiveil
+  - guardrail_name: phiproxy
     litellm_params:
-      guardrail: phiveil.integrations.litellm.PhiveilGuardrail
+      guardrail: phiproxy.integrations.litellm.PhiproxyGuardrail
       mode: [pre_call, post_call]
       default_on: true
-      redis_url: os.environ/PHIVEIL_REDIS_URL   # optional; in-memory if unset
+      redis_url: os.environ/PHIPROXY_REDIS_URL   # optional; in-memory if unset
 
 litellm_settings:
   turn_off_message_logging: true   # otherwise LiteLLM logs hold the restored reply
@@ -89,14 +96,14 @@ client.chat.completions.create(
     messages=[...],
     extra_body={"metadata": {
         "session_id": "conv-42",
-        "phiveil_known": {"names": ["Sarah Chen"], "phones": ["416-555-0142"]},
+        "phiproxy_known": {"names": ["Sarah Chen"], "phones": ["416-555-0142"]},
     }},
 )
 ```
 
-`phiveil_known` is removed from the request before anything is forwarded. Instead of sending identifiers, you can configure `known_entities_provider: "yourapp.phi:lookup"`, an (async) function that receives `session_id` and `metadata` (e.g. a patient id) and returns them from your own system.
+`phiproxy_known` is removed from the request before anything is forwarded. Instead of sending identifiers, you can configure `known_entities_provider: "yourapp.phi:lookup"`, an (async) function that receives `session_id` and `metadata` (e.g. a patient id) and returns them from your own system.
 
-A ready-to-run gateway (LiteLLM + phiveil + Redis vault) is in [`deploy/`](deploy/):
+A ready-to-run gateway (LiteLLM + phiproxy + Redis vault) is in [`deploy/`](deploy/):
 
 ```bash
 cp deploy/.env.example deploy/.env      # add provider keys
@@ -119,7 +126,7 @@ docker compose -f deploy/docker-compose.yml up --build
 | `MRN`, `ACCOUNT`, `DONOR_ID`, `ID` | "MRN: 00482913", "policy number: XK-99812", "donor D-4521" | regex + known |
 | `PROVIDER` | "Dr. Patel" (passes by default, as clinician names are not patient identifiers; enable with `Policy(disabled_types=set())`) | regex |
 
-Optional NER layer: `pip install phiveil[presidio]` and add `PresidioDetector()` to the detector list. It runs in-process; nothing is sent anywhere to detect PHI.
+Optional NER layer: `pip install phiproxy[presidio]` and add `PresidioDetector()` to the detector list. It runs in-process; nothing is sent anywhere to detect PHI.
 
 ## Benchmark
 
@@ -146,7 +153,7 @@ v0 results (288 messages, 560 labelled spans):
 
 ## Deployment shapes
 
-- **Gateway:** LiteLLM + phiveil as one container inside your private network, Redis as the shared vault. Apps change only their base URL. This gives one enforcement and audit point.
+- **Gateway:** LiteLLM + phiproxy as one container inside your private network, Redis as the shared vault. Apps change only their base URL. This gives one enforcement and audit point.
 - **Library:** call `mask` / `unmask` in your own code. It is the smallest footprint, but every code path must remember to call it.
 - **Sidecar (planned):** a small HTTP wrapper for apps in other languages (.NET, Java, Node).
 

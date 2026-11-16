@@ -1,7 +1,7 @@
 from datetime import date
 
-from phiveil import EntityType as T
-from phiveil import KnownEntities, KnownEntityDetector
+from phiproxy import EntityType as T
+from phiproxy import KnownEntities, KnownEntityDetector
 
 
 def found(text, **known):

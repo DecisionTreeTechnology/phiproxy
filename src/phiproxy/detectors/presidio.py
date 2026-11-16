@@ -1,6 +1,6 @@
 """Optional NER layer using Microsoft Presidio, run in-process (nothing leaves).
 
-Install with ``pip install phiveil[presidio]`` plus a spaCy model, e.g.
+Install with ``pip install phiproxy[presidio]`` plus a spaCy model, e.g.
 ``python -m spacy download en_core_web_lg``.
 """
 
@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 from ..entities import Entity, EntityType
 
-# Presidio entity -> phiveil type. Unlisted Presidio entities are ignored.
+# Presidio entity -> phiproxy type. Unlisted Presidio entities are ignored.
 DEFAULT_MAP: dict[str, EntityType] = {
     "PERSON": EntityType.NAME,
     "PHONE_NUMBER": EntityType.PHONE,

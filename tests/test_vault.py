@@ -1,7 +1,7 @@
 import time
 
-from phiveil import EntityType as T
-from phiveil import InMemoryVault, RedisVault
+from phiproxy import EntityType as T
+from phiproxy import InMemoryVault, RedisVault
 
 
 class FakeRedis:

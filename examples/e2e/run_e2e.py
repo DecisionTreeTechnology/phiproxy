@@ -5,7 +5,7 @@ contain PHI, then checks two things:
   1. what the provider received contains none of the PHI, and
   2. what the client got back has the PHI restored.
 
-    pip install "phiveil[litellm]" "litellm[proxy]"
+    pip install "phiproxy[litellm]" "litellm[proxy]"
     python examples/e2e/run_e2e.py
 """
 
@@ -79,7 +79,7 @@ def main() -> int:
         msg = "Hi, this is Sarah Chen, DOB 1990-03-05, OHIP 1234-567-890-AB. Call me at 416-555-0142."
         known = {"names": ["Sarah Chen"], "phones": ["416-555-0142"], "dates_of_birth": ["1990-03-05"]}
         base = {"model": "fake", "messages": [{"role": "user", "content": msg}],
-                "metadata": {"session_id": "e2e-1", "phiveil_known": known}}
+                "metadata": {"session_id": "e2e-1", "phiproxy_known": known}}
 
         status, reply = post("/v1/chat/completions", base)
         check(failures, status == 200, f"non-stream status {status}: {reply}")
@@ -105,7 +105,7 @@ def main() -> int:
         for s in PHI:
             check(failures, s.lower() not in received.lower(), f"provider received PHI: {s!r}")
         check(failures, "[NAME_1]" in received and "[PHONE_1]" in received, "provider did not get tokens")
-        check(failures, "phiveil_known" not in received, "known-entity list was forwarded to the provider")
+        check(failures, "phiproxy_known" not in received, "known-entity list was forwarded to the provider")
     finally:
         proxy.terminate()
         fake.terminate()

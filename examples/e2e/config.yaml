@@ -1,4 +1,4 @@
-# LiteLLM proxy config used by run_e2e.py: one fake model, phiveil on every request.
+# LiteLLM proxy config used by run_e2e.py: one fake model, phiproxy on every request.
 model_list:
   - model_name: fake
     litellm_params:
@@ -7,9 +7,9 @@ model_list:
       api_key: not-a-real-key
 
 guardrails:
-  - guardrail_name: phiveil
+  - guardrail_name: phiproxy
     litellm_params:
-      guardrail: phiveil.integrations.litellm.PhiveilGuardrail
+      guardrail: phiproxy.integrations.litellm.PhiproxyGuardrail
       mode: [pre_call, post_call]
       default_on: true
 

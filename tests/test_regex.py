@@ -1,7 +1,7 @@
 import pytest
 
-from phiveil import EntityType as T
-from phiveil import RegexDetector
+from phiproxy import EntityType as T
+from phiproxy import RegexDetector
 
 
 def types_in(text):

@@ -15,7 +15,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from phiveil import KnownEntities, Masker, Policy, RegexDetector
+from phiproxy import KnownEntities, Masker, Policy, RegexDetector
 
 DEFAULT_DATA = Path(__file__).parent / "data" / "patient_comms_v0.jsonl"
 COVER = 0.8
@@ -27,7 +27,7 @@ def configs() -> dict:
         "regex+known": (lambda: [RegexDetector()], True),
     }
     try:
-        from phiveil.detectors.presidio import PresidioDetector
+        from phiproxy.detectors.presidio import PresidioDetector
 
         PresidioDetector()  # needs presidio + a spaCy model
         out["regex+known+presidio"] = (lambda: [RegexDetector(), PresidioDetector()], True)

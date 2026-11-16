@@ -1,9 +1,9 @@
 # Security policy
 
-phiveil sits between patient data and third-party AI providers. Two kinds of report matter:
+phiproxy sits between patient data and third-party AI providers. Two kinds of report matter:
 
 1. **Vulnerabilities**: anything that lets PHI bypass masking (a request shape that is not masked, a way to switch the guardrail off from the client, a vault leak).
-2. **Detection misses that leak PHI**: an identifier type or format phiveil does not catch.
+2. **Detection misses that leak PHI**: an identifier type or format phiproxy does not catch.
 
 ## How to report
 
@@ -15,8 +15,8 @@ We aim to acknowledge reports within 3 business days and to share a fix timeline
 
 ## Supported versions
 
-phiveil is pre-alpha. Only the latest commit on `main` receives fixes.
+phiproxy is pre-alpha. Only the latest commit on `main` receives fixes.
 
 ## Scope reminder
 
-phiveil reduces how much PHI reaches an LLM provider. It is not a compliance guarantee and does not replace a BAA or equivalent agreement with the provider.
+phiproxy reduces how much PHI reaches an LLM provider. It is not a compliance guarantee and does not replace a BAA or equivalent agreement with the provider.

@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from phiveil import KnownEntities, Masker, PhiveilError, Policy, UnsupportedContentError
-from phiveil.detectors.regex import RegexDetector
+from phiproxy import KnownEntities, Masker, PhiproxyError, Policy, UnsupportedContentError
+from phiproxy.detectors.regex import RegexDetector
 
 KNOWN = KnownEntities(names=["Sarah Chen"], phones=["416-555-0142"], dates_of_birth=["1990-03-05"])
 
@@ -66,7 +66,7 @@ def test_fail_closed_on_detector_error():
         def detect(self, text):
             raise RuntimeError("model crashed")
 
-    with pytest.raises(PhiveilError):
+    with pytest.raises(PhiproxyError):
         Masker(detectors=[RegexDetector(), Boom()]).mask("call 416-555-0142", "s")
 
 

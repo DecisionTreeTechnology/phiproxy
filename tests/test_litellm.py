@@ -7,11 +7,11 @@ litellm = pytest.importorskip("litellm")
 from litellm import ModelResponse  # noqa: E402
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices  # noqa: E402
 
-from phiveil.integrations.litellm import PhiveilGuardrail  # noqa: E402
+from phiproxy.integrations.litellm import PhiproxyGuardrail  # noqa: E402
 
 
 def guard(**kw):
-    return PhiveilGuardrail(guardrail_name="phiveil", event_hook=["pre_call", "post_call"], default_on=True, **kw)
+    return PhiproxyGuardrail(guardrail_name="phiproxy", event_hook=["pre_call", "post_call"], default_on=True, **kw)
 
 
 def request(content, **metadata):
@@ -26,13 +26,13 @@ async def test_pre_call_masks_and_drops_known():
     g = guard()
     data = request(
         "hi it's sarah, my phone is 416 555 0142",
-        phiveil_known={"names": ["Sarah Chen"], "phones": ["416-555-0142"]},
+        phiproxy_known={"names": ["Sarah Chen"], "phones": ["416-555-0142"]},
     )
     out = await g.async_pre_call_hook(None, None, data, "completion")
     sent = json.dumps(out["messages"])
     assert "sarah" not in sent.lower() and "555" not in sent
-    assert "phiveil_known" not in out["metadata"]
-    assert out["metadata"]["phiveil_session_id"] == "conv-1"
+    assert "phiproxy_known" not in out["metadata"]
+    assert out["metadata"]["phiproxy_session_id"] == "conv-1"
 
 
 async def test_client_cannot_opt_out():
@@ -84,7 +84,7 @@ async def test_image_rejected_fail_closed():
     data = request([{"type": "image_url", "image_url": {"url": "https://x/y.png"}}])
     with pytest.raises(Exception) as exc:
         await g.async_pre_call_hook(None, None, data, "completion")
-    assert "phiveil" in str(exc.value.__dict__ or exc.value)
+    assert "phiproxy" in str(exc.value.__dict__ or exc.value)
 
 
 async def test_known_entities_provider(monkeypatch):

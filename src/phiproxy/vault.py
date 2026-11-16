@@ -123,7 +123,7 @@ class InMemoryVault:
 
 
 class RedisVault:
-    """Vault shared across processes/replicas. Requires ``pip install phiveil[redis]``.
+    """Vault shared across processes/replicas. Requires ``pip install phiproxy[redis]``.
 
     Keys (all expire after ``ttl_seconds`` of inactivity):
       {prefix}:{session}:v2t   hash  "<TYPE>|<normalized>" -> token
@@ -134,7 +134,7 @@ class RedisVault:
     (private network, TLS, auth, encryption at rest).
     """
 
-    def __init__(self, client=None, url: Optional[str] = None, prefix: str = "phiveil",
+    def __init__(self, client=None, url: Optional[str] = None, prefix: str = "phiproxy",
                  ttl_seconds: int = 24 * 3600, date_shift_days: tuple[int, int] = (7, 60)):
         if client is None:
             import redis  # type: ignore[import-not-found]

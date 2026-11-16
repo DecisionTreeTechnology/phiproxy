@@ -17,12 +17,12 @@ from .entities import Entity, EntityType
 from .vault import InMemoryVault, Vault
 
 
-class PhiveilError(Exception):
+class PhiproxyError(Exception):
     """Masking failed. Callers must not send the original content (fail closed)."""
 
 
-class UnsupportedContentError(PhiveilError):
-    """The payload holds content phiveil cannot mask (images, audio, files)."""
+class UnsupportedContentError(PhiproxyError):
+    """The payload holds content phiproxy cannot mask (images, audio, files)."""
 
 
 @dataclass
@@ -120,10 +120,10 @@ class Masker:
                 pos = e.end
             out.append(text[pos:])
             return MaskResult("".join(out), entities)
-        except PhiveilError:
+        except PhiproxyError:
             raise
         except Exception as exc:  # fail closed
-            raise PhiveilError(f"masking failed: {type(exc).__name__}") from exc
+            raise PhiproxyError(f"masking failed: {type(exc).__name__}") from exc
 
     # ------------------------------------------------------------------ unmask
     def unmask(self, text: str, session_id: str) -> str:

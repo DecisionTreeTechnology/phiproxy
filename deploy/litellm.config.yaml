@@ -1,6 +1,6 @@
 # Example gateway config. Replace the model list with your providers.
 # Only route PHI to providers you have a BAA / data-processing agreement with:
-# phiveil reduces what they see, it does not replace that agreement.
+# phiproxy reduces what they see, it does not replace that agreement.
 model_list:
   - model_name: gpt-4o
     litellm_params:
@@ -13,12 +13,12 @@ model_list:
       api_key: os.environ/ANTHROPIC_API_KEY
 
 guardrails:
-  - guardrail_name: phiveil
+  - guardrail_name: phiproxy
     litellm_params:
-      guardrail: phiveil.integrations.litellm.PhiveilGuardrail
+      guardrail: phiproxy.integrations.litellm.PhiproxyGuardrail
       mode: [pre_call, post_call]
       default_on: true
-      redis_url: os.environ/PHIVEIL_REDIS_URL   # shared vault across replicas
+      redis_url: os.environ/PHIPROXY_REDIS_URL   # shared vault across replicas
       date_mode: token                          # "shift" keeps intervals, hides real dates
       # known_entities_provider: "yourapp.phi:lookup"   # async (session_id, metadata) -> dict
 

@@ -3,12 +3,12 @@
 config.yaml::
 
     guardrails:
-      - guardrail_name: phiveil
+      - guardrail_name: phiproxy
         litellm_params:
-          guardrail: phiveil.integrations.litellm.PhiveilGuardrail
+          guardrail: phiproxy.integrations.litellm.PhiproxyGuardrail
           mode: [pre_call, post_call]
           default_on: true
-          redis_url: os.environ/PHIVEIL_REDIS_URL   # optional; in-memory if unset
+          redis_url: os.environ/PHIPROXY_REDIS_URL   # optional; in-memory if unset
           date_mode: token                          # or "shift"
 
     litellm_settings:
@@ -16,7 +16,7 @@ config.yaml::
 
 Per request, clients may send (in ``metadata``):
   * ``session_id`` - keeps tokens stable across turns of one conversation
-  * ``phiveil_known`` - identifiers you already hold, e.g.
+  * ``phiproxy_known`` - identifiers you already hold, e.g.
     ``{"names": ["Sarah Chen"], "phones": ["416-555-0142"], "dates_of_birth": ["1990-03-05"]}``.
     It is removed from the request before anything is forwarded.
 
@@ -39,16 +39,16 @@ from litellm.integrations.custom_guardrail import CustomGuardrail, get_session_i
 from litellm.types.guardrails import GuardrailEventHooks
 
 from ..detectors.known import KnownEntities
-from ..masker import Masker, PhiveilError, Policy, StreamUnmasker
+from ..masker import Masker, PhiproxyError, Policy, StreamUnmasker
 from ..vault import InMemoryVault, RedisVault
 
-log = logging.getLogger("phiveil")
+log = logging.getLogger("phiproxy")
 
 # Request fields that carry conversation content, across the routes LiteLLM serves
 # (chat/completions, /v1/messages, /v1/responses, text completions).
 _CONTENT_KEYS = ("messages", "system", "input", "instructions", "prompt")
-_SESSION_KEY = "phiveil_session_id"
-_KNOWN_KEY = "phiveil_known"
+_SESSION_KEY = "phiproxy_session_id"
+_KNOWN_KEY = "phiproxy_known"
 
 
 def _load_callable(path: str) -> Callable[..., Any]:
@@ -60,7 +60,7 @@ def _as_bool(v: Any) -> bool:
     return v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "yes", "on")
 
 
-class PhiveilGuardrail(CustomGuardrail):
+class PhiproxyGuardrail(CustomGuardrail):
     use_native_lifecycle_hooks: ClassVar[bool] = True
 
     def __init__(
@@ -92,7 +92,7 @@ class PhiveilGuardrail(CustomGuardrail):
             )
             if _as_bool(mask_provider_names):
                 policy.disabled_types = set()
-            redis_url = redis_url or os.environ.get("PHIVEIL_REDIS_URL")
+            redis_url = redis_url or os.environ.get("PHIPROXY_REDIS_URL")
             vault = (
                 RedisVault(url=redis_url, ttl_seconds=int(vault_ttl_seconds))
                 if redis_url
@@ -167,7 +167,7 @@ class PhiveilGuardrail(CustomGuardrail):
         try:
             from fastapi import HTTPException  # present in the LiteLLM proxy
 
-            return HTTPException(status_code=400, detail={"error": message, "guardrail": "phiveil"})
+            return HTTPException(status_code=400, detail={"error": message, "guardrail": "phiproxy"})
         except ImportError:  # pragma: no cover
             return ValueError(message)
 
@@ -181,10 +181,10 @@ class PhiveilGuardrail(CustomGuardrail):
             for key in _CONTENT_KEYS:
                 if key in data and data[key] is not None:
                     data[key] = self.masker.mask_payload(data[key], session_id, known)
-        except PhiveilError as exc:
-            raise self._reject(f"phiveil blocked the request: {exc}") from None
+        except PhiproxyError as exc:
+            raise self._reject(f"phiproxy blocked the request: {exc}") from None
         except Exception as exc:  # fail closed on anything unexpected
-            raise self._reject(f"phiveil could not mask the request ({type(exc).__name__})") from None
+            raise self._reject(f"phiproxy could not mask the request ({type(exc).__name__})") from None
         return data
 
     async def async_post_call_success_hook(self, data: dict, user_api_key_dict: Any, response: Any) -> Any:
@@ -215,7 +215,7 @@ class PhiveilGuardrail(CustomGuardrail):
         async for chunk in response:
             if isinstance(chunk, (bytes, str)):
                 if not self._warned_raw_stream:
-                    log.warning("phiveil: raw SSE stream passed through without unmasking")
+                    log.warning("phiproxy: raw SSE stream passed through without unmasking")
                     self._warned_raw_stream = True
                 if pending is not None:
                     yield pending
@@ -257,7 +257,7 @@ class PhiveilGuardrail(CustomGuardrail):
                             tc.function.arguments = (tc.function.arguments or "") + tail
                             break
                     else:
-                        log.warning("phiveil: could not place the last tool-call argument fragment")
+                        log.warning("phiproxy: could not place the last tool-call argument fragment")
             yield pending
 
     # ------------------------------------------------------------- unmasking
