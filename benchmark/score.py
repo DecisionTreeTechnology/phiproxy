@@ -5,7 +5,11 @@
 
 A labelled span counts as caught when detected spans cover at least 80% of
 its characters (any type: catching a phone as an ID still protects it).
-A detected span counts as correct when it overlaps any labelled span.
+Scoring uses the default policy, so clinician names (PROVIDER) pass through:
+PROVIDER labels are not counted in recall, and masking one counts as a false
+positive. A detected span counts as correct when it overlaps a labelled
+identifier. "Clean messages masked" is the share of messages with no
+identifiers in which something was masked anyway.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from phiproxy import KnownEntities, Masker, Policy, RegexDetector
+from phiproxy import KnownEntities, Masker, RegexDetector
 
 DEFAULT_DATA = Path(__file__).parent / "data" / "patient_comms_v0.jsonl"
 COVER = 0.8
@@ -33,14 +37,23 @@ def configs() -> dict:
         out["regex+known+presidio"] = (lambda: [RegexDetector(), PresidioDetector()], True)
     except Exception:
         pass
+    try:
+        from phiproxy.detectors.gliner import GlinerDetector
+
+        g = GlinerDetector()  # needs phiproxy[gliner] and the model download
+        out["regex+gliner"] = (lambda: [RegexDetector(), g], False)
+        out["regex+known+gliner"] = (lambda: [RegexDetector(), g], True)
+    except Exception:
+        pass
     return out
 
 
 def score(rows: list[dict], detectors, use_known: bool) -> dict:
-    # Score every type, including clinician names, so nothing is hidden by policy.
-    m = Masker(detectors=detectors, policy=Policy(disabled_types=set()))
+    m = Masker(detectors=detectors)  # default policy: clinician names pass
     by_type = defaultdict(lambda: [0, 0])  # type -> [caught, total]
     by_channel = defaultdict(lambda: [0, 0])
+    by_lang = defaultdict(lambda: [0, 0])
+    clean = clean_masked = 0
     tp = fp = 0
     leaked_chars = total_chars = 0
     misses = []
@@ -50,18 +63,24 @@ def score(rows: list[dict], detectors, use_known: bool) -> dict:
         covered = set()
         for e in found:
             covered.update(range(e.start, e.end))
-        for s in r["spans"]:
+        spans = [s for s in r["spans"] if s["type"] != "PROVIDER"]
+        if not spans:
+            clean += 1
+            clean_masked += bool(found)
+        for s in spans:
             chars = set(range(s["start"], s["end"]))
             hit = len(chars & covered) / len(chars) >= COVER
             by_type[s["type"]][0] += hit
             by_type[s["type"]][1] += 1
             by_channel[r["channel"]][0] += hit
             by_channel[r["channel"]][1] += 1
+            by_lang[r.get("lang", "en")][0] += hit
+            by_lang[r.get("lang", "en")][1] += 1
             leaked_chars += len(chars - covered)
             total_chars += len(chars)
             if not hit:
                 misses.append((r["id"], s["type"], r["text"][s["start"] : s["end"]]))
-        gold = [set(range(s["start"], s["end"])) for s in r["spans"]]
+        gold = [set(range(s["start"], s["end"])) for s in spans]
         for e in found:
             span = set(range(e.start, e.end))
             if any(span & g for g in gold):
@@ -78,6 +97,9 @@ def score(rows: list[dict], detectors, use_known: bool) -> dict:
         "leaked_char_rate": leaked_chars / total_chars if total_chars else 0.0,
         "by_type": {k: v[0] / v[1] for k, v in sorted(by_type.items())},
         "by_channel": {k: v[0] / v[1] for k, v in sorted(by_channel.items())},
+        "by_lang": {k: v[0] / v[1] for k, v in sorted(by_lang.items())},
+        "clean_messages": clean,
+        "clean_masked_rate": clean_masked / clean if clean else 0.0,
         "false_positives": fp,
         "misses": misses,
     }
@@ -103,10 +125,11 @@ def main() -> None:
     types = sorted({t for r in results.values() for t in r["by_type"]})
     channels = sorted({c for r in results.values() for c in r["by_channel"]})
     print(f"\n{a.data.name}: {len(rows)} messages, {next(iter(results.values()))['spans']} labelled spans\n")
-    print("| config | recall | precision | missed | false positives |")
-    print("|---|---|---|---|---|")
+    print("| config | recall | precision | missed | false positives | clean messages masked |")
+    print("|---|---|---|---|---|---|")
     for n, r in results.items():
-        print(f"| {n} | {r['recall']:.1%} | {r['precision']:.1%} | {r['missed']} | {r['false_positives']} |")
+        print(f"| {n} | {r['recall']:.1%} | {r['precision']:.1%} | {r['missed']} | {r['false_positives']} "
+              f"| {r['clean_masked_rate']:.0%} of {r['clean_messages']} |")
     print("\n| recall by type | " + " | ".join(results) + " |")
     print("|---|" + "---|" * len(results))
     for t in types:
@@ -115,6 +138,12 @@ def main() -> None:
     print("|---|" + "---|" * len(results))
     for c in channels:
         print(f"| {c} | " + " | ".join(f"{r['by_channel'].get(c, 0):.0%}" for r in results.values()) + " |")
+    langs = sorted({g for r in results.values() for g in r["by_lang"]})
+    if len(langs) > 1:
+        print("\n| recall by language | " + " | ".join(results) + " |")
+        print("|---|" + "---|" * len(results))
+        for g in langs:
+            print(f"| {g} | " + " | ".join(f"{r['by_lang'].get(g, 0):.0%}" for r in results.values()) + " |")
     if a.show_misses:
         for n, r in results.items():
             print(f"\nmisses ({n}):")

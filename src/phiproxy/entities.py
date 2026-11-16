@@ -31,6 +31,7 @@ class EntityType(str, Enum):
     DONOR_ID = "DONOR_ID"  # gamete donor / embryo identifiers
     ACCOUNT = "ACCOUNT"
     ID = "ID"  # any other identifying number
+    EMPLOYER = "EMPLOYER"  # a named workplace, which can identify a person
     URL = "URL"
     IP_ADDRESS = "IP_ADDRESS"
 

@@ -9,7 +9,7 @@ from ..entities import Entity
 # When two detections overlap, the one from the higher-priority source wins.
 # Known-entity matches come from the clinic's own records, so they are the most
 # trustworthy; NER guesses are the least.
-SOURCE_PRIORITY = {"known": 3, "regex": 2, "presidio": 1}
+SOURCE_PRIORITY = {"known": 3, "regex": 2, "presidio": 1, "gliner": 1}
 
 
 class Detector(Protocol):
