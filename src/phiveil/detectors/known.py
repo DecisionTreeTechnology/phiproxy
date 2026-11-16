@@ -1,0 +1,235 @@
+"""Known-entity detection: match the identifiers you already hold for this patient.
+
+The application usually knows who the conversation is about (the patient's name,
+date of birth, phone, health card number...). Matching those exact values is the
+highest-recall, lowest-cost layer: it catches casual first names, lowercase
+spellings and one-letter typos that generic NER misses.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Iterable, Mapping, Optional, Sequence, Union
+
+from ..entities import Entity, EntityType
+
+# First names that are also common English words. A lowercase match of these
+# ("I have hope") is not treated as the name; a capitalized one is.
+COMMON_WORD_NAMES = {
+    "hope", "faith", "grace", "joy", "will", "may", "june", "april", "rose", "mark", "bill",
+    "art", "page", "sky", "summer", "autumn", "dawn", "eve", "ray", "rich", "max", "pat",
+    "sue", "hunter", "chase", "lane", "brook", "river", "star", "sunny", "honey", "ginger",
+    "iris", "lily", "daisy", "ivy", "ruby", "amber", "crystal", "angel", "major", "young",
+    "white", "black", "brown", "green", "long", "short", "little", "king", "price", "cash",
+    "love", "christian", "miles", "frank", "jean", "gay", "deb", "dick", "guy", "an", "bo",
+}
+
+_MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December",
+]
+
+
+def _damerau_leq1(a: str, b: str) -> bool:
+    """True if a and b are within one edit (insert, delete, substitute, adjacent swap)."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:
+        diff = [i for i in range(la) if a[i] != b[i]]
+        if len(diff) == 1:
+            return True
+        if len(diff) == 2 and diff[1] == diff[0] + 1:
+            i, j = diff
+            return a[i] == b[j] and a[j] == b[i]
+        return False
+    if la > lb:
+        a, b = b, a
+    # b is longer by one: try deleting each char of b
+    i = j = 0
+    skipped = False
+    while i < len(a) and j < len(b):
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+        elif skipped:
+            return False
+        else:
+            skipped = True
+            j += 1
+    return True
+
+
+def _date_variants(d: date) -> list[str]:
+    m = _MONTH_NAMES[d.month - 1]
+    mon = m[:3]
+    return [
+        d.isoformat(),
+        f"{d.month}/{d.day}/{d.year}",
+        f"{d.month:02d}/{d.day:02d}/{d.year}",
+        f"{d.day}/{d.month}/{d.year}",
+        f"{d.day:02d}/{d.month:02d}/{d.year}",
+        f"{d.month}/{d.day}/{d.year % 100:02d}",
+        f"{d.month:02d}/{d.day:02d}/{d.year % 100:02d}",
+        f"{d.month}-{d.day}-{d.year}",
+        f"{d.day}.{d.month}.{d.year}",
+        f"{m} {d.day}, {d.year}",
+        f"{m} {d.day} {d.year}",
+        f"{mon} {d.day}, {d.year}",
+        f"{mon} {d.day} {d.year}",
+        f"{mon}. {d.day}, {d.year}",
+        f"{d.day} {m} {d.year}",
+        f"{d.day} {mon} {d.year}",
+        f"{m} {d.day}",
+        f"{mon} {d.day}",
+    ]
+
+
+DateLike = Union[date, str]
+
+
+@dataclass
+class KnownEntities:
+    """Identifiers the application already holds for the people in this conversation.
+
+    All fields are optional. Pass whatever you have; more is better.
+    """
+
+    names: Sequence[str] = ()  # full names of the patient, partner, donor, ...
+    phones: Sequence[str] = ()
+    emails: Sequence[str] = ()
+    dates_of_birth: Sequence[DateLike] = ()
+    identifiers: Sequence[str] = ()  # health card, MRN, chart #, donor ID, account #
+    addresses: Sequence[str] = ()
+    other: Mapping[str, Sequence[str]] = field(default_factory=dict)  # EntityType name -> values
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "KnownEntities":
+        def seq(key: str) -> list:
+            v = data.get(key) or []
+            return [v] if isinstance(v, (str, date)) else list(v)  # type: ignore[arg-type]
+
+        return cls(
+            names=seq("names"),
+            phones=seq("phones"),
+            emails=seq("emails"),
+            dates_of_birth=seq("dates_of_birth"),
+            identifiers=seq("identifiers"),
+            addresses=seq("addresses"),
+            other=dict(data.get("other") or {}),  # type: ignore[arg-type]
+        )
+
+    def is_empty(self) -> bool:
+        return not any(
+            [self.names, self.phones, self.emails, self.dates_of_birth,
+             self.identifiers, self.addresses, self.other]
+        )
+
+
+def _flex_pattern(value: str) -> str:
+    """Regex for a value where spaces, dashes and dots between characters are optional."""
+    chars = [re.escape(c) for c in re.sub(r"[\s\-.]", "", value)]
+    return r"[\s\-.]?".join(chars)
+
+
+@dataclass
+class KnownEntityDetector:
+    known: KnownEntities
+    name: str = "known"
+    fuzzy_names: bool = True  # allow one typo against record names of 5+ letters
+
+    def detect(self, text: str) -> list[Entity]:
+        out: list[Entity] = []
+        k = self.known
+        out += self._names(text, k.names)
+        for p in k.phones:
+            digits = re.sub(r"\D", "", p)
+            if len(digits) >= 10:
+                digits = digits[-10:]
+                pat = (
+                    r"(?<!\d)(?:\+?1[\s.\-]?)?\(?" + digits[:3] + r"\)?[\s.\-]?"
+                    + digits[3:6] + r"[\s.\-]?" + digits[6:] + r"(?!\d)"
+                )
+                out += self._find(text, pat, EntityType.PHONE)
+            elif len(digits) >= 7:
+                out += self._find(text, r"(?<!\d)" + _flex_pattern(digits) + r"(?!\d)", EntityType.PHONE)
+        for e in k.emails:
+            out += self._find(text, re.escape(e), EntityType.EMAIL, re.IGNORECASE)
+        for d in k.dates_of_birth:
+            out += self._dates(text, d)
+        for ident in k.identifiers:
+            if len(re.sub(r"[\s\-.]", "", ident)) >= 4:
+                out += self._find(text, r"(?<![A-Za-z0-9])" + _flex_pattern(ident) + r"(?![A-Za-z0-9])",
+                                  EntityType.ID, re.IGNORECASE)
+        for a in k.addresses:
+            pat = r"\s+".join(re.escape(w) for w in a.split())
+            out += self._find(text, pat, EntityType.ADDRESS, re.IGNORECASE)
+        for type_name, values in k.other.items():
+            t = EntityType(type_name)
+            for v in values:
+                out += self._find(text, re.escape(v), t, re.IGNORECASE)
+        return out
+
+    def _find(self, text: str, pattern: str, t: EntityType, flags: int = 0,
+              canonical: Optional[str] = None) -> list[Entity]:
+        return [
+            Entity(t, m.start(), m.end(), m.group(0), self.name, canonical=canonical)
+            for m in re.finditer(pattern, text, flags)
+            if m.end() > m.start()
+        ]
+
+    def _dates(self, text: str, d: DateLike) -> list[Entity]:
+        if isinstance(d, str):
+            try:
+                d = date.fromisoformat(d)
+            except ValueError:
+                return self._find(text, re.escape(d), EntityType.DATE, re.IGNORECASE)
+        out: list[Entity] = []
+        for v in _date_variants(d):
+            out += self._find(text, r"(?<![\d/\-.])" + re.escape(v) + r"(?![\d])", EntityType.DATE, re.IGNORECASE)
+        return out
+
+    def _names(self, text: str, names: Iterable[str]) -> list[Entity]:
+        out: list[Entity] = []
+        tokens: dict[str, str] = {}  # lowercase -> spelling from the record
+        for full in names:
+            full = full.strip()
+            if not full:
+                continue
+            # The full name first (also catches it across line breaks / extra spaces).
+            parts = full.split()
+            pat = r"\b" + r"\s+".join(re.escape(p) for p in parts) + r"\b"
+            out += self._find(text, pat, EntityType.NAME, re.IGNORECASE, canonical=" ".join(parts))
+            for p in re.split(r"[\s\-]+", full):
+                p = p.strip(".,'")
+                if len(p) >= 2:
+                    tokens.setdefault(p.lower(), p)
+        if not tokens:
+            return out
+        for m in re.finditer(r"[A-Za-zÀ-ÖØ-öø-ÿ'\-]+", text):
+            raw = m.group(0)
+            lead = len(raw) - len(raw.lstrip("'-"))
+            word = raw.strip("'-")
+            if word.lower().endswith("'s"):  # possessive: keep the 's outside the mask
+                word = word[:-2]
+            if len(word) < 2:
+                continue
+            lw = word.lower()
+            match = tokens.get(lw)
+            if match is None and self.fuzzy_names and len(lw) >= 4:
+                match = next(
+                    (orig for t, orig in tokens.items()
+                     if len(t) >= 5 and t[0] == lw[0] and _damerau_leq1(lw, t)),
+                    None,
+                )
+            if match is None:
+                continue
+            if lw in COMMON_WORD_NAMES and not word[0].isupper():
+                continue
+            start = m.start() + lead
+            out.append(Entity(EntityType.NAME, start, start + len(word), word, self.name, canonical=match))
+        return out

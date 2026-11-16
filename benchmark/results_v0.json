@@ -1,0 +1,56 @@
+{
+  "regex": {
+    "recall": 0.6142857142857143,
+    "precision": 1.0,
+    "spans": 560,
+    "missed": 216,
+    "leaked_char_rate": 0.27801894238358327,
+    "by_type": {
+      "ACCOUNT": 1.0,
+      "ADDRESS": 0.3333333333333333,
+      "AGE": 1.0,
+      "DATE": 1.0,
+      "DONOR_ID": 1.0,
+      "EMAIL": 1.0,
+      "HEALTH_CARD": 1.0,
+      "MRN": 1.0,
+      "NAME": 0.3225806451612903,
+      "PHONE": 1.0,
+      "POSTAL_CODE": 1.0
+    },
+    "by_channel": {
+      "call": 0.5,
+      "chat": 0.7368421052631579,
+      "note": 0.631578947368421,
+      "sms": 0.5454545454545454
+    },
+    "false_positives": 0
+  },
+  "regex+known": {
+    "recall": 0.8571428571428571,
+    "precision": 1.0,
+    "spans": 560,
+    "missed": 80,
+    "leaked_char_rate": 0.14068666140489344,
+    "by_type": {
+      "ACCOUNT": 1.0,
+      "ADDRESS": 0.3333333333333333,
+      "AGE": 1.0,
+      "DATE": 1.0,
+      "DONOR_ID": 1.0,
+      "EMAIL": 1.0,
+      "HEALTH_CARD": 1.0,
+      "MRN": 1.0,
+      "NAME": 0.8709677419354839,
+      "PHONE": 1.0,
+      "POSTAL_CODE": 1.0
+    },
+    "by_channel": {
+      "call": 0.8,
+      "chat": 0.8421052631578947,
+      "note": 0.7894736842105263,
+      "sms": 0.9545454545454546
+    },
+    "false_positives": 0
+  }
+}

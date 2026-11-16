@@ -1,0 +1,17 @@
+# LiteLLM proxy config used by run_e2e.py: one fake model, phiveil on every request.
+model_list:
+  - model_name: fake
+    litellm_params:
+      model: openai/fake
+      api_base: http://127.0.0.1:4010/v1
+      api_key: not-a-real-key
+
+guardrails:
+  - guardrail_name: phiveil
+    litellm_params:
+      guardrail: phiveil.integrations.litellm.PhiveilGuardrail
+      mode: [pre_call, post_call]
+      default_on: true
+
+litellm_settings:
+  turn_off_message_logging: true

@@ -1,0 +1,20 @@
+# Local trial: gateway + Redis vault.
+#   cp deploy/.env.example deploy/.env   # fill in keys
+#   docker compose -f deploy/docker-compose.yml up --build
+# Then point your OpenAI-compatible client at http://localhost:4000.
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "127.0.0.1:4000:4000"   # local only; never expose the gateway publicly
+    env_file: .env
+    environment:
+      PHIVEIL_REDIS_URL: redis://vault:6379/0
+    depends_on: [vault]
+
+  vault:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # tokens are short-lived; no disk
+    # No ports published: only the gateway can reach the vault.

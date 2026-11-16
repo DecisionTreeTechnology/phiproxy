@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phiveil"
+version = "0.1.0.dev0"
+description = "Reversible PHI masking for LLM traffic: mask patient identifiers before they reach a cloud LLM, restore them in the reply."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.10"
+authors = [{ name = "Decision Tree Technology" }]
+keywords = ["phi", "pii", "hipaa", "phipa", "llm", "privacy", "de-identification", "litellm", "guardrail"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Healthcare Industry",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = []
+
+[project.optional-dependencies]
+litellm = ["litellm>=1.70"]
+redis = ["redis>=5"]
+presidio = ["presidio-analyzer>=2.2"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.urls]
+Homepage = "https://github.com/DecisionTreeTechnology/phiveil"
+Issues = "https://github.com/DecisionTreeTechnology/phiveil/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/phiveil"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+addopts = "--doctest-modules --ignore=src/phiveil/integrations"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["ignore::UserWarning:pydantic.*"]
