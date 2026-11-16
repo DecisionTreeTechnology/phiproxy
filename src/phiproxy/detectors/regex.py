@@ -38,6 +38,7 @@ _NOT_NAMES = {
     "the", "a", "an", "my", "your", "our", "it", "this", "that", "not", "just", "so",
     "clinic", "office", "doctor", "nurse", "team", "everyone", "all", "regarding",
     "urgent", "important", "about", "re", "fwd", "ivf", "iui", "fet",
+    "dr", "dre", "dra", "doctor", "mr", "mrs", "ms", "miss", "mx", "sent", "subject",
 }
 
 _RELATIONS = (
@@ -46,9 +47,36 @@ _RELATIONS = (
     "grandmother|grandfather|aunt|uncle|cousin|niece|nephew|boss|employer|coworker|colleague"
 )
 
-_NAME = r"[A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+)?"
+_NAME = r"[A-Z][a-zA-Z'\-]+(?:[ \t]+[A-Z][a-zA-Z'\-]+)?"
 
 _DIGIT_WORDS = "zero|oh|one|two|three|four|five|six|seven|eight|nine"
+# Digits spoken in French, Spanish, Polish and Hebrew (call transcripts).
+_DIGIT_WORDS_ML = (
+    "z[ée]ro|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|"
+    "cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|"
+    "jeden|jedna|dwa|trzy|cztery|pi[eę][cć]|sze[sś][cć]|siedem|osiem|dziewi[eę][cć]|"
+    "אפס|אחת|אחד|שתיים|שניים|שתים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע"
+)
+_ANY_DIGIT_WORD = f"(?:{_DIGIT_WORDS}|{_DIGIT_WORDS_ML})"
+_WEEKDAY = (
+    r"(?:monday|mon|tuesday|tues|tue|wednesday|weds|wed|thursday|thurs|thur|thu|friday|fri|"
+    r"saturday|sat|sunday|sun)\.?"
+)
+_WEEKDAY_ML = (
+    r"lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|"
+    r"lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo|"
+    r"poniedzia[łl]ek|wtorek|[śs]roda|czwartek|pi[ąa]tek|sobota|niedziela|"
+    r"יום\s+(?:ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)"
+)
+# Month names in French, Spanish, Polish (nominative and genitive) and Hebrew.
+_MONTHS_ML = (
+    "janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|"
+    "enero|febrero|marzo|abril|mayo|junio|julio|agosto|se?ptiembre|octubre|noviembre|diciembre|"
+    "stycze[nń]|stycznia|luty|lutego|marzec|marca|kwiecie[nń]|kwietnia|maj|maja|czerwiec|czerwca|"
+    "lipiec|lipca|sierpie[nń]|sierpnia|wrzesie[nń]|wrze[sś]nia|pa[zź]dziernik|pa[zź]dziernika|"
+    "listopad|listopada|grudzie[nń]|grudnia|"
+    "ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר"
+)
 _ORDINAL_WORDS = (
     "(?:twenty|thirty)[\\s\\-]?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)|"
     "first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|"
@@ -109,6 +137,7 @@ def _build_rules() -> list[_Rule]:
 
     add(EntityType.EMAIL, r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
     add(EntityType.URL, r"\bhttps?://[^\s<>\"')\]]+|\bwww\.[^\s<>\"')\]]+", I)
+    add(EntityType.URL, r"\b[a-z0-9\-]+\.(?:com|org|net|ca|io|me)/[^\s<>\"')\]]+", I)
     add(EntityType.IP_ADDRESS, r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")
 
     # Keyword-anchored identifiers. The keyword stays; only the value is masked.
@@ -122,14 +151,14 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.MRN,
         r"\b(?:mrn|medical\s*record(?:\s*(?:number|no\.?|#))?|chart\s*(?:number|no\.?|#)|"
-        r"patient\s*(?:id|number|no\.?|#))\s*(?:is|:|#)?\s*([A-Z0-9][A-Z0-9\-]{3,19})\b",
+        r"patient\s*(?:id|number|no\.?|#))\s*(?:is|:|#)?\s*((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{3,19})\b",
         I,
         group=1,
     )
     add(
         EntityType.DONOR_ID,
         r"\b(?:donor|embryo|egg\s*bank|sperm\s*bank|straw)\s*(?:id|code|number|no\.?|#)\s*(?:is|:|#)?\s*"
-        r"([A-Z0-9][A-Z0-9\-]{2,19})\b",
+        r"((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{2,19})\b",
         I,
         group=1,
     )
@@ -143,9 +172,23 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.ACCOUNT,
         r"\b(?:account|acct|policy|member|insurance\s*id|claim)\s*(?:number|no\.?|#|id)?\s*(?:is|:|#)\s*"
-        r"([A-Z0-9][A-Z0-9\-]{3,24})\b",
+        r"((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{3,24})\b",
         I,
         group=1,
+    )
+
+    # Identifier-shaped codes without a keyword: "SL-4471920-03", "CB-20418-S3",
+    # "W123456789", "D4429-60718-55231". Upper-case prefix plus at least three digits.
+    add(EntityType.ID, r"\b(?=[A-Z0-9\-]*\d{3})[A-Z]{1,5}\d*-\d[A-Z0-9]*(?:-[A-Z0-9]+)*\b")
+    add(EntityType.ID, r"\b[A-Z]{1,2}\d{6,12}\b")
+    # Any long bare number (chart numbers, national IDs). Phones and other shapes
+    # overlap and win on merge; amounts with separators are excluded.
+    add(EntityType.ID, r"(?<![\d.,$€£])\b\d{7,}\b(?![.,]\d)")
+    # Payment card numbers in 4-4-4-4 groups, Luhn-checked.
+    add(
+        EntityType.ACCOUNT,
+        r"\b\d{4}[\s\-]\d{4}[\s\-]\d{4}[\s\-]\d{4}\b",
+        check=lambda m: _luhn_ok(_digits(m.group(0))),
     )
 
     # Quebec RAMQ: 4 letters + 8 digits.
@@ -167,14 +210,33 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.PHONE, r"(?<!\w)\+(?:[2-9]\d{0,2})[\s.\-]?\d(?:[\s.\-]?\d){6,12}\b")
 
     # Numbers spoken digit by digit (call transcripts): "four one six five five five ..."
-    add(EntityType.PHONE, rf"\b(?:{_DIGIT_WORDS})(?:[\s,\-]+(?:{_DIGIT_WORDS})){{6,11}}\b", I)
+    add(EntityType.PHONE, rf"\b{_ANY_DIGIT_WORD}(?:[\s,\-]+{_ANY_DIGIT_WORD}){{6,11}}\b", I)
+    # Spoken emails: "chen dot wei at example dot com", "julie point savard arobase ...".
+    add(
+        EntityType.EMAIL,
+        r"\b\w+(?:\s+(?:dot|point|punto|kropka|underscore|dash)\s+\w+)*\s+(?:at|arobase|arroba|ma[łl]pa)\s+"
+        r"\w+(?:\s+(?:dot|point|punto|kropka)\s+\w+)*\s+(?:dot|point|punto|kropka)\s+"
+        r"(?:com|org|net|ca|edu|gov|io|co|uk|fr|es|pl|il)\b",
+        I,
+    )
+    # Spelled-out words ("k o w a l c z y k", "W-O-J-C-I-K") are almost always names.
+    add(EntityType.NAME, r"(?<![\w\-])[A-Za-z](?:(?:\s+|-)(?:hyphen\s+|dash\s+)?[A-Za-z]){3,}(?![\w\-])")
+    # Postal codes read aloud: "n one h four k seven".
+    add(
+        EntityType.POSTAL_CODE,
+        rf"\b[a-z]\s+{_ANY_DIGIT_WORD}\s+[a-z]\s+{_ANY_DIGIT_WORD}\s+[a-z]\s+{_ANY_DIGIT_WORD}\b",
+        I,
+    )
 
     # Dates. Year-only is not PHI under Safe Harbor, so it is not matched.
     add(EntityType.DATE, r"\b\d{4}-\d{1,2}-\d{1,2}\b")
+    # Year and month only is still a date element under Safe Harbor.
+    add(EntityType.DATE, r"\b(?:19|20)\d{2}-(?:0[1-9]|1[0-2])\b(?!-\d)")
+    add(EntityType.DATE, rf"\b\d{{1,2}}[\s\-/.](?:{_MONTHS})[\s\-/.]\d{{2,4}}\b", I)
     add(EntityType.DATE, r"\b\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})\b")
     add(
         EntityType.DATE,
-        rf"\b(?P<month>{_MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?\b",
+        rf"\b(?:(?:{_WEEKDAY}|{_WEEKDAY_ML}),?\s+)?(?P<month>{_MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?\b",
         I,
         check=_month_check,
     )
@@ -192,10 +254,27 @@ def _build_rules() -> list[_Rule]:
         I,
     )
     add(EntityType.DATE, rf"\b(?:{_ORDINAL_WORDS})\s+of\s+(?P<month>{_MONTHS})\b(?:,?\s+\d{{4}})?", I)
+    # A day of the month without the month: "the 19th", "Monday the 9th", "Friday 14th".
+    add(EntityType.DATE, rf"\b(?:(?:{_WEEKDAY})\s+(?:the\s+)?|the\s+)\d{{1,2}}(?:st|nd|rd|th)\b", I)
+    add(
+        EntityType.DATE,
+        rf"\b(?:{_WEEKDAY})\s+(?:the\s+)?(?:{_ORDINAL_WORDS})\b",
+        I,
+    )
+    # French, Spanish, Polish, Hebrew: "le 12 mai 1990", "1er décembre", "jueves 6 de noviembre".
+    add(
+        EntityType.DATE,
+        rf"(?<![0-9A-Za-zÀ-ž])(?:(?:le|el|du|au)\s+)?(?:(?:{_WEEKDAY_ML}),?\s+)?\d{{1,2}}(?:er|re|º|\.)?\s+"
+        rf"(?:de\s+|ב)?(?:{_MONTHS_ML})"
+        rf"(?:,?\s+(?:de\s+)?\d{{4}})?(?!\w)",
+        I,
+    )
+    add(EntityType.DATE, rf"\b(?:{_WEEKDAY_ML})\s+\d{{1,2}}\b(?![:.,]?\d)", I)
     # Short numeric dates like 3/14 (no year).
     add(EntityType.DATE, r"(?<![\d/])\b(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\d|3[01])\b(?![/\d])")
 
-    add(EntityType.AGE, r"\b(?:9\d|1[01]\d)\s*(?:-\s*)?(?:years?[\s\-]*old|yrs?|y/?o)\b", I)
+    add(EntityType.AGE, r"\b(?:9\d|1[01]\d)\s*(?:-\s*)?(?:years?[\s\-]*old|yrs?|y/?o|ans|años|lat)\b", I)
+    add(EntityType.AGE, r"\b(?:age[ds]?|aged|âgée?|edad|wiek)\s*:?\s*(9\d|1[01]\d)\b", I, group=1)
 
     add(
         EntityType.ADDRESS,
@@ -235,18 +314,26 @@ def _build_rules() -> list[_Rule]:
         group=0,
         check=_name_check,
     )
+    # Courtesy titles name patients and relatives, not clinicians.
     add(
-        EntityType.PROVIDER,
-        r"\b(?:Dr|Doctor|Nurse|NP|RN|Mr|Mrs|Ms|Miss|Mx)\.?\s+(?P<name>" + _NAME + r")",
+        EntityType.NAME,
+        r"\b(?:Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Sr|Sra|Pan|Pani)\.?\s+(?P<name>" + _NAME + r")",
         group=0,
         check=_name_check,
     )
+    add(
+        EntityType.PROVIDER,
+        r"\b(?i:dr|dre|dra|doctor|doctora|docteur|docteure|nurse|enf|inf|np|rn)\.?\s+"
+        r"(?P<name>[A-Z][a-zA-Z'\-]+(?:\s+[A-Z]\.?)?(?:\s+[A-Z][a-zA-Z'\-]+)?)",
+        check=_name_check,
+    )
+    add(EntityType.PROVIDER, r"ד[״\"']ר\s+\S+")
     return R
 
 
 _RULES = _build_rules()
 
-# Rules where only the named "name" group should be masked.
+# Rules where only the named "name" group should be masked ("my husband Dave" -> "Dave").
 _NAME_GROUP_TYPES = {EntityType.NAME, EntityType.PROVIDER}
 
 

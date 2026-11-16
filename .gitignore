@@ -8,3 +8,4 @@ build/
 deploy/.env
 received.jsonl
 .DS_Store
+.venv-ml/

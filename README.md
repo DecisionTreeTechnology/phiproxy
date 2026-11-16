@@ -19,7 +19,7 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 "Thanks Sarah Chen, we'll call 416-555-0142 today."            ◄──
 ```
 
-> **Status: pre-alpha (0.1.0a2).** APIs will change. Do not rely on it as your only control.
+> **Status: pre-alpha (0.1.0a3).** APIs will change. Do not rely on it as your only control.
 
 ## Read this first
 
@@ -29,7 +29,8 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 
 ## What makes it different
 
-- **Your own records as a detector.** Pass the identifiers you already hold for the patient (name, DOB, phone, health card). Exact and one-typo matching against them catches lowercase names, nicknames in context and misspellings that pattern matching misses. On the benchmark below this lifts recall from 61% to 86%.
+- **Your own records as a detector.** Pass the identifiers you already hold for the patient (name, DOB, phone, health card). Exact and one-typo matching against them catches lowercase names and misspellings that pattern matching misses. On the blind benchmark below this lifts recall from 51% to 68%.
+- **Optional local model.** `phiproxy[gliner]` adds a small named-entity model that runs on your own machine and finds names, cities and workplaces that no rule or record covers ("my husband ravi", "I live in Sudbury"). It lifts blind-benchmark recall to 92%, at about 50 ms per message on CPU.
 - **Stable tokens per conversation.** The same value gets the same token on every turn of a session, so the model can follow who is who and provider prompt caching keeps working. Tokens are sequential, not derived from the value (see 45 CFR 164.514(c)).
 - **Fail closed.** If masking errors, or a request holds media the policy does not allow, the request is rejected and nothing is sent. Clients cannot switch the guardrail off through request metadata.
 - **Clinic-specific identifiers.** Canadian health card numbers (OHIP, RAMQ), SIN, donor and embryo IDs, spoken numbers and dates from call transcripts.
@@ -117,40 +118,61 @@ docker compose -f deploy/docker-compose.yml up --build
 
 | Type | Examples | Layer |
 |---|---|---|
-| `NAME` | "this is Maria Lopez", "my husband Dave", any name from your records (any case, one typo) | regex context + known |
+| `NAME` | "this is Maria Lopez", "my husband Dave", any name from your records (any case, one typo), "my husband ravi" | regex context + known + local model |
 | `PHONE` | 416-555-0142, (416) 555 0142, +44 20 7946 0958, "four one six five five five…" | regex + known |
 | `EMAIL`, `URL`, `IP_ADDRESS` | | regex |
 | `DATE` | 2026-11-03, 11/3, March 5, 1990, Nov 8th, "march fifteenth 1988" (year alone is not masked) | regex + known DOB |
 | `AGE` | ages over 89 only (Safe Harbor) | regex |
-| `ADDRESS`, `POSTAL_CODE`, `ZIP` | 22 Elm Street apt 4, PO Box 12, M5V 2T6, TX 78701 | regex + known |
+| `ADDRESS`, `POSTAL_CODE`, `ZIP` | 22 Elm Street apt 4, PO Box 12, M5V 2T6, TX 78701, "I live in Sudbury" | regex + known + local model |
 | `HEALTH_CARD`, `SIN`, `SSN` | OHIP 1234-567-890-AB, RAMQ, keyword + number, Luhn-checked SIN | regex + known |
 | `MRN`, `ACCOUNT`, `DONOR_ID`, `ID` | "MRN: 00482913", "policy number: XK-99812", "donor D-4521" | regex + known |
-| `PROVIDER` | "Dr. Patel" (passes by default, as clinician names are not patient identifiers; enable with `Policy(disabled_types=set())`) | regex |
+| `PROVIDER` | "Dr. Patel" (passes by default, as clinician names are not patient identifiers; enable with `Policy(disabled_types=set())`) | regex + local model |
+| `EMPLOYER` | "I work at the Tim Hortons on Barton" | local model |
 
-Optional NER layer: `pip install phiproxy[presidio]` and add `PresidioDetector()` to the detector list. It runs in-process; nothing is sent anywhere to detect PHI.
+Dates are also matched in French, Spanish, Polish and Hebrew ("le 12 mai 1990", "jueves 6 de noviembre", "5 בנובמבר"), and spoken digits in those languages. Code-shaped identifiers without a keyword ("SL-4471920-03", "W123456789", any bare number of 7+ digits) are masked as `ID`.
+
+### Optional local model
+
+```bash
+pip install "phiproxy[gliner]"
+```
+
+```python
+from phiproxy import Masker, RegexDetector
+from phiproxy.detectors.gliner import GlinerDetector
+
+masker = Masker(detectors=[RegexDetector(), GlinerDetector()])
+```
+
+`GlinerDetector` uses [GLiNER](https://github.com/urchade/GLiNER) with the Apache-2.0 model `urchade/gliner_multi_pii-v1` (about 1.2 GB). It runs in-process: nothing is sent anywhere to detect PHI. The model is downloaded from Hugging Face on first use, so in production download it once and pass its local path as `model=`, or set `HF_HUB_OFFLINE=1`. Model guesses never override the policy: a guess on "Dr. Haddad" does not mask a clinician name that the policy lets through.
+
+Presidio is also supported: `pip install phiproxy[presidio]` and add `PresidioDetector()`.
 
 ## Benchmark
 
-`benchmark/` holds a synthetic **patient communications** set: SMS, web chat, call transcripts and referral notes, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented. Run it with `python benchmark/score.py`.
+`benchmark/` holds two synthetic **patient communications** sets: SMS, web chat, call transcripts, emails and referral notes, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
 
-v0 results (288 messages, 560 labelled spans):
+- **v0** (288 messages, English): template-based, written by the detector authors.
+- **blind v1** (420 messages; English, French, Spanish, Polish, Hebrew and mixed; 129 messages with no identifiers but full of lookalikes such as drug doses and embryo grades): written by a separate AI agent that never saw the detector code.
 
-| config | recall | missed |
-|---|---|---|
-| regex | 61.4% | 216 |
-| regex + known entities | **85.7%** | 80 |
+| recall | v0 | blind v1, first score | blind v1, now |
+|---|---|---|---|
+| regex | 61.4% | 36.6% | 50.5% |
+| regex + known entities | 85.7% | 54.4% | 67.8% |
+| regex + known + local model | 99.1% | 80.1% | **92.2%** |
 
-| recall by channel | regex | regex + known |
-|---|---|---|
-| SMS | 55% | 95% |
-| web chat | 74% | 84% |
-| call transcripts | 50% | 80% |
-| referral notes | 63% | 79% |
+| blind v1, regex + known + local model | |
+|---|---|
+| by channel | SMS 94%, chat 91%, email 96%, notes 94%, call transcripts 86% |
+| by language | en 91%, fr 94%, es 93%, pl 95%, he 92%, mixed 97% |
+| precision | 86.9% |
+| messages without identifiers where something was masked | 19% |
 
 **How to read this honestly:**
-- v0 was written by the same team that wrote the detectors. Expect real-world recall to be **lower**. An independent, larger set is the next milestone, and contributions are welcome.
-- Precision is reported as 100% on v0, but v0 has almost no non-PHI distractor text, so that number means little yet.
-- Known misses today: **cities and workplaces** ("I live in Sudbury", "I work at the Tim Hortons on King") and **names not in your records written in lowercase** ("my husband ravi"). These need the NER layer or a local model, which is on the roadmap.
+- The first blind score is the fair one: the detectors were frozen before v1 was scored. "Now" includes fixes made after looking at v1's misses, so it is optimistic. A new blind set will re-test it.
+- v0 overstated recall by about 30 points. Expect real traffic to score lower than v1 too.
+- Known misses: dates spoken in words outside English, some cities, workplaces described in a phrase, and lowercase names that are also words ("joy", "will"). Without the local model, cities and names not in your records are mostly missed.
+- Details, label rules and the full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
 
 ## Deployment shapes
 
@@ -162,9 +184,9 @@ The vault holds real values. Protect Redis like the PHI store it is: private net
 
 ## Roadmap
 
-- Larger independent benchmark with distractor text, plus multilingual sets (French, Polish, Hebrew, Spanish)
-- Local small-model detector for names, places and workplaces
-- Gazetteer for cities and regions
+- A benchmark set written by clinic staff, and a second blind AI-written set to re-test the current numbers
+- Gazetteer for cities the model misses; spoken dates in French, Spanish, Polish and Hebrew
+- Smaller and faster local models (distilled or ONNX)
 - HTTP sidecar; Anthropic `/v1/messages` streaming
 - Masked logging hook for LiteLLM
 

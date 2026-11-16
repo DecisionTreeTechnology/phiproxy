@@ -25,6 +25,10 @@ class UnsupportedContentError(PhiproxyError):
     """The payload holds content phiproxy cannot mask (images, audio, files)."""
 
 
+# Detectors whose spans are statistical guesses rather than record or rule matches.
+MODEL_SOURCES = frozenset({"presidio", "gliner"})
+
+
 @dataclass
 class Policy:
     # Clinician names are not patient identifiers under Safe Harbor and masking
@@ -97,7 +101,17 @@ class Masker:
         found: list[Entity] = []
         for d in detectors:
             found.extend(d.detect(text))
-        found = [e for e in found if e.type not in self.policy.disabled_types]
+        # A disabled span (by default a clinician name) also shields model
+        # guesses that overlap it: a NER model tags "Dr. Patel" as a person too,
+        # and that guess must not mask what the policy lets through. Matches from
+        # records or rules are still masked.
+        disabled = [e for e in found if e.type in self.policy.disabled_types]
+        found = [
+            e
+            for e in found
+            if e.type not in self.policy.disabled_types
+            and not (e.source in MODEL_SOURCES and any(e.overlaps(d) for d in disabled))
+        ]
         return fill_text(text, merge_entities(found))
 
     # -------------------------------------------------------------------- mask

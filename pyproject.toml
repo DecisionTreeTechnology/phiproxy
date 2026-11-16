@@ -26,6 +26,7 @@ dependencies = []
 litellm = ["litellm>=1.70"]
 redis = ["redis>=5"]
 presidio = ["presidio-analyzer>=2.2"]
+gliner = ["gliner>=0.2.20", "sentencepiece", "protobuf"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [project.urls]
