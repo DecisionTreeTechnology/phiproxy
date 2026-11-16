@@ -29,7 +29,8 @@ presidio = ["presidio-analyzer>=2.2"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [project.urls]
-Homepage = "https://github.com/DecisionTreeTechnology/phiproxy"
+Homepage = "https://decisiontree.tech/open-source/phiproxy"
+Source = "https://github.com/DecisionTreeTechnology/phiproxy"
 Issues = "https://github.com/DecisionTreeTechnology/phiproxy/issues"
 
 [tool.hatch.version]

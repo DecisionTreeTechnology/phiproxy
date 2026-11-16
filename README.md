@@ -1,6 +1,6 @@
 # phiproxy
 
-**Your patients' stand-in on the way to any LLM, and back.**
+**Your patients' stand-in on the way to any LLM, and back.** · [Project page](https://decisiontree.tech/open-source/phiproxy) · [PyPI](https://pypi.org/project/phiproxy/)
 
 phiproxy is a proxy in two senses:
 
