@@ -19,7 +19,7 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 "Thanks Sarah Chen, we'll call 416-555-0142 today."            ◄──
 ```
 
-> **Status: pre-alpha (0.1.0a1).** APIs will change. Do not rely on it as your only control.
+> **Status: pre-alpha (0.1.0a2).** APIs will change. Do not rely on it as your only control.
 
 ## Read this first
 

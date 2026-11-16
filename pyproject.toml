@@ -32,6 +32,8 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 Homepage = "https://decisiontree.tech/open-source/phiproxy"
 Source = "https://github.com/DecisionTreeTechnology/phiproxy"
 Issues = "https://github.com/DecisionTreeTechnology/phiproxy/issues"
+"Decision Tree" = "https://decisiontree.tech/"
+Fertiligent = "https://fertiligent.ai/"
 
 [tool.hatch.version]
 path = "src/phiproxy/__init__.py"
