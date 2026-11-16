@@ -29,10 +29,6 @@ class UnsupportedContentError(PhiproxyError):
 MODEL_SOURCES = frozenset({"presidio", "gliner"})
 
 
-def _within(inner: Entity, outer: Entity) -> bool:
-    return outer.start <= inner.start and inner.end <= outer.end
-
-
 @dataclass
 class Policy:
     # Clinician names are not patient identifiers under Safe Harbor and masking
@@ -106,15 +102,15 @@ class Masker:
         for d in detectors:
             found.extend(d.detect(text))
         # A disabled span (by default a clinician name) also shields model
-        # guesses inside it: a NER model tags "Dr. Patel" as a person too, and
-        # that guess must not mask what the policy lets through. Matches from
-        # records or rules inside it are still masked.
+        # guesses that overlap it: a NER model tags "Dr. Patel" as a person too,
+        # and that guess must not mask what the policy lets through. Matches from
+        # records or rules are still masked.
         disabled = [e for e in found if e.type in self.policy.disabled_types]
         found = [
             e
             for e in found
             if e.type not in self.policy.disabled_types
-            and not (e.source in MODEL_SOURCES and any(_within(e, d) for d in disabled))
+            and not (e.source in MODEL_SOURCES and any(e.overlaps(d) for d in disabled))
         ]
         return fill_text(text, merge_entities(found))
 

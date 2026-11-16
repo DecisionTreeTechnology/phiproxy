@@ -80,3 +80,60 @@ def test_ignores(text):
 )
 def test_detects_spoken_forms(text, etype, value):
     assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        # Dates with weekdays, ordinals only, other formats and languages.
+        ("can we do Saturday, November 22?", T.DATE, "Saturday, November 22"),
+        ("move it to thurs nov 6", T.DATE, "thurs nov 6"),
+        ("see you Monday the 9th", T.DATE, "Monday the 9th"),
+        ("is the 19th ok", T.DATE, "the 19th"),
+        ("DOB 14-AUG-1990", T.DATE, "14-AUG-1990"),
+        ("prévu pour 2027-03", T.DATE, "2027-03"),
+        ("née le 12 mai 1990", T.DATE, "le 12 mai 1990"),
+        ("rendez-vous le 1er décembre", T.DATE, "le 1er décembre"),
+        ("cita el jueves 6 de noviembre", T.DATE, "el jueves 6 de noviembre"),
+        ("wizyta 12 listopada", T.DATE, "12 listopada"),
+        ("הבדיקה מה5 בנובמבר", T.DATE, "5 בנובמבר"),
+        # Identifier-shaped codes without a keyword.
+        ("my booking is BK-882013", T.ID, "BK-882013"),
+        ("straw CB-20418-S3 thawed", T.ID, "CB-20418-S3"),
+        ("member W123456789", T.ID, "W123456789"),
+        ("chart 0048213 attached", T.ID, "0048213"),
+        ("card 4539 1488 0343 6467", T.ACCOUNT, "4539 1488 0343 6467"),
+        # Spoken forms in other languages and spelled-out names.
+        ("c'est cinq un quatre cinq cinq cinq zéro un huit quatre", T.PHONE,
+         "cinq un quatre cinq cinq cinq zéro un huit quatre"),
+        ("es nueve cero cinco cinco cinco cinco cero uno dos siete", T.PHONE,
+         "nueve cero cinco cinco cinco cinco cero uno dos siete"),
+        ("its chen dot wei at example dot com", T.EMAIL, "chen dot wei at example dot com"),
+        ("thats k o w a l c z y k", T.NAME, "k o w a l c z y k"),
+        ("W-O-J-C-I-K", T.NAME, "W-O-J-C-I-K"),
+        ("postal code n one h four k seven", T.POSTAL_CODE, "n one h four k seven"),
+        ("profile instagram.com/jess.and.the.tww", T.URL, "instagram.com/jess.and.the.tww"),
+        ("Pt Margaret Hollis, age 91.", T.AGE, "91"),
+        # Courtesy titles are people, not clinicians.
+        ("Mrs. Okafor called", T.NAME, "Okafor"),
+        ("Dre Lefebvre a confirmé", T.PROVIDER, "Lefebvre"),
+    ],
+)
+def test_detects_v1_shapes(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Gonal-f 150 IU and Menopur 75 tonight",
+        "embryo graded 4AA, AMH 1.2, E2 2450 pmol/L",
+        "CPT 58970 is $450, call ext 214",
+        "COVID-19 rules, PGT-A results",
+        "the donor says hi",  # keyword followed by a word, not a code
+        "account overdue",
+        "sent from my iPhone",
+    ],
+)
+def test_ignores_v1_distractors(text):
+    assert types_in(text) == set()

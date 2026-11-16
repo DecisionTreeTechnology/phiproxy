@@ -34,17 +34,64 @@ DEFAULT_LABELS: dict[str, EntityType] = {
 
 _WORD = re.compile(r"\S+")
 
-# NER models sometimes tag pronouns and role words as people ("we", "you",
-# "Patient"). These closed-class words are never names on their own.
-_NOT_NAMES = frozenset(
+# NER models sometimes tag pronouns, greetings and role words as people ("we",
+# "hi", "my husband", "Patient"). Spans made only of these words are dropped.
+_NOT_NAME_WORDS = frozenset(
     """
-    i me my mine you your yours we us our ours he him his she her hers they them
-    their it someone somebody everyone anyone patient patients caller agent
-    partner husband wife spouse mom mum mother dad father baby doctor nurse
-    je moi tu toi vous nous il elle ils elles on yo tú tu usted ustedes nosotros
-    nosotras él ella ellos ellas ja ty wy oni ona on pan pani
+    i me my mine you your yours ur we us our ours he him his she her hers they them
+    their it someone somebody everyone anyone and
+    patient patients pt caller agent sir madam maam ma'am
+    partner husband hubby wife spouse boyfriend girlfriend fiance fiancee mom mum
+    mother dad father baby son daughter sister brother grandson granddaughter
+    grandmother grandfather girl boy little kids doctor nurse team
+    hi hello hey um uh hmm
+    je moi tu toi vous nous il elle ils elles on mon ma mes bonjour salut
+    conjoint conjointe mari femme
+    yo tú usted ustedes nosotros nosotras él ella ellos ellas mi hola esposo esposa
+    ja ty wy oni ona pan pani mój moja cześć mąż żona
+    אני אתה את אנחנו הוא היא הם הן שלום
     """.split()
 )
+
+# A place the size of a state or province is not an identifier under Safe Harbor.
+_REGIONS = frozenset(
+    """
+    canada usa us america ontario quebec québec alberta manitoba saskatchewan
+    nova-scotia new-brunswick newfoundland labrador pei yukon nunavut bc
+    british-columbia prince-edward-island northwest-territories
+    alabama alaska arizona arkansas california colorado connecticut delaware
+    florida georgia hawaii idaho illinois indiana iowa kansas kentucky louisiana
+    maine maryland massachusetts michigan minnesota mississippi missouri montana
+    nebraska nevada new-hampshire new-jersey new-mexico new-york north-carolina
+    north-dakota ohio oklahoma oregon pennsylvania rhode-island south-carolina
+    south-dakota tennessee texas utah vermont virginia washington west-virginia
+    wisconsin wyoming
+    """.split()
+)
+
+
+def _words(span: str) -> list[str]:
+    return re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", span.lower())
+
+
+def _keep(t: EntityType, span: str) -> bool:
+    words = _words(span)
+    if t is EntityType.NAME:
+        # Names have no digits ("embryo 1") and are rarely more than four words.
+        if any(ch.isdigit() for ch in span) or len(words) > 4:
+            return False
+        return bool(words) and not all(w in _NOT_NAME_WORDS for w in words)
+    if t is EntityType.ADDRESS:
+        # Bare numbers ("401", "ext 214") are not places; nor are provinces/states.
+        if not any(ch.isdigit() for ch in span) and not words:
+            return False
+        if not re.search(r"[^\W\d_]{2,}", span):
+            return False
+        return "-".join(words) not in _REGIONS
+    if t is EntityType.EMPLOYER:
+        # A workplace is identifying only when it is named: "the clinic" is not.
+        return any(ch.isupper() for ch in span) or len(words) >= 3
+    return True
 
 
 @dataclass
@@ -86,9 +133,7 @@ class GlinerDetector:
                     continue
                 start, end = offset + p["start"], offset + p["end"]
                 span = text[start:end]
-                if (start, end, t) in seen or len(span.strip()) < 2:
-                    continue
-                if t is EntityType.NAME and span.strip().lower() in _NOT_NAMES:
+                if (start, end, t) in seen or len(span.strip()) < 2 or not _keep(t, span):
                     continue
                 seen.add((start, end, t))
                 out.append(Entity(t, start, end, span, self.name, float(p["score"])))
