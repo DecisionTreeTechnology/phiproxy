@@ -19,7 +19,7 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 "Thanks Sarah Chen, we'll call 416-555-0142 today."            ◄──
 ```
 
-> **Status: pre-alpha (0.1.0.dev0).** APIs will change. Do not rely on it as your only control.
+> **Status: pre-alpha (0.1.0a1).** APIs will change. Do not rely on it as your only control.
 
 ## Read this first
 
@@ -39,7 +39,8 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 ## Quick start: library
 
 ```bash
-pip install phiproxy   # not yet on PyPI; for now: pip install git+https://github.com/DecisionTreeTechnology/phiproxy
+pip install phiproxy                 # library
+pip install "phiproxy[litellm]"      # + LiteLLM guardrail
 ```
 
 ```python
@@ -103,7 +104,7 @@ client.chat.completions.create(
 
 `phiproxy_known` is removed from the request before anything is forwarded. Instead of sending identifiers, you can configure `known_entities_provider: "yourapp.phi:lookup"`, an (async) function that receives `session_id` and `metadata` (e.g. a patient id) and returns them from your own system.
 
-A ready-to-run gateway (LiteLLM + phiproxy + Redis vault) is in [`deploy/`](deploy/):
+A ready-to-run gateway (LiteLLM + phiproxy + Redis vault) is in [`deploy/`](https://github.com/DecisionTreeTechnology/phiproxy/tree/main/deploy):
 
 ```bash
 cp deploy/.env.example deploy/.env      # add provider keys
@@ -169,7 +170,7 @@ The vault holds real values. Protect Redis like the PHI store it is: private net
 
 ## Contributing and security
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) (DCO sign-off required). Report vulnerabilities and detection misses that could leak PHI privately, as described in [SECURITY.md](SECURITY.md). **Never put real patient data in issues, tests or benchmark files.**
+See [CONTRIBUTING.md](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/CONTRIBUTING.md) (DCO sign-off required). Report vulnerabilities and detection misses that could leak PHI privately, as described in [SECURITY.md](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/SECURITY.md). **Never put real patient data in issues, tests or benchmark files.**
 
 ## License
 
