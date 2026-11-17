@@ -119,18 +119,18 @@ docker compose -f deploy/docker-compose.yml up --build
 
 | Type | Examples | Layer |
 |---|---|---|
-| `NAME` | "this is Maria Lopez", "my husband Dave", any name from your records (any case, one typo), "my husband ravi" | regex context + known + local model |
+| `NAME` | "hi its jess", "me llamo Yolanda Pérez", "Husband Imran", "PATIENT: PARK, Soo-jin", "Thanks so much,\nJess", "Amelia Frost, DOB…", any name from your records (any case, one typo), "Can Omar come in with me?" | regex context + known + local model |
 | `PHONE` | 416-555-0142, (416) 555 0142, +44 20 7946 0958, "four one six five five five…" | regex + known |
 | `EMAIL`, `URL`, `IP_ADDRESS` | | regex |
-| `DATE` | 2026-11-03, 11/3, March 5, 1990, Nov 8th, "march fifteenth 1988" (year alone is not masked) | regex + known DOB |
-| `AGE` | ages over 89 only (Safe Harbor) | regex |
-| `ADDRESS`, `POSTAL_CODE`, `ZIP` | 22 Elm Street apt 4, PO Box 12, M5V 2T6, TX 78701, "I live in Sudbury" | regex + known + local model |
-| `HEALTH_CARD`, `SIN`, `SSN` | OHIP 1234-567-890-AB, RAMQ, keyword + number, Luhn-checked SIN | regex + known |
-| `MRN`, `ACCOUNT`, `DONOR_ID`, `ID` | "MRN: 00482913", "policy number: XK-99812", "donor D-4521" | regex + known |
+| `DATE` | 2026-11-03, 11/3, March 5, 1990, Nov 8th, May 2024, "january ninth eighty five" (year alone is not masked) | regex + known DOB |
+| `AGE` | ages over 89 only (Safe Harbor): "93 years old", "i'm ninety one", "who is 94" | regex |
+| `ADDRESS`, `POSTAL_CODE`, `ZIP` | 22 Elm Street apt 4, PO Box 12, M5V 2T6, TX 78701, "…Ave Apt 2R Chicago 60647", "I live in Sudbury" | regex + known + local model |
+| `HEALTH_CARD`, `SIN`, `SSN` | OHIP 1234-567-890-AB, RAMQ, keyword + number, SIN (Luhn-checked, or any 9 digits after "SIN"/"NAS") | regex + known |
+| `MRN`, `ACCOUNT`, `DONOR_ID`, `ID` | "MRN: 00482913", "policy number: XK-99812", "claim 2025-118-440921", "card ending 4417", "donor D-4521", record numbers read out digit by digit | regex + known |
 | `PROVIDER` | "Dr. Patel" (passes by default, as clinician names are not patient identifiers; enable with `Policy(disabled_types=set())`) | regex + local model |
 | `EMPLOYER` | "I work at the Tim Hortons on Barton" | local model |
 
-Dates are also matched in French, Spanish, Polish and Hebrew, written or spoken ("le 12 mai 1990", "el catorce de febrero de mil novecientos noventa y uno", "trzeciego lipca", "5 בנובמבר"), and spoken digits in those languages. Canadian and US cities and towns over 15,000 people (from [GeoNames](https://www.geonames.org/), CC BY 4.0) are masked after a location cue ("I live in Sudbury", "j'habite à Laval", "mieszkam w Toronto"); names that are also common words, such as Normal or Mobile, must be capitalized. Code-shaped identifiers without a keyword ("SL-4471920-03", "W123456789", any bare number of 7+ digits) are masked as `ID`.
+Names are found from context in English, French, Spanish, Polish and Hebrew without a model: self-introductions (also lowercase, as in call transcripts), relatives with or without "my", chart labels, sign-offs and signature blocks, email headers, and full names next to a date of birth or chart number. Names with no cue word need the local model or your records. Dates are also matched in French, Spanish, Polish and Hebrew, written or spoken ("le 12 mai 1990", "el catorce de febrero de mil novecientos noventa y uno", "trzeciego lipca", "5 בנובמבר"), and spoken digits in those languages. Canadian and US cities and towns over 15,000 people (from [GeoNames](https://www.geonames.org/), CC BY 4.0) are masked after a location cue ("I live in Sudbury", "j'habite à Laval", "mieszkam w Toronto"); names that are also common words, such as Normal or Mobile, must be capitalized. Code-shaped identifiers without a keyword ("SL-4471920-03", "W123456789", any bare number of 7+ digits) are masked as `ID`.
 
 ### Optional local model
 
@@ -151,32 +151,32 @@ Presidio is also supported: `pip install phiproxy[presidio]` and add `PresidioDe
 
 ## Benchmark
 
-`benchmark/` holds three synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
+`benchmark/` holds four synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters, insurance letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
 
 - **v0** (288 messages, English): template-based, written by the detector authors.
-- **blind v1** (420 messages) and **blind v2** (400 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by a separate AI agent that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). A second annotator, also blind to the code, corrected the labels.
+- **blind v1, v2, v3** (420, 400 and 360 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by a different AI model (Opus, Sonnet, Fable) that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). v3 is US-heavy and mentions people without cue words ("Can Omar come in with me?"). A second annotator, also blind to the code, corrected the labels.
 
-Each blind set was scored once with the detectors frozen. v2 was written after the fixes made on v1, so its first score is the re-test:
+Each blind set was scored once with the detectors frozen, then used to find gaps. So each set's first score is a test of the fixes made on the sets before it:
 
-| recall | v0 | v1 first score | v2 first score |
+| recall, first score on unseen text | v1 | v2 | v3 |
 |---|---|---|---|
-| regex | 64.3% | 36.0% | 57.3% |
-| regex + known entities | 88.6% | 54.1% | 80.2% |
-| regex + local model | 98.2% | 77.3% | 87.9% |
-| regex + known + local model | 99.1% | 79.2% | **92.3%** |
+| regex | 36.0% | 57.3% | 58.4% |
+| regex + known entities | 54.1% | 80.2% | 68.3% |
+| regex + local model | 77.3% | 87.9% | 84.2% |
+| regex + known + local model | 79.2% | **92.3%** | **88.1%** |
 
-| v2, regex + known + local model | |
+| v3 first score, regex + known + local model | |
 |---|---|
-| by channel | SMS 97%, chat 97%, email 98%, notes 95%, call transcripts 83% |
-| by language | en 92%, fr 97%, es 95%, pl 90%, he 85%, mixed 94% |
-| precision | 76.5% (80.6% with the clinic's own details allowed) |
-| messages without identifiers where something was masked | 51% (35% with the clinic's own details allowed) |
+| by channel | chat 93%, SMS 90%, email 89%, call transcripts 86%, notes 84% |
+| by language | en 88%, fr 88%, es 86%, pl 91%, he 77%, mixed 96% |
+| precision | 82.6% (87.1% with the clinic's own details allowed) |
+| messages without identifiers where something was masked | 31% (20% with the clinic's own details allowed) |
 
 **How to read this honestly:**
-- v0 overstated recall by about 30 points. Expect real traffic to score lower than the blind sets too: they are AI-written, not written by clinic staff.
-- On v2 the "known entities" rows are optimistic: for some messages the patient record was filled in from the message itself.
+- Expect real traffic to score lower: these sets are AI-written, not written by clinic staff. v0 overstated recall by about 30 points.
+- Without the local model, names not in your records are the main gap. On v3, where names often come with no cue, the pattern rules alone found 43% of names.
+- After the gaps found on each set were fixed, the current code scores about 95% with the local model on all three blind sets. Those numbers are optimistic, which is why the table above shows first scores.
 - Over-masking is real. Most of it is the clinic's own contact details (pass them in `Policy(allow=...)`), holiday dates, and staff first names that are also words.
-- Call transcripts are the weakest channel. Without the local model, names not in your records are mostly missed.
 - Details, label rules, the corrections and full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
 
 ## Deployment shapes
