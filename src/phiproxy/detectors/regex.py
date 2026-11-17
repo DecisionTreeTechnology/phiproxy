@@ -13,7 +13,7 @@ from importlib import resources
 from typing import Callable, Optional
 
 from ..entities import Entity, EntityType
-from . import _names, _spoken
+from . import _hebrew, _names, _spoken
 
 _MONTHS = (
     "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
@@ -548,6 +548,8 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.ADDRESS, r"(?<![א-ת])(?:רחוב|רח[׳'])\s+[א-ת][א-ת\-\"״]+(?:\s+[א-ת][א-ת\-]+)?(?:\s+\d{1,4})?(?:,\s*[א-ת][א-ת\-]+(?:\s+[א-ת][א-ת\-]+)?)?")
     # Cities and towns where a person lives or comes from ("I live in Sudbury").
     R.append(_Rule(EntityType.ADDRESS, _places()[1], group=0, check=_place_check))
+    # Cities written in Hebrew ("גרה בפתח תקווה", "עוברים לטורונטו"); the prefix stays outside.
+    R.append(_Rule(EntityType.ADDRESS, _hebrew.PLACE_RE))
 
     # Canadian postal code.
     add(

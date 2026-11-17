@@ -51,3 +51,37 @@ def test_identifier_ignores_spacing():
 def test_from_dict():
     k = KnownEntities.from_dict({"names": "Ana Diaz", "phones": ["6475550100"]})
     assert list(k.names) == ["Ana Diaz"] and not k.is_empty()
+
+
+def test_hebrew_names_prefixes_and_scripts():
+    from phiproxy.detectors.known import KnownEntityDetector
+
+    def found(rec, text):
+        return [e.text for e in KnownEntityDetector(KnownEntities(names=rec)).detect(text)]
+
+    assert found(["שירה אברהמי"], "שירה מרגישה מצוין. שירה ואיתי") == ["שירה", "שירה"]
+    assert found(["מיכל בן-דוד"], "שלום ומיכל") == ["מיכל"]
+    assert found(["Noa Ben-Ami"], "אשתי, נועה, ולנועה") == ["נועה", "נועה"]
+    assert found(["נועה רוזנברג"], "Noa called") == ["Noa"]
+    assert found(["Michał Kowalczyk"], "Michał i Michała") == ["Michał", "Michała"]
+    assert found(["Anna Kowalska"], "Kowalska-Nowak") == ["Kowalska"]
+    assert found(["מיכל כהן"], "מיכאל הגיע") == []  # no fuzzy matching in Hebrew
+
+
+def test_hebrew_places():
+    from phiproxy import RegexDetector, EntityType
+
+    def places(t):
+        return [e.text for e in RegexDetector().detect(t) if e.type is EntityType.ADDRESS]
+
+    assert places("אנחנו עוברים לטורונטו באוגוסט") == ["טורונטו"]
+    assert places("אני גרה בפתח תקווה") == ["פתח תקווה"]
+    assert places("נולדתי בחיפה, גרה בתל אביב") == ["חיפה", "תל אביב"]
+    assert places("ברחובות העיר") == []
+
+
+def test_short_hebrew_name_parts_are_words():
+    from phiproxy.detectors.known import KnownEntityDetector
+
+    found = [e.text for e in KnownEntityDetector(KnownEntities(names=["מיכל בן-דוד"])).detect("הבן שלי בא")]
+    assert found == []
