@@ -42,16 +42,20 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 | v3 first score, clinic details allowed | 87.1% | 20% |
 | v3 now, default policy | 86.5% | 26% |
 | v3 now, clinic details allowed | 91.2% | 15% |
+| v2 now, clinic details and staff list | 85.7% | 27% |
+| v3 now, clinic details and staff list | 93.0% | 15% |
 
 v2 and v3 contain many email footers and letterheads with the fictional clinic's own name, phone, fax, address and email. Those are not patient data, so they are not labelled, and phiproxy masks them unless the deployment lists them in `Policy(allow=[...])`. The "clinic details allowed" rows pass `blind/clinic_v2.json` or `blind/clinic_v3.json` with `--allow`. Most of the rest is holiday and clinic-closure dates (masked on purpose: a date is never exempted, because it could be a birthday), staff first names that are also words ("Will", "Grace", "Hope"), staff names without a title, and card last-four digits the label rules did not ask for.
 
 After the v3 first score, the local model's guesses were filtered further: speaker labels and role words in French, Spanish, Polish and Hebrew ("Appelante", "Persona que llama", "Estimados pacientes") are dropped; a person with a clinician title or credential ("dr Wójcik", "Panie doktorze Okafor", "Rohan Iyer, MD", "N. Haddad RN") is treated as a clinician and passes like other clinician names; phone extensions, rooms and lot numbers are no longer places. On v3 this removed a third of the false positives (123 to 84 with clinic details allowed), and recall did not change on any set. These are "now" numbers, measured on the sets used to find the problems.
 
+**Staff list.** `Policy(staff=[...])` passes the clinic's staff names: a full name anywhere, a first name or surname alone only next to a staff cue ("Jocelyn in billing", "AGENT: Billing, this is Jon", "call Hsu at ext. 2240", "Sig: T. Kowalski, M. Reyes"). The blind authors were not asked for a staff roster, so `blind/staff_v2.json` and `blind/staff_v3.json` were compiled by reading each set for the people who work at the clinic, the way a clinic knows its own staff; surnames the sets never mention were made up. With them, false positives fell from 145 to 122 on v2 and from 84 to 66 on v3, and recall did not change: no labelled patient name passed, including v3's patient Sunny Dhillon, who shares a first name with a staff member. Staff named with no cue ("Faith and Hope are both out Friday", "- Dawn" at the end of a note) stay masked, because the same words in a patient's message would be a relative or the patient.
+
 ## Files
 
 - `generate.py`: deterministic generator (fixed seed) for `data/patient_comms_v0.jsonl`.
 - `blind/blind_v*.source.jsonl`: the blind sets as written, with inline labels (`[[NAME|jess]]`). `blind/audit_v*.jsonl`: second-annotator corrections. `blind/convert.py v1|v2|v3` builds `data/patient_comms_blind_v*.jsonl`.
-- `score.py`: scores every available configuration and prints recall by type, channel and language, precision, and clean-message masking. `--show-misses N`, `--show-false-positives N` and `--allow clinic.json` help with error analysis. The local-model configurations appear when `phiproxy[gliner]` is installed.
+- `score.py`: scores every available configuration and prints recall by type, channel and language, precision, and clean-message masking. `--show-misses N`, `--show-false-positives N`, `--allow clinic.json` and `--staff staff.json` help with error analysis. The local-model configurations appear when `phiproxy[gliner]` is installed.
 - `results_*.json`: scores for the built-in configurations.
 
 ## Record format

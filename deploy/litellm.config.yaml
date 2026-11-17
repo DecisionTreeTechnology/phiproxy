@@ -21,6 +21,9 @@ guardrails:
       redis_url: os.environ/PHIPROXY_REDIS_URL   # shared vault across replicas
       date_mode: token                          # "shift" keeps intervals, hides real dates
       # known_entities_provider: "yourapp.phi:lookup"   # async (session_id, metadata) -> dict
+      # The clinic's own details and staff pass unmasked (record matches never do):
+      # allow: ["Harborview Reproductive Centre", "613-555-0100", "@harborview.example.org"]
+      # staff: ["Jocelyn Paré", "Will Barnes"]   # first names alone pass only next to a staff cue
 
 litellm_settings:
   # LiteLLM's own logs would otherwise hold the unmasked reply.

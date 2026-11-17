@@ -48,8 +48,9 @@ def configs() -> dict:
     return out
 
 
-def score(rows: list[dict], detectors, use_known: bool, allow: tuple[str, ...] = ()) -> dict:
-    m = Masker(detectors=detectors, policy=Policy(allow=allow))  # clinician names pass
+def score(rows: list[dict], detectors, use_known: bool, allow: tuple[str, ...] = (),
+          staff: tuple[str, ...] = ()) -> dict:
+    m = Masker(detectors=detectors, policy=Policy(allow=allow, staff=staff))  # clinician names pass
     by_type = defaultdict(lambda: [0, 0])  # type -> [caught, total]
     by_channel = defaultdict(lambda: [0, 0])
     by_lang = defaultdict(lambda: [0, 0])
@@ -115,6 +116,8 @@ def main() -> None:
     ap.add_argument("--show-misses", type=int, default=0, help="print N missed spans per config")
     ap.add_argument("--allow", type=Path, default=None,
                     help="JSON list of the clinic's own details to pass unmasked (Policy.allow)")
+    ap.add_argument("--staff", type=Path, default=None,
+                    help="JSON list of the clinic's staff names (Policy.staff)")
     ap.add_argument("--show-false-positives", type=int, default=0,
                     help="print N falsely masked spans per config")
     ap.add_argument("--json", type=Path, default=None, help="write results here")
@@ -128,7 +131,8 @@ def main() -> None:
     results = {}
     for name, (make, use_known) in cfgs.items():
         allow = tuple(json.loads(a.allow.read_text())) if a.allow else ()
-        results[name] = score(rows, make(), use_known, allow)
+        staff = tuple(json.loads(a.staff.read_text())) if a.staff else ()
+        results[name] = score(rows, make(), use_known, allow, staff)
 
     types = sorted({t for r in results.values() for t in r["by_type"]})
     channels = sorted({c for r in results.values() for c in r["by_channel"]})
