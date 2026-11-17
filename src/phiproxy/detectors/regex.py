@@ -74,6 +74,26 @@ _MONTHS_ML = (
     "listopad|listopada|grudzie[nń]|grudnia|"
     "ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר"
 )
+_DAY_CARDINALS = (
+    "(?:twenty|thirty)[\\s\\-]?(?:one|two|three|four|five|six|seven|eight|nine)|"
+    "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
+    "fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty"
+)
+_TENS = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+_UNITS = "one|two|three|four|five|six|seven|eight|nine"
+# "eighty five", "nineteen ninety two", "two thousand one", "oh three".
+_SPOKEN_YEAR = (
+    rf"(?:(?:nineteen|twenty)[\s\-]+)?(?:(?:{_TENS})(?:[\s\-]+(?:{_UNITS}))?|ten|eleven|twelve|thirteen|"
+    rf"fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|oh[\s\-]+(?:{_UNITS}))|"
+    rf"two\s+thousand(?:\s+and)?(?:\s+(?:{_UNITS}|ten|eleven|twelve|thirteen|fourteen|fifteen))?"
+)
+_SPOKEN_NUMBER = (
+    rf"zero|oh|{_UNITS}|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+    rf"nineteen|{_TENS}|thousand|hundred|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|"
+    rf"tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|"
+    rf"nineteenth|twentieth|thirtieth|jan(?:uary)?|feb(?:ruary)?|march|april|may|june|july|"
+    rf"august|september|october|november|december"
+)
 _ORDINAL_WORDS = (
     "(?:twenty|thirty)[\\s\\-]?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)|"
     "first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|"
@@ -228,7 +248,9 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.ACCOUNT,
-        r"\b(?:account|acct|policy|member|insurance\s*id|claim)\s*(?:number|no\.?|#|id)?\s*(?:is|:|#)\s*"
+        r"\b(?:account|acct|policy|member|insurance\s*id|claim|group|certificate|certificat|contrat|"
+        r"contrato|reclamo|grupo|p[óo]liza|polisa|ledger|invoice|statement)"
+        r"(?:\s*(?:number|no\.?|#|id|num[ée]ro|n[úu]mero|numer))?(?:\s+on\s+the\s+\w+)?\s*(?:is|:|#|es|est|to)?\s*"
         r"((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{3,24})\b",
         I,
         group=1,
@@ -236,7 +258,7 @@ def _build_rules() -> list[_Rule]:
 
     # Identifier-shaped codes without a keyword: "SL-4471920-03", "CB-20418-S3",
     # "W123456789", "D4429-60718-55231". Upper-case prefix plus at least three digits.
-    add(EntityType.ID, r"\b(?=[A-Z0-9\-]*\d{3})[A-Z]{1,5}\d*-\d[A-Z0-9]*(?:-[A-Z0-9]+)*\b")
+    add(EntityType.ID, r"\b(?=[A-Z0-9\-]*\d{3})[A-Z]{1,5}\d*(?:-[A-Z]{1,6})*-\d[A-Z0-9]*(?:-[A-Z0-9]+)*\b")
     add(EntityType.ID, r"\b[A-Z]{1,2}\d{6,12}\b")
     # Any long bare number (chart numbers, national IDs). Phones and other shapes
     # overlap and win on merge; amounts with separators are excluded.
@@ -248,6 +270,24 @@ def _build_rules() -> list[_Rule]:
         check=lambda m: _luhn_ok(_digits(m.group(0))),
     )
 
+    # A card named as such needs no checksum ("visa 4539 5555 0142 7719").
+    add(
+        EntityType.ACCOUNT,
+        r"\b(?:visa|mastercard|master\s*card|amex|card|carte|tarjeta|karta|kart[ąa])\s*(?:number|no\.?|#|is|:)?\s*"
+        r"(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{2,4})\b",
+        I,
+        group=1,
+    )
+    # "card ending 4417", "ends in four four one seven", "xxxx7719".
+    add(
+        EntityType.ACCOUNT,
+        rf"\b(?:ending(?:\s+in)?|ends\s+in|last\s+(?:4|four)(?:\s+digits)?(?:\s+(?:are|is))?|termin[ée]e?\s+par|"
+        rf"terminada\s+en|ko[ńn]c[zą]c[aąe]\s+si[ęe]\s+na)\s*:?\s*(\d{{4}}|{_ANY_DIGIT_WORD}(?:\s+{_ANY_DIGIT_WORD}){{3}})\b",
+        I,
+        group=1,
+    )
+    add(EntityType.ACCOUNT, r"\b[xX*•]{2,}[\s\-]?\d{4}\b")
+
     # Quebec RAMQ: 4 letters + 8 digits.
     add(EntityType.HEALTH_CARD, r"\b[A-Z]{4}\s?\d{4}\s?\d{4}\b")
     # Ontario OHIP in its printed 4-3-3 grouping, optional 2-letter version code.
@@ -255,6 +295,25 @@ def _build_rules() -> list[_Rule]:
 
     add(EntityType.SSN, r"\b(\d{3})-(\d{2})-(\d{4})\b", check=_ssn_check)
     add(EntityType.SIN, r"\b\d{3}[\s\-]?\d{3}[\s\-]?\d{3}\b", check=_sin_check)
+    add(
+        EntityType.SIN,
+        r"\b(?:sin|social\s+insurance(?:\s+number)?|nas|num[ée]ro\s+d['’]assurance\s+sociale)\b[^\d\n]{0,25}?"
+        r"(\d{3}[\s\-]?\d{3}[\s\-]?\d{3})\b",
+        I,
+        group=1,
+    )
+    # Israeli and other local numbers with a leading 0 area code: "03-555-0147", "054-555-0147".
+    add(EntityType.PHONE, r"(?<![\w\-])0\d{1,2}-\d{3}-\d{4}\b")
+    # Numbers read out digit by digit after an ID keyword: "medical record number ... four eight two nine one seven",
+    # and spoken letter-digit codes: "c b one zero four seven two".
+    add(
+        EntityType.ID,
+        rf"(?<!lot\s)\b(?:record|mrn|chart|member|claim|id|i\s+d|donor|policy|account|group|dossier|historia)\b[^\n]{{0,40}}?(?:\n[^:\n]{{1,20}}:[ \t]*)?"
+        rf"\b((?:(?:{_ANY_DIGIT_WORD}|[a-z])\b[\s,\-]+){{3,}}{_ANY_DIGIT_WORD})\b",
+        I,
+        group=1,
+        check=lambda m: sum(1 for w in re.split(r"[\s,\-]+", m.group(1)) if len(w) > 1) >= 4,
+    )
 
     # North American phone numbers, any common formatting.
     add(
@@ -332,19 +391,82 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.DATE,
         rf"(?<!\w)(?:(?:le|el)\s+)?(?:{_DAY_WORDS_FR_ES}|{_DAY_WORDS_PL})\s+(?:de\s+)?(?:{_MONTHS_ML})(?!\w)"
-        rf"(?:(?:\s+de)?(?:[\s\-]+(?:{_YEAR_WORDS})(?!\w)){{1,8}})?",
+        rf"(?:(?:\s+del?)?(?:[\s\-]+(?:{_YEAR_WORDS})(?!\w)){{1,8}})?",
         I,
     )
     add(
         EntityType.DATE,
-        rf"(?<!\w){_DAY_WORDS_HE}(?:\s+{_DAY_WORDS_HE})*\s+ב(?:{_MONTHS_ML})(?!\w)"
+        rf"(?<!\w)[בלמ]?-?{_DAY_WORDS_HE}(?:\s+{_DAY_WORDS_HE})*\s+ב(?:{_MONTHS_ML})(?!\w)"
         rf"(?:\s+(?:{_YEAR_WORDS})(?!\w)){{0,8}}",
     )
+    # Month and year: "May 2024", "Feb 2021", "août 2025", "marzo de 2024".
+    add(
+        EntityType.DATE,
+        rf"\b(?P<month>{_MONTHS})\.?,?\s+(?:of\s+)?(?:19|20)\d{{2}}\b",
+        I,
+        check=_month_check,
+    )
+    add(EntityType.DATE, rf"(?<![\w])(?:{_MONTHS_ML})(?:\s+de)?\s+(?:19|20)\d{{2}}\b", I)
+    # Abbreviated French, Spanish and Polish months after a day: "4 déc", "12 sept.", "3 ene".
+    add(
+        EntityType.DATE,
+        r"(?<![\d])\b\d{1,2}(?:er)?\s+(?:janv|f[ée]vr|avr|juil|sept|d[ée]c|ene|abr|ago|dic|sty|lut|kwi|cze|lip|sie|wrz|pa[źz]|lis|gru)\b\.?",
+        I,
+    )
+    # Day-first dates without a year: unambiguous ones ("14/03") anywhere, others after a
+    # date word ("el 14/03", "punkcja 9.11", "ב-14.3").
+    add(EntityType.DATE, r"(?<![\d/.])\b(?!24/7\b)(?:1[3-9]|2\d|3[01])[/.](?:0?[1-9]|1[0-2])\b(?![/.]?\d)")
+    add(
+        EntityType.DATE,
+        r"(?:(?<![\w])(?:el|le|du|au|on|dnia|od|do|ב-?|ל-?|עד|מ-)\s*|\b(?:punkcj[aęi]|punci[óo]n|ponction|retrieval|transfer|"
+        r"transfert|transferencia|transfer|iui|ET|שאיבה|החזרה)\s+)"
+        r"((?:0?[1-9]|[12]\d|3[01])[/.](?:0?[1-9]|1[0-2]))\b(?![/.]?\d)",
+        I,
+        group=1,
+    )
+    # OCR'd numeric dates with O for 0: "06/O6/1989", "17/O4/1987".
+    add(
+        EntityType.DATE,
+        r"\b[\dOo]{1,2}/[\dOo]{1,2}/[\dOo]{4}\b",
+        check=lambda m: sum(ch.isdigit() for ch in m.group(0)) >= 5,
+    )
+    # Spoken dates of birth: "january ninth eighty five", "june six eighty nine",
+    # "the fifth of may nineteen ninety two", "oh two eleven nineteen ninety one".
+    add(
+        EntityType.DATE,
+        rf"\b(?P<month>{_MONTHS})\s+(?:the\s+)?(?:{_ORDINAL_WORDS}|{_DAY_CARDINALS})(?:,?\s+{_SPOKEN_YEAR})?\b",
+        I,
+        check=_month_check,
+    )
+    add(
+        EntityType.DATE,
+        rf"\b(?:the\s+)?(?:{_ORDINAL_WORDS})\s+of\s+(?P<month>{_MONTHS})\s+{_SPOKEN_YEAR}\b",
+        I,
+    )
+    add(
+        EntityType.DATE,
+        rf"\b(?:date\s+of\s+birth|birth\s*date|d\.?o\.?b\.?|born(?:\s+on)?)\b[^\n]{{0,25}}?(?:\n[^:\n]{{1,20}}:[ \t]*)?"
+        rf"(?:(?:it'?s|his\s+is|hers?\s+is|is|um|uh)[\s,]+)*"
+        rf"((?:(?:{_SPOKEN_NUMBER})[\s\-]+){{2,7}}(?:{_SPOKEN_NUMBER}))\b",
+        I,
+        group=1,
+    )
+
     # Short numeric dates like 3/14 (no year).
     add(EntityType.DATE, r"(?<![\d/])\b(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\d|3[01])\b(?![/\d])")
 
     add(EntityType.AGE, r"\b(?:9\d|1[01]\d)\s*(?:-\s*)?(?:years?[\s\-]*old|yrs?|y/?o|ans|años|lat)\b", I)
     add(EntityType.AGE, r"\b(?:age[ds]?|aged|âgée?|edad|wiek)\s*:?\s*(9\d|1[01]\d)\b", I, group=1)
+    _old = r"9\d|1[01]\d|ninety(?:[\s\-](?:one|two|three|four|five|six|seven|eight|nine))?|one\s+hundred(?:\s+and\s+\w+)?"
+    _not_unit = r"(?!\s*(?:%|percent|mg|mcg|ml|kg|lbs?|cm|mm|pm|am|min|minutes|\$|dollars|pmol|iu|bpm|/))"
+    add(
+        EntityType.AGE,
+        rf"\b(?:i'?m|i\s+am|she'?s|he'?s|who\s+is|who'?s|turn(?:s|ed|ing)?|is\s+now)\s+({_old})\b{_not_unit}",
+        I,
+        group=1,
+    )
+    # "Esther, 92, lives with them": a capitalized name, then the age between commas.
+    add(EntityType.AGE, rf"\b[A-Z][a-z]+,\s+(9\d|1[01]\d),", group=1)
 
     add(
         EntityType.ADDRESS,
@@ -365,6 +487,25 @@ def _build_rules() -> list[_Rule]:
     # US ZIP only with context (a bare 5-digit number is too ambiguous).
     add(EntityType.ZIP, rf"\b(?:{_US_STATES})\s+(\d{{5}}(?:-\d{{4}})?)\b", group=1)
     add(EntityType.ZIP, r"\bzip(?:\s*code)?\s*(?:is|:)?\s*(\d{5}(?:-\d{4})?)\b", I, group=1)
+    add(
+        EntityType.ZIP,
+        r"\b(?:c[óo]digo\s+postal|code\s+postal|kod(?:\s+pocztowy)?|zip|מיקוד)\s*:?\s*(\d{5}(?:-\d{4})?)\b",
+        I,
+        group=1,
+    )
+    # Street address then city then ZIP: "...Ave Apt 2R Chicago 60647".
+    add(
+        EntityType.ZIP,
+        rf"\b(?:{_STREET_SUFFIX})\b\.?[^\n]{{0,40}}?\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?,?\s+(\d{{5}}(?:-\d{{4}})?)\b(?![.,]\d)",
+        I,
+        group=1,
+    )
+    add(
+        EntityType.ZIP,
+        rf"\bzip(?:\s*code)?\b[^\n]{{0,30}}?(?:\n[^:\n]{{1,20}}:[ \t]*)?((?:{_ANY_DIGIT_WORD})(?:\s+(?:{_ANY_DIGIT_WORD})){{4}})\b",
+        I,
+        group=1,
+    )
 
     # Names introduced by context (see _names.py). The local model or the
     # known-entity list catch names with no cue.

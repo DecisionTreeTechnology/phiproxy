@@ -60,7 +60,7 @@ def test_detects(text, etype, value):
         "this is Tuesday right?",  # weekday is not a name
         "thanks so much",  # lowercase after "thanks" is not a name
         "take 2 tablets at 8pm",
-        "SIN 123 456 789",  # fails Luhn
+        "ref 123 456 789 on the invoice",  # nine digits, fails Luhn, no SIN keyword
     ],
 )
 def test_ignores(text):
@@ -170,3 +170,60 @@ def test_detects_places_and_spoken_dates(text, etype, value):
 )
 def test_places_need_a_cue(text):
     assert not any(t is T.ADDRESS for t, _ in types_in(text))
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        # US insurance and billing text.
+        ("claim 2025-118-440921 was denied", T.ACCOUNT, "2025-118-440921"),
+        ("Member ID: W2291 77014   Group: 774120", T.ACCOUNT, "774120"),
+        ("policy CL-778-20931, certificate 004417.", T.ACCOUNT, "004417"),
+        ("try the visa 4539 5555 0142 7719", T.ACCOUNT, "4539 5555 0142 7719"),
+        ("card ending 4417 got declined", T.ACCOUNT, "4417"),
+        ("the card on file ends in four four one seven", T.ACCOUNT, "four four one seven"),
+        ("10/14 pmt Visa xxxx7719 -500.00", T.ACCOUNT, "xxxx7719"),
+        ("Billing ledger LFP-A-198803 - guarantor", T.ID, "LFP-A-198803"),
+        ("my SIN is 512 483 906 for the tax receipt", T.SIN, "512 483 906"),
+        ("new addr 2714 N Kedzie Ave Apt 2R Chicago 60647", T.ZIP, "60647"),
+        ("Código postal: 60608", T.ZIP, "60608"),
+        ("Agent: and the billing zip\nCaller: six oh six five seven", T.ZIP, "six oh six five seven"),
+        ("טל' 03-555-0147", T.PHONE, "03-555-0147"),
+        ("medical record number\nCaller: four eight two nine one seven", T.ID, "four eight two nine one seven"),
+        ("we reserved donor c b one zero four seven two from the bank", T.ID, "c b one zero four seven two"),
+        # Ages over 89 without "years old".
+        ("i'm ninety one and i don't do the computer", T.AGE, "ninety one"),
+        ("My grandmother, who is 94, wants to pay", T.AGE, "94"),
+        ("Deborah's mother Esther, 92, lives with them", T.AGE, "92"),
+        # More date shapes.
+        ("are they both from the May 2024 retrieval?", T.DATE, "May 2024"),
+        ("pour le rdv du 4 déc", T.DATE, "4 déc"),
+        ("Esposo Juan Pablo la trae el 14/03 para la punción", T.DATE, "14/03"),
+        ("punkcja 9.11, 12 oocytów", T.DATE, "9.11"),
+        ("D0B 06/O6/1989", T.DATE, "06/O6/1989"),
+        ("date of birth june six eighty nine", T.DATE, "june six eighty nine"),
+        ("Caller: his is january ninth eighty five", T.DATE, "january ninth eighty five"),
+        ("date of birth the fifth of may nineteen ninety two", T.DATE, "the fifth of may nineteen ninety two"),
+        ("date of birth\nCaller: oh two eleven nineteen ninety one", T.DATE, "oh two eleven nineteen ninety one"),
+        ("fecha de nacimiento veintiuno de agosto del ochenta y nueve", T.DATE,
+         "veintiuno de agosto del ochenta y nueve"),
+        ("יש לה החזרה בארבעה עשר במרץ", T.DATE, "בארבעה עשר במרץ"),
+    ],
+)
+def test_detects_v3_shapes(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Call our 24/7 line at ext 4410",
+        "the lot number says l seven seven three nine",
+        "E2 is 940 pmol/L and she is 34",
+        "her BP is 92/60 today",
+        "AMH 9.11 ng/mL",
+    ],
+)
+def test_ignores_v3_lookalikes(text):
+    found = {(e.type, e.text) for e in RegexDetector().detect(text)}
+    assert not {f for f in found if f[0] in (T.DATE, T.AGE, T.ID, T.ACCOUNT)}, found
