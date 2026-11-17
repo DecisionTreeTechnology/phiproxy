@@ -34,8 +34,9 @@ DEFAULT_LABELS: dict[str, EntityType] = {
 
 _WORD = re.compile(r"\S+")
 
-# NER models sometimes tag pronouns, greetings and role words as people ("we",
-# "hi", "my husband", "Patient"). Spans made only of these words are dropped.
+# NER models sometimes tag pronouns, greetings, role words and transcript
+# speaker labels as people ("we", "hi", "my husband", "Patient", "Visiteur:").
+# Spans made only of these words are dropped.
 _NOT_NAME_WORDS = frozenset(
     """
     i me my mine you your yours ur we us our ours he him his she her hers they them
@@ -44,7 +45,13 @@ _NOT_NAME_WORDS = frozenset(
     partner husband hubby wife spouse boyfriend girlfriend fiance fiancee mom mum
     mother dad father baby son daughter sister brother grandson granddaughter
     grandmother grandfather girl boy little kids doctor nurse team
-    hi hello hey um uh hmm
+    hi hello hey um uh hmm a an the one two three
+    user bot visitor guest staff receptionist assistant system ivr operator
+    coordinator embryologist embryologists worker social
+    visiteur visiteuse patiente infirmière une un le la les
+    visitante agente llamante paciente enfermera una el los las
+    gość gosc dzwoniąca dzwoniący pacjent pacjentka konsultant konsultantka
+    מתקשרת מתקשר אורח אורחת סוכן סוכנת מטופל מטופלת נציג נציגה
     je moi tu toi vous nous il elle ils elles on mon ma mes bonjour salut
     conjoint conjointe mari femme
     yo tú usted ustedes nosotros nosotras él ella ellos ellas mi hola esposo esposa

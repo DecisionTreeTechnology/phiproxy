@@ -130,3 +130,22 @@ def test_stream_unmasker_shift_mode_dates():
     u = m.stream_unmasker("s")
     out = "".join(u.feed(ch) for ch in masked) + u.flush()
     assert out == "transfer on 2026-11-08 and check 11/20/2026"
+
+
+def test_allow_list_passes_clinic_details_but_not_the_patient():
+    from phiproxy import KnownEntities
+
+    m = Masker(policy=Policy(allow=["Harborview Reproductive Centre", "613-555-0100", "Beth Alvarado"]))
+    text = "Call Harborview Reproductive Centre at (613) 555 0100. Thanks, Beth Alvarado. Patient: Maria Lopez, 613-555-0199"
+    out = m.mask(text, "s").text
+    assert "Harborview Reproductive Centre" in out and "(613) 555 0100" in out
+    assert "Maria Lopez" not in out and "613-555-0199" not in out
+    # A patient who shares an allowed name is still masked when it comes from the record.
+    out = m.mask("Hi, this is Beth Alvarado", "s2", known=KnownEntities(names=["Beth Alvarado"])).text
+    assert "Beth Alvarado" not in out
+
+
+def test_allow_email_domain():
+    m = Masker(policy=Policy(allow=["@clinic.example.org"]))
+    out = m.mask("write to nurses@clinic.example.org or me at jo@example.com", "s").text
+    assert "nurses@clinic.example.org" in out and "jo@example.com" not in out

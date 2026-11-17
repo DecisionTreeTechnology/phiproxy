@@ -41,6 +41,7 @@ _NOT_NAMES = {
     "clinic", "office", "doctor", "nurse", "team", "everyone", "all", "regarding",
     "urgent", "important", "about", "re", "fwd", "ivf", "iui", "fet",
     "dr", "dre", "dra", "doctor", "mr", "mrs", "ms", "miss", "mx", "sent", "subject",
+    "dear", "i'm", "im", "je", "agent", "user", "bot", "intake", "file", "canada",
 }
 
 _RELATIONS = (
@@ -128,6 +129,15 @@ def _month_check(m: re.Match[str]) -> bool:
 def _name_check(m: re.Match[str]) -> bool:
     first = m.group("name").split()[0].lower()
     return first not in _NOT_NAMES
+
+
+def _weak_name_check(m: re.Match[str]) -> bool:
+    # After "for", "from", "to", a short all-caps word is an acronym (HSG, ICSI),
+    # not a name. Stronger cues ("Patient: NG") keep short all-caps names.
+    name = m.group("name")
+    if name.isupper() and len(name) <= 4:
+        return False
+    return _name_check(m)
 
 
 # Days of the month spoken in French and Spanish ("quatorze", "vingt et un",
@@ -386,9 +396,15 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.NAME,
-        r"\b(?i:patient|pt|client|for|from|to|dear|hi|hello|hey)\s*:?\s+(?P<name>" + _NAME + r")",
+        r"\b(?i:patient|pt|client|dear|hi|hello|hey)\s*:?\s+(?P<name>" + _NAME + r")",
         group=0,
         check=_name_check,
+    )
+    add(
+        EntityType.NAME,
+        r"\b(?i:for|from|to)\s*:?\s+(?P<name>" + _NAME + r")",
+        group=0,
+        check=_weak_name_check,
     )
     # Courtesy titles name patients and relatives, not clinicians.
     add(

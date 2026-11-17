@@ -1,35 +1,51 @@
 # Patient-communications PHI benchmark
 
-Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, phone-call transcripts, emails and referral or staff notes. Most open de-identification datasets cover clinical notes; these cover patient communications. Every person and number in them is invented.
+Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, phone-call transcripts and voicemails, emails, referral letters, fax and intake text. Most open de-identification datasets cover clinical notes; these cover patient communications. Every person and number in them is invented.
 
-## The two sets
+## The sets
 
 | set | messages | labelled identifiers | languages | written by |
 |---|---|---|---|---|
-| `patient_comms_v0.jsonl` | 288 | 560 | English (one French template) | generated from templates by the detector authors |
-| `patient_comms_blind_v1.jsonl` | 420 (129 with no identifiers) | 664 + 57 clinician names | en 260, fr 50, es 40, pl 30, he 20, mixed 20 | written blind, see below |
+| `patient_comms_v0.jsonl` | 288 | 560 | English | generated from templates by the detector authors |
+| `patient_comms_blind_v1.jsonl` | 420 (128 with no identifiers) | 684 + 63 clinician names | en, fr, es, pl, he, mixed | blind AI author (Claude Opus) |
+| `patient_comms_blind_v2.jsonl` | 400 (122 with no identifiers) | 778 + 106 clinician names | en, fr, es, pl, he, mixed | blind AI author (Claude Sonnet), different brief: more fax, intake, voicemail and email text |
 
-**How v1 was written.** v1 was written by a separate AI agent (Claude) that was given only a brief: the label rules, the channels, the languages, realistic mess (typos, lowercase names, spoken numbers, spelled-out names) and a list of things that look like identifiers but are not (drug doses, embryo grades, cycle days, billing codes). It was told not to read the detector code, the tests or v0, and it wrote every message from scratch. So v1 is independent of the detector code, but it is not independent of AI-written text. A set written by clinic staff is still the goal.
+**How the blind sets were made.** Each was written by a separate AI agent that had only a brief: the label rules, channels, languages, realistic mess, and a list of things that look like identifiers but are not. It was told not to read the detector code, the tests or the other sets, and it wrote every message from scratch. The sets are independent of the detector code, but they are AI-written, not written by clinic staff.
 
-**How v1 was scored.** The local-model detector was tuned on v0 only. Its settings were committed (082c2e1) and v1 was then scored once. Those first scores are kept in `results_blind_v1_frozen.json`. After that, v1 was used to find and fix gaps, so the current v1 numbers are optimistic in the same way v0's always were. The next blind set will re-test them.
+**Second annotator.** A third agent, also without access to code or detector output, reviewed each blind set against the written label rules and listed missing and wrong labels (`blind/audit_v1.jsonl`, `blind/audit_v2.jsonl`; 45 and 149 corrections, mostly unlabelled repeat mentions of names, staff names and spoken dates). `blind/convert.py` applies them. All scores below use the corrected labels.
 
-| recall | v0 (current) | v1 first blind score | v1 after fixes from v1 |
-|---|---|---|---|
-| regex | 61.4% | 36.6% | 50.5% |
-| regex + known entities | 85.7% | 54.4% | 67.8% |
-| regex + local model | 98.2% | 78.2% | 89.9% |
-| regex + known + local model | 99.1% | 80.1% | 92.2% |
+**Frozen scoring.** Before each blind set was scored, the detectors were committed and not changed: v1 against commit 082c2e1, v2 against ab99dc9. Those first scores are the fair ones (`results_blind_*_frozen.json`). After a set was scored it was used to find and fix gaps, so its later scores are optimistic. v2 was the re-test of the fixes made on v1.
 
-The 30-point gap between v0 and v1 is the honest lesson: a set written by the people who wrote the detectors flatters them.
+## Results (recall)
+
+| configuration | v0 | v1 first score | v1 now | v2 first score | v2 now |
+|---|---|---|---|---|---|
+| regex | 64.3% | 36.0% | 54.4% | 57.3% | 57.3% |
+| regex + known entities | 88.6% | 54.1% | 72.1% | 80.2% | 80.2% |
+| regex + local model | 98.2% | 77.3% | 90.2% | **87.9%** | 87.9% |
+| regex + known + local model | 99.1% | 79.2% | 92.4% | **92.3%** | 92.3% |
+
+- The fixes made on v1 held up on v2: recall with the local model moved from 79% on v1's first score to 92% on v2's first score.
+- v0 overstates recall by about 30 points, because it was written by the people who wrote the detectors.
+- On v2 the "known entities" rows are optimistic: for some messages the v2 author filled the patient record from the message itself.
+- v2 recall with the local model, by channel: SMS 97%, chat 97%, email 98%, notes 95%, calls 83%. By language: en 92%, fr 97%, es 95%, pl 90%, he 85%, mixed 94%.
+
+## Results (over-masking)
+
+| regex + known + local model | precision | messages without identifiers where something was masked |
+|---|---|---|
+| v1 now | 89.7% | 16% |
+| v2 now, default policy | 76.5% | 51% |
+| v2 now, clinic details allowed | 80.6% | 35% |
+
+v2 contains many email footers and letterheads with the fictional clinic's own name, phone, fax, address and email. Those are not patient data, so they are not labelled, and phiproxy masks them unless the deployment lists them in `Policy(allow=[...])`. The last row passes the six clinic details in `blind/clinic_v2.json` with `--allow`. Most of the rest is holiday and clinic-closure dates (masked on purpose: a date is never exempted, because it could be a birthday), staff first names that are also words ("Will", "Grace", "Hope"), and staff names without a title.
 
 ## Files
 
-- `generate.py`: deterministic generator (fixed seed). It writes `data/patient_comms_v0.jsonl`.
-- `blind/blind_v1.source.jsonl`: v1 as written, with inline labels (`[[NAME|jess]]`). `blind/convert.py` turns it into `data/patient_comms_blind_v1.jsonl`.
-- `score.py`: scores every available detector configuration and prints recall by type, channel and language. The local-model configurations appear when `phiproxy[gliner]` is installed.
-- `results_v0.json`, `results_blind_v1.json`, `results_blind_v1_frozen.json`: scores for the built-in configurations.
-
-Run `python benchmark/score.py` for v0 and `python benchmark/score.py --data benchmark/data/patient_comms_blind_v1.jsonl` for v1.
+- `generate.py`: deterministic generator (fixed seed) for `data/patient_comms_v0.jsonl`.
+- `blind/blind_v*.source.jsonl`: the blind sets as written, with inline labels (`[[NAME|jess]]`). `blind/audit_v*.jsonl`: second-annotator corrections. `blind/convert.py v1|v2` builds `data/patient_comms_blind_v*.jsonl`.
+- `score.py`: scores every available configuration and prints recall by type, channel and language, precision, and clean-message masking. `--show-misses N`, `--show-false-positives N` and `--allow clinic.json` help with error analysis. The local-model configurations appear when `phiproxy[gliner]` is installed.
+- `results_*.json`: scores for the built-in configurations.
 
 ## Record format
 
@@ -54,9 +70,9 @@ Run `python benchmark/score.py` for v0 and `python benchmark/score.py --data ben
 
 ## Known limits
 
-- v0 is template-based and was written by the detector authors, so its scores are optimistic.
-- v1 is AI-written. Real messages are messier still, and the labels have a few judgment calls: the author labelled some weekdays ("Sunday") and "yesterday" as dates, left some cities unlabelled, mostly where they are the clinic's location ("are you a clinic in Hamilton or only Toronto?"), left clinic holiday dates unlabelled, and did not label a few spelled-out names. These are left as written.
-- Still missed on v1: dates spoken in words in French, Spanish, Polish and Hebrew, some cities the model does not know ("Hamilton", "kitchener"), workplaces described in a phrase ("the canada post depot on lakeshore"), and lowercase names that are also words ("joy", "will").
-- With the local model, something is masked in 19% of messages that contain no identifiers (drug names such as Gonal-f, staff first names, holidays, phone extensions, and role words such as "Paciente"). That costs answer quality, not privacy.
+- The blind sets are AI-written. Real messages are messier, and a set written by people who work in clinics is still the goal.
+- Call transcripts are the weakest channel (83% on v2): names and numbers spoken in fragments, voice-to-text errors ("for one six" for 416), and repeated spellings.
+- Still missed: some lowercase names that are also words ("joy", "will"), workplaces described in a phrase, Hebrew abbreviations of months, numeric spoken dates ("oh four oh nine eighty two").
+- Over-masking costs answer quality, not privacy, but it is real: see the table above.
 
 Contributions are welcome, especially messages written by people who work in clinics (see ../CONTRIBUTING.md). All data must be synthetic.
