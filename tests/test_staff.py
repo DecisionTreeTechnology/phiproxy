@@ -85,3 +85,26 @@ def test_without_context_first_names_pass_anywhere():
 
 def test_no_staff_list_changes_nothing():
     assert "Jocelyn" not in mask("Jocelyn in billing", ["Jocelyn"], staff=())
+
+
+def test_initials_accents_and_new_cues():
+    from phiproxy.entities import Entity, EntityType
+    from phiproxy.staff import StaffList
+
+    staff = StaffList(["Chris Nakamura", "Felix Moreau", "Will Thornbury", "Lior Ben-David", "Hannah Wolfe"])
+
+    def ok(text, name):
+        i = text.index(name)
+        e = Entity(EntityType.NAME, i, i + len(name), name, "gliner")
+        return staff.passes(text, e, set())
+
+    assert ok("Signed C. Nakamura today", "C. Nakamura")
+    assert ok("ask Nakamura, C about it", "Nakamura, C")
+    assert ok("thanks Chris N for the help", "Chris N")
+    assert not ok("my son T. Nakamura is coming", "T. Nakamura")
+    assert ok("Merci à Félix Moreau", "Félix Moreau")
+    assert ok("Will is covering my retrievals", "Will")
+    assert ok("Lior cubre la vitrificación", "Lior")
+    assert ok("I left 2 voicemails with Chris. Not ok", "Chris")
+    assert ok("Pani Hannah z recepcji mówiła", "Pani Hannah")
+    assert not ok("Will is picking me up", "Will")

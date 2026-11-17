@@ -66,6 +66,22 @@ _NOT_NAME_WORDS = frozenset(
     dear estimado estimada estimados estimadas cher chère chers chères drodzy szanowni
     pacientes pacjenci pacjentki מטופלים מטופלות יקרים יקרות
     nvm vm hsg hr it reply bueno name s
+    kid kiddo toddler infant ex single female male kin next of lady gentleman
+    asistente asistenta assistante asystent asystentka מבקר מבקרת
+    żony żonie żonę żoną męża mężowi mężem partnera partnerki partnerką
+    """.split()
+)
+# Fertility and common drugs the model reads as names ("Ovitrelle", "אוביטרל").
+_DRUGS = frozenset(
+    """
+    ovitrelle ovidrel gonal gonal-f menopur cetrotide orgalutran ganirelix fyremadel lupron
+    leuprolide puregon follistim pregnyl novarel rekovelle elonva luveris pergoveris
+    crinone endometrin prometrium utrogestan cyclogest duphaston progesterone estrace
+    estradiol progynova climara letrozole femara clomid clomiphene serophene metformin
+    decapeptyl synarel suprefact dostinex cabergoline omnitrope medrol prednisone
+    doxycycline azithromycin aspirin heparin clexane fragmin lovenox tylenol advil
+    אוביטרל אוביטרל גונל גונל-אף מנופור צטרוטייד אורגלוטרן פרגניל אסטרופם קרינון אוטרוגסטן
+    לטרוזול פמרה קלומיד דקפפטיל
     """.split()
 )
 
@@ -107,6 +123,8 @@ def _keep(t: EntityType, span: str) -> bool:
         # several are a name spelled out ("K O W").
         if sum(len(w) == 1 for w in words) >= 2:
             return True
+        if any(w in _DRUGS or re.sub(r"^[ולבמשה]", "", w) in _DRUGS for w in words):
+            return False
         return any(w not in _NOT_NAME_WORDS and len(w) > 1 for w in words)
     if t is EntityType.ADDRESS:
         if _NOT_PLACE.match(span.strip()):

@@ -24,6 +24,7 @@ patients who share a staff member's first name.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -31,7 +32,10 @@ from .entities import Entity
 
 _WORD = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)?")
 # Joining and filler words inside a name span ("Marisol and Sunny", "Jocelyn in billing").
-_CONNECTORS = frozenset("and & or et ou y e i und lub oraz ו in from at the of our de du del la le el w z".split())
+_CONNECTORS = frozenset(
+    "and & or et ou y e i und lub oraz ו in from at the of our de du del la le el w z "
+    "pani pan pana panią panem panu".split()
+)
 
 # People's roles (may follow a comma: "Priya Menon, Surrogacy Coordinator").
 _PERSON_ROLE = (
@@ -48,9 +52,10 @@ _PERSON_ROLE = (
 )
 # Departments and places inside the clinic.
 _DEPT = (
-    r"billing|front[\s\-]desk|desk|reception|accueil|recepci[oó]n|recepcja|rejestracja|"
+    r"billing|front[\s\-]desk|desk|reception|accueil|recepci[oó]n|recepcj[aię]|rejestracj[aię]|"
     r"lab|labo|laboratory|laboratoire|laboratorio|laboratorium|embryology|embryologie|"
-    r"embriolog[ií]a|andrology|andrologie|nursing|scheduling|finance|facturation|"
+    r"embriolog[ií]a|andrology|andrologie|ultrasound|[ée]chographie|ecograf[ií]a|usg|"
+    r"pharmacy|pharmacie|farmacia|apteka|front|nursing|scheduling|finance|facturation|"
     r"facturaci[oó]n|rozliczenia|admin|records|intake|team|[ée]quipe|equipo|zesp[oó]ł|"
     r"מעבדה|קבלה|צוות|הנהלת\s+חשבונות"
 )
@@ -71,6 +76,12 @@ _AFTER = [
         _FLAGS,
     ),
     re.compile(r"^\s*,?\s*(?:speaking|ici|al\s+habla|przy\s+telefonie|מדברת|מדבר)\b", _FLAGS),
+    # Covering a colleague's work: "Will is covering my retrievals", "Lior cubre la vitrificación".
+    re.compile(
+        r"^\s*(?:is\s+|will\s+be\s+)?(?:covering|covers|cubre|remplace|zast[ęe]puje|on\s+call|"
+        r"de\s+garde|de\s+guardia|na\s+dy[żz]urze)\b",
+        _FLAGS,
+    ),
     re.compile(r"^\s*(?:at\s+|on\s+|au\s+|al\s+|pod\s+)?(?:ext|extension|x|poste|wewn|שלוחה)\.?\s*\d", _FLAGS),
 ]
 _BEFORE = [
@@ -94,7 +105,9 @@ _BEFORE = [
     re.compile(
         r"\b(?:speak|talk)\s+(?:to|with)\s*$|\bask\s+for\s*$|\bmessage\s+for\s*$|"
         r"\btransfer\w*\s+(?:you\s+)?to\s*$|\bparler\s+(?:à|avec)\s*$|\bhablar\s+con\s*$|"
-        r"\brozmawia[ćc]\s+z\s*$",
+        r"\brozmawia[ćc]\s+z\s*$|\b(?:voicemails?|messages?)\s+(?:with|for)\s*$|"
+        r"\b(?:pass(?:\s+this)?\s+(?:on\s+)?to|forward(?:ed)?\s+(?:this\s+)?to|transmettre\s+[àa]|"
+        r"reenviar\s+a|pasar\s+a|przeka[żz]\w*\s+(?:to\s+)?)\s*$",
         _FLAGS,
     ),
 ]
@@ -106,7 +119,8 @@ def _name_words(text: str) -> tuple[list[str], list[str]]:
     """(words of two or more letters, initials), lowercased, without connectors."""
     words, initials = [], []
     for w in _WORD.findall(text):
-        lw = w.lower()
+        # "Félix" and "Felix" are the same staff member.
+        lw = "".join(c for c in unicodedata.normalize("NFKD", w.lower()) if not unicodedata.combining(c))
         if lw in _CONNECTORS:
             continue
         (initials if len(lw) == 1 else words).append(lw)
@@ -143,6 +157,10 @@ class StaffList:
                 return False
         if len(words) >= 2 and any(set(words) <= p for p, _ in self._people):
             return True  # a full name: "Carla Benitez", "Benitez, Carla"
+        if len(words) == 1 and initials and any(
+            words[0] in p and set(initials) <= {w[0] for w in p if w != words[0]} for p, _ in self._people
+        ):
+            return True  # "C. Nakamura", "Okafor, G", "Carmen R.", "Sam K"
         if not self.need_context:
             return True
         if inner_cue or self._has_cue(text, e.start, e.end):

@@ -57,7 +57,6 @@ def test_spoken_identifiers(text, span):
         "she's on day five, follicles at fifteen, sixteen and eighteen",
         "E2 was one thousand two hundred and LH four point five",
         "ten thirty a.m works",
-        "fax 613-555-O188  P.1",
         "no one called, I waited from nine to five",
         "un rendez-vous à neuf heures, deux ampoules",
     ],
@@ -88,3 +87,46 @@ def test_spoken_dates():
     assert not dates("this is the third time I call")
     assert not dates("it's the first, right")
     assert not dates("lot number one two three four five six seven eight")
+
+
+def test_ocr_numbers():
+    d = RegexDetector()
+
+    def found(t):
+        return {(e.type, e.text) for e in d.detect(t)}
+
+    assert (T.PHONE, "613-555-O188") in found("fax 613-555-O188  P.1")
+    assert (T.PHONE, "6O4-555-Ol74") in found("Tel: 6O4-555-Ol74")
+    assert (T.DATE, "O9/Ol/199O") in found("DOB: O9/Ol/199O")
+    assert (T.HEALTH_CARD, "9l42 337 O58") in found("PHN 9l42 337 O58")
+    assert not found("Room I0 is on level 2, see Ollie")
+
+
+def test_international_ids():
+    d = RegexDetector()
+
+    def types(t):
+        return {e.type for e in d.detect(t)}
+
+    assert T.ID in types("CURP: FUSD880412MDFNLN07")
+    assert T.ID in types("DNI 50812345K")
+    assert T.ID in types("n° sécu 2 90 03 75 112 233 45")
+    assert T.PHONE in types("Rappelez-moi au 06 55 50 01 23")
+    assert T.IP_ADDRESS in types("login from 2001:db8:4a1c::17")
+    assert T.POSTAL_CODE in types("ul. Długa 17/4, 31-147 Kraków")
+    assert T.POSTAL_CODE in types("12 rue Sainte-Catherine, 33000 Bordeaux")
+    assert T.DATE in types("נולדתי כ״ג בחשוון תשנ״א")
+    assert not types("the visit is at 10:30:00 and costs 12-150")
+
+
+def test_spoken_more():
+    d = RegexDetector()
+
+    def found(t):
+        return {(e.type, e.text) for e in d.detect(t)}
+
+    assert (T.NAME, "K as in kilo O W A L C H U K") in found("that's K as in kilo O W A L C H U K um")
+    assert (T.NAME, "H A, N G U Y E N") in found("that's H A, N G U Y E N, my email")
+    assert any(t is T.EMAIL for t, _ in found("my email is ha dot nguyen dot eighty eight at example dot net"))
+    assert (T.PHONE, "604... 555... 0164") in found("call me back at 604... 555... 0164")
+    assert not found("the right side has a nineteen, eighteen and two sixteens, the left has a seventeen")

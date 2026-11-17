@@ -233,7 +233,11 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
             nxt = next((t.group(0).lower() for t in tokens[i + 1 :] if t.group(0) not in _PAUSES), "")
             ahead = bool(_number_word(nxt)) or (len(nxt) == 1 and nxt.isalpha()) or nxt in _NATO
             # Lowercase "i" and "a" are also words: "... oh one four two i think".
-            if ahead or ((run.chars or run.open) and (raw.isupper() or w not in ("i", "a"))):
+            # "a nineteen, eighteen and two": the article, not a letter.
+            starts = not (run.chars or run.open)
+            if (ahead and not (starts and raw in ("a", "i"))) or (
+                not starts and (raw.isupper() or w not in ("i", "a"))
+            ):
                 run.letter(w, s, e)
                 joins = 0
                 continue
@@ -292,9 +296,16 @@ def _classify(s: str) -> Optional[EntityType]:
     return None
 
 
+# Follicle sizes read out are lists of numbers, not identifiers.
+_MEASURES = re.compile(r"follic|ovar|p[ęe]cherzyk|זקיק|\bmm\b|millim|right\s+side|left\s+side", re.IGNORECASE)
+
+
 def detect(text: str) -> list[Entity]:
     out: list[Entity] = []
     for chars in _runs(text):
+        line_start = text.rfind("\n", 0, chars[0][1]) + 1
+        if _MEASURES.search(text[max(line_start, chars[0][1] - 120) : chars[0][1]]):
+            continue
         s = "".join(c for c, _, _ in chars)
         t = _classify(s)
         if t is None:
