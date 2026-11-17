@@ -19,7 +19,7 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 "Thanks Sarah Chen, we'll call 416-555-0142 today."            ◄──
 ```
 
-> **Status: pre-alpha (0.1.0a3).** APIs will change. Do not rely on it as your only control.
+> **Status: pre-alpha (0.1.0a4).** APIs will change. Do not rely on it as your only control.
 
 ## Read this first
 
@@ -29,8 +29,9 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 
 ## What makes it different
 
-- **Your own records as a detector.** Pass the identifiers you already hold for the patient (name, DOB, phone, health card). Exact and one-typo matching against them catches lowercase names and misspellings that pattern matching misses. On the blind benchmark below this lifts recall from 51% to 68%.
-- **Optional local model.** `phiproxy[gliner]` adds a small named-entity model that runs on your own machine and finds names, cities and workplaces that no rule or record covers ("my husband ravi", "I live in Sudbury"). It lifts blind-benchmark recall to 92%, at about 50 ms per message on CPU.
+- **Your own records as a detector.** Pass the identifiers you already hold for the patient (name, DOB, phone, health card). Exact and one-typo matching against them catches lowercase names and misspellings that pattern matching misses. On the blind benchmark below this lifts recall from 57% to 80%.
+- **Optional local model.** `phiproxy[gliner]` adds a small named-entity model that runs on your own machine and finds names, cities and workplaces that no rule or record covers ("my husband ravi", "I live in Sudbury"). With it, recall on a blind set written after the fixes was 92%, at about 50 ms per message on CPU.
+- **Your clinic's own details pass.** `Policy(allow=["Harborview Reproductive Centre", "613-555-0100", "@clinic.example.org"])` lets the clinic's name, phone numbers, address, email domain and staff names reach the model unmasked, so answers keep them. Anything that matches the patient's own record is still masked.
 - **Stable tokens per conversation.** The same value gets the same token on every turn of a session, so the model can follow who is who and provider prompt caching keeps working. Tokens are sequential, not derived from the value (see 45 CFR 164.514(c)).
 - **Fail closed.** If masking errors, or a request holds media the policy does not allow, the request is rejected and nothing is sent. Clients cannot switch the guardrail off through request metadata.
 - **Clinic-specific identifiers.** Canadian health card numbers (OHIP, RAMQ), SIN, donor and embryo IDs, spoken numbers and dates from call transcripts.
@@ -129,7 +130,7 @@ docker compose -f deploy/docker-compose.yml up --build
 | `PROVIDER` | "Dr. Patel" (passes by default, as clinician names are not patient identifiers; enable with `Policy(disabled_types=set())`) | regex + local model |
 | `EMPLOYER` | "I work at the Tim Hortons on Barton" | local model |
 
-Dates are also matched in French, Spanish, Polish and Hebrew ("le 12 mai 1990", "jueves 6 de noviembre", "5 בנובמבר"), and spoken digits in those languages. Code-shaped identifiers without a keyword ("SL-4471920-03", "W123456789", any bare number of 7+ digits) are masked as `ID`.
+Dates are also matched in French, Spanish, Polish and Hebrew, written or spoken ("le 12 mai 1990", "el catorce de febrero de mil novecientos noventa y uno", "trzeciego lipca", "5 בנובמבר"), and spoken digits in those languages. Canadian and US cities and towns over 15,000 people (from [GeoNames](https://www.geonames.org/), CC BY 4.0) are masked after a location cue ("I live in Sudbury", "j'habite à Laval", "mieszkam w Toronto"); names that are also common words, such as Normal or Mobile, must be capitalized. Code-shaped identifiers without a keyword ("SL-4471920-03", "W123456789", any bare number of 7+ digits) are masked as `ID`.
 
 ### Optional local model
 
@@ -150,29 +151,33 @@ Presidio is also supported: `pip install phiproxy[presidio]` and add `PresidioDe
 
 ## Benchmark
 
-`benchmark/` holds two synthetic **patient communications** sets: SMS, web chat, call transcripts, emails and referral notes, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
+`benchmark/` holds three synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
 
 - **v0** (288 messages, English): template-based, written by the detector authors.
-- **blind v1** (420 messages; English, French, Spanish, Polish, Hebrew and mixed; 129 messages with no identifiers but full of lookalikes such as drug doses and embryo grades): written by a separate AI agent that never saw the detector code.
+- **blind v1** (420 messages) and **blind v2** (400 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by a separate AI agent that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). A second annotator, also blind to the code, corrected the labels.
 
-| recall | v0 | blind v1, first score | blind v1, now |
+Each blind set was scored once with the detectors frozen. v2 was written after the fixes made on v1, so its first score is the re-test:
+
+| recall | v0 | v1 first score | v2 first score |
 |---|---|---|---|
-| regex | 61.4% | 36.6% | 50.5% |
-| regex + known entities | 85.7% | 54.4% | 67.8% |
-| regex + known + local model | 99.1% | 80.1% | **92.2%** |
+| regex | 64.3% | 36.0% | 57.3% |
+| regex + known entities | 88.6% | 54.1% | 80.2% |
+| regex + local model | 98.2% | 77.3% | 87.9% |
+| regex + known + local model | 99.1% | 79.2% | **92.3%** |
 
-| blind v1, regex + known + local model | |
+| v2, regex + known + local model | |
 |---|---|
-| by channel | SMS 94%, chat 91%, email 96%, notes 94%, call transcripts 86% |
-| by language | en 91%, fr 94%, es 93%, pl 95%, he 92%, mixed 97% |
-| precision | 86.9% |
-| messages without identifiers where something was masked | 19% |
+| by channel | SMS 97%, chat 97%, email 98%, notes 95%, call transcripts 83% |
+| by language | en 92%, fr 97%, es 95%, pl 90%, he 85%, mixed 94% |
+| precision | 76.5% (80.6% with the clinic's own details allowed) |
+| messages without identifiers where something was masked | 51% (35% with the clinic's own details allowed) |
 
 **How to read this honestly:**
-- The first blind score is the fair one: the detectors were frozen before v1 was scored. "Now" includes fixes made after looking at v1's misses, so it is optimistic. A new blind set will re-test it.
-- v0 overstated recall by about 30 points. Expect real traffic to score lower than v1 too.
-- Known misses: dates spoken in words outside English, some cities, workplaces described in a phrase, and lowercase names that are also words ("joy", "will"). Without the local model, cities and names not in your records are mostly missed.
-- Details, label rules and the full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
+- v0 overstated recall by about 30 points. Expect real traffic to score lower than the blind sets too: they are AI-written, not written by clinic staff.
+- On v2 the "known entities" rows are optimistic: for some messages the patient record was filled in from the message itself.
+- Over-masking is real. Most of it is the clinic's own contact details (pass them in `Policy(allow=...)`), holiday dates, and staff first names that are also words.
+- Call transcripts are the weakest channel. Without the local model, names not in your records are mostly missed.
+- Details, label rules, the corrections and full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
 
 ## Deployment shapes
 
@@ -184,8 +189,8 @@ The vault holds real values. Protect Redis like the PHI store it is: private net
 
 ## Roadmap
 
-- A benchmark set written by clinic staff, and a second blind AI-written set to re-test the current numbers
-- Gazetteer for cities the model misses; spoken dates in French, Spanish, Polish and Hebrew
+- A benchmark set written by people who work in clinics
+- Better call-transcript handling (fragments, voice-to-text errors)
 - Smaller and faster local models (distilled or ONNX)
 - HTTP sidecar; Anthropic `/v1/messages` streaming
 - Masked logging hook for LiteLLM

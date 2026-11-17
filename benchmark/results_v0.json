@@ -1,13 +1,13 @@
 {
   "regex": {
-    "recall": 0.6142857142857143,
+    "recall": 0.6428571428571429,
     "precision": 1.0,
     "spans": 560,
-    "missed": 216,
-    "leaked_char_rate": 0.27801894238358327,
+    "missed": 200,
+    "leaked_char_rate": 0.2517758484609313,
     "by_type": {
       "ACCOUNT": 1.0,
-      "ADDRESS": 0.3333333333333333,
+      "ADDRESS": 0.5555555555555556,
       "AGE": 1.0,
       "DATE": 1.0,
       "DONOR_ID": 1.0,
@@ -19,27 +19,27 @@
       "POSTAL_CODE": 1.0
     },
     "by_channel": {
-      "call": 0.5,
-      "chat": 0.7368421052631579,
+      "call": 0.6,
+      "chat": 0.7894736842105263,
       "note": 0.631578947368421,
       "sms": 0.5454545454545454
     },
     "by_lang": {
-      "en": 0.6142857142857143
+      "en": 0.6428571428571429
     },
     "clean_messages": 24,
     "clean_masked_rate": 0.0,
     "false_positives": 0
   },
   "regex+known": {
-    "recall": 0.8571428571428571,
+    "recall": 0.8857142857142857,
     "precision": 1.0,
     "spans": 560,
-    "missed": 80,
-    "leaked_char_rate": 0.14068666140489344,
+    "missed": 64,
+    "leaked_char_rate": 0.11444356748224152,
     "by_type": {
       "ACCOUNT": 1.0,
-      "ADDRESS": 0.3333333333333333,
+      "ADDRESS": 0.5555555555555556,
       "AGE": 1.0,
       "DATE": 1.0,
       "DONOR_ID": 1.0,
@@ -51,13 +51,13 @@
       "POSTAL_CODE": 1.0
     },
     "by_channel": {
-      "call": 0.8,
-      "chat": 0.8421052631578947,
+      "call": 0.9,
+      "chat": 0.8947368421052632,
       "note": 0.7894736842105263,
       "sms": 0.9545454545454546
     },
     "by_lang": {
-      "en": 0.8571428571428571
+      "en": 0.8857142857142857
     },
     "clean_messages": 24,
     "clean_masked_rate": 0.0,

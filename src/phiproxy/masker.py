@@ -41,6 +41,28 @@ class Policy:
     allow_images: bool = False
     allow_audio: bool = False
     allow_files: bool = False
+    # The clinic's own details that should reach the model unmasked: its name,
+    # phone and fax numbers, address, website, and staff names. A detection that
+    # lies wholly inside one of these passes, unless it matched the patient's
+    # own record (a patient who shares a staff member's name stays masked).
+    # Prefer full names: allowing a bare first name unmasks any patient with it.
+    # "@clinic.example.org" allows every address at that email domain.
+    allow: Sequence[str] = ()
+
+
+def _allow_pattern(value: str) -> Optional[re.Pattern[str]]:
+    value = value.strip()
+    digits = re.sub(r"\D", "", value)
+    if len(digits) >= 7 and len(digits) >= len(re.sub(r"[\s().+\-]", "", value)) - 1:
+        # Phone-like: same digits, any separators ("613-555-0100" = "(613) 555 0100").
+        return re.compile(r"(?<!\d)(?:\+?1\D{0,3})?\(?" + r"\D{0,3}".join(digits[-10:]) + r"(?!\d)")
+    if not value:
+        return None
+    if value.startswith("@"):
+        # Every address at the clinic's email domain: "@clinic.example.org".
+        return re.compile(r"[\w.+\-]+" + re.escape(value) + r"(?![\w.\-])", re.IGNORECASE)
+    words = [re.escape(w) for w in value.split()]
+    return re.compile(r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)", re.IGNORECASE)
 
 
 @dataclass
@@ -92,6 +114,7 @@ class Masker:
         self.detectors: list[Detector] = list(detectors) if detectors is not None else [RegexDetector()]
         self.policy = policy or Policy()
         self._date_detector = RegexDetector(enabled={EntityType.DATE})
+        self._allow = [p for p in (_allow_pattern(v) for v in self.policy.allow) if p is not None]
 
     # ------------------------------------------------------------------ detect
     def detect(self, text: str, known: Optional[KnownEntities] = None) -> list[Entity]:
@@ -112,6 +135,13 @@ class Masker:
             if e.type not in self.policy.disabled_types
             and not (e.source in MODEL_SOURCES and any(e.overlaps(d) for d in disabled))
         ]
+        if self._allow:
+            allowed = [m.span() for p in self._allow for m in p.finditer(text)]
+            found = [
+                e
+                for e in found
+                if e.source == "known" or not any(a <= e.start and e.end <= b for a, b in allowed)
+            ]
         return fill_text(text, merge_entities(found))
 
     # -------------------------------------------------------------------- mask

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from importlib import resources
 from typing import Callable, Optional
 
 from ..entities import Entity, EntityType
@@ -39,6 +41,7 @@ _NOT_NAMES = {
     "clinic", "office", "doctor", "nurse", "team", "everyone", "all", "regarding",
     "urgent", "important", "about", "re", "fwd", "ivf", "iui", "fet",
     "dr", "dre", "dra", "doctor", "mr", "mrs", "ms", "miss", "mx", "sent", "subject",
+    "dear", "i'm", "im", "je", "agent", "user", "bot", "intake", "file", "canada",
 }
 
 _RELATIONS = (
@@ -126,6 +129,74 @@ def _month_check(m: re.Match[str]) -> bool:
 def _name_check(m: re.Match[str]) -> bool:
     first = m.group("name").split()[0].lower()
     return first not in _NOT_NAMES
+
+
+def _weak_name_check(m: re.Match[str]) -> bool:
+    # After "for", "from", "to", a short all-caps word is an acronym (HSG, ICSI),
+    # not a name. Stronger cues ("Patient: NG") keep short all-caps names.
+    name = m.group("name")
+    if name.isupper() and len(name) <= 4:
+        return False
+    return _name_check(m)
+
+
+# Days of the month spoken in French and Spanish ("quatorze", "vingt et un",
+# "veintitrés", "primero"), Polish ordinals ("trzeciego") and Hebrew numbers.
+_DAY_WORDS_FR_ES = (
+    r"premier|primero|(?:vingt|trente)(?:[\s\-](?:et[\s\-])?(?:un|deux|trois|quatre|cinq|six|sept|huit|neuf))?|"
+    r"dix(?:[\s\-](?:sept|huit|neuf))?|onze|douze|treize|quatorze|quinze|seize|"
+    r"un|deux|trois|quatre|cinq|six|sept|huit|neuf|"
+    r"uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|"
+    r"dieci(?:s[ée]is|siete|ocho|nueve)|veinte|veinti\w+|treinta(?:\s+y\s+uno)?"
+)
+_DAY_WORDS_PL = (
+    r"(?:(?:dwudziest|trzydziest)\w*\s+)?(?:pierwsz|drug|trzec|czwart|pi[ąa]t|sz[óo]st|si[óo]dm|[óo]sm|"
+    r"dziewi[ąa]t|dziesi[ąa]t|jedenast|dwunast|trzynast|czternast|pi[ęe]tnast|szesnast|siedemnast|"
+    r"osiemnast|dziewi[ęe]tnast|dwudziest|trzydziest)\w*"
+)
+_DAY_WORDS_HE = r"(?:אחד|אחת|שניים|שתיים|שני|שלושה|שלוש|ארבעה|ארבע|חמישה|חמש|שישה|שש|שבעה|שבע|שמונה|תשעה|תשע|עשרה|עשר|עשרים|שלושים|ו)+"
+# Words that make up a spoken year ("mille neuf cent quatre-vingt-huit",
+# "mil novecientos noventa y uno", "tysiąc dziewięćset osiemdziesiąty").
+_YEAR_WORDS = (
+    r"mille|mil|cent|cents|vingts?|trente|quarante|cinquante|soixante|quatre-vingts?(?:-\w+)?|dix-\w+|"
+    r"novecientos|ochocientos|dos|uno|una|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|"
+    r"veinte|veinti\w+|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|y|et|"
+    r"un|deux|trois|quatre|cinq|six|sept|huit|neuf|onze|douze|treize|quatorze|quinze|seize|"
+    r"tysi[ąa]c\w*|dwa|dziewi[ęe][ćc]set|osiemset|\w+dziesi[ąa]t\w*|\w+na[śs]cie|"
+    r"(?:pierwsz|drug|trzec|czwart|pi[ąa]t|sz[óo]st|si[óo]dm|[óo]sm|dziewi[ąa]t)\w*|roku|"
+    r"אלף|מאות|תשע|שמונה|תשעים|שמונים|ו?אחת|ו?אחד|ו?שתיים|ו?שלוש|ו?ארבע|ו?חמש|ו?שש|ו?שבע|ו?שמונה|ו?תשע"
+)
+
+
+@lru_cache(maxsize=1)
+def _places() -> tuple[dict[str, bool], re.Pattern[str]]:
+    """Canadian and US places (GeoNames, CC BY 4.0) -> ambiguous flag, and a matcher.
+
+    A place counts only after a location cue ("in", "from", "near", "moved to",
+    "à", "près de", "en", "w"...), so "Hamilton" in "Dr. Hamilton" is not a
+    place. Names that are also common words ("Normal", "Mobile") must be
+    capitalized.
+    """
+    text = resources.files("phiproxy.data").joinpath("places_ca_us.tsv").read_text(encoding="utf-8")
+    names: dict[str, bool] = {}
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        name, flag = line.split("\t")
+        names[name.lower()] = flag == "1"
+    alternation = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    cue = (
+        r"(?:\b(?:in|from|near|to|into|outside(?:\s+of)?|around|towards?|"
+        r"[àa]|au|de|pr[èe]s\s+de|en|desde|cerca\s+de|w|we|z|ze|do|pod|ko[łl]o)\s+)"
+    )
+    pattern = re.compile(rf"{cue}(?P<place>{alternation})(?![\w\-])", re.IGNORECASE)
+    return names, pattern
+
+
+def _place_check(m: re.Match[str]) -> bool:
+    names, _ = _places()
+    place = m.group("place")
+    return not names.get(place.lower(), False) or place[0].isupper()
 
 
 def _build_rules() -> list[_Rule]:
@@ -270,6 +341,19 @@ def _build_rules() -> list[_Rule]:
         I,
     )
     add(EntityType.DATE, rf"\b(?:{_WEEKDAY_ML})\s+\d{{1,2}}\b(?![:.,]?\d)", I)
+    # Spoken: "le quatorze mars mille neuf cent quatre-vingt-huit", "el veinte de
+    # noviembre", "trzeciego lipca tysiąc dziewięćset...", "ארבעה עשר בפברואר".
+    add(
+        EntityType.DATE,
+        rf"(?<!\w)(?:(?:le|el)\s+)?(?:{_DAY_WORDS_FR_ES}|{_DAY_WORDS_PL})\s+(?:de\s+)?(?:{_MONTHS_ML})(?!\w)"
+        rf"(?:(?:\s+de)?(?:[\s\-]+(?:{_YEAR_WORDS})(?!\w)){{1,8}})?",
+        I,
+    )
+    add(
+        EntityType.DATE,
+        rf"(?<!\w){_DAY_WORDS_HE}(?:\s+{_DAY_WORDS_HE})*\s+ב(?:{_MONTHS_ML})(?!\w)"
+        rf"(?:\s+(?:{_YEAR_WORDS})(?!\w)){{0,8}}",
+    )
     # Short numeric dates like 3/14 (no year).
     add(EntityType.DATE, r"(?<![\d/])\b(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\d|3[01])\b(?![/\d])")
 
@@ -283,6 +367,8 @@ def _build_rules() -> list[_Rule]:
         I,
     )
     add(EntityType.ADDRESS, r"\b(?:p\.?\s?o\.?\s*box|postal\s*box)\s*\d+\b", I)
+    # Cities and towns where a person lives or comes from ("I live in Sudbury").
+    R.append(_Rule(EntityType.ADDRESS, _places()[1], group=0, check=_place_check))
 
     # Canadian postal code.
     add(
@@ -310,9 +396,15 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.NAME,
-        r"\b(?i:patient|pt|client|for|from|to|dear|hi|hello|hey)\s*:?\s+(?P<name>" + _NAME + r")",
+        r"\b(?i:patient|pt|client|dear|hi|hello|hey)\s*:?\s+(?P<name>" + _NAME + r")",
         group=0,
         check=_name_check,
+    )
+    add(
+        EntityType.NAME,
+        r"\b(?i:for|from|to)\s*:?\s+(?P<name>" + _NAME + r")",
+        group=0,
+        check=_weak_name_check,
     )
     # Courtesy titles name patients and relatives, not clinicians.
     add(
@@ -355,6 +447,8 @@ class RegexDetector:
                     continue
                 if rule.type in _NAME_GROUP_TYPES and "name" in m.groupdict():
                     start, end = m.span("name")
+                elif "place" in m.groupdict():
+                    start, end = m.span("place")
                 else:
                     start, end = m.span(rule.group)
                 if end <= start:

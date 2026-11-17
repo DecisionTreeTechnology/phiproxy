@@ -137,3 +137,36 @@ def test_detects_v1_shapes(text, etype, value):
 )
 def test_ignores_v1_distractors(text):
     assert types_in(text) == set()
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("we live in Sudbury now", T.ADDRESS, "Sudbury"),
+        ("driving in from mississauga", T.ADDRESS, "mississauga"),
+        ("moved to Normal, IL", T.ADDRESS, "Normal"),
+        ("j'habite à Laval", T.ADDRESS, "Laval"),
+        ("mieszkam w Toronto", T.ADDRESS, "Toronto"),
+        ("née le quatorze mars mille neuf cent quatre-vingt-huit", T.DATE,
+         "le quatorze mars mille neuf cent quatre-vingt-huit"),
+        ("nací el catorce de febrero de mil novecientos noventa y uno.", T.DATE,
+         "el catorce de febrero de mil novecientos noventa y uno"),
+        ("urodzona trzeciego lipca tysiąc dziewięćset osiemdziesiąty dziewiąty", T.DATE,
+         "trzeciego lipca tysiąc dziewięćset osiemdziesiąty dziewiąty"),
+        ("ארבעה עשר בפברואר", T.DATE, "ארבעה עשר בפברואר"),
+    ],
+)
+def test_detects_places_and_spoken_dates(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "results in normal range",  # "Normal" is a city, but lowercase common word
+        "Hamilton General lab",  # a city name without a location cue
+        "see you in May",
+    ],
+)
+def test_places_need_a_cue(text):
+    assert not any(t is T.ADDRESS for t, _ in types_in(text))

@@ -1,0 +1,45 @@
+{"id": "en-sms-056", "action": "add", "type": "NAME", "surface": "Faith", "occurrence": 1, "reason": "friend first name"}
+{"id": "en-sms-057", "action": "add", "type": "PROVIDER", "surface": "Holly", "occurrence": 1, "reason": "staff first name"}
+{"id": "en-chat-107", "action": "add", "type": "PHONE", "surface": "647 555 0113", "occurrence": 1, "reason": "unmarked first copy of phone"}
+{"id": "en-chat-125", "action": "add", "type": "DATE", "surface": "12th", "occurrence": 1, "reason": "appointment date"}
+{"id": "en-chat-129", "action": "add", "type": "AGE", "surface": "92", "occurrence": 1, "reason": "age over 89"}
+{"id": "en-call-150", "action": "add", "type": "HEALTH_CARD", "surface": "four seven two nine dash one one eight dash three oh five and then k t", "occurrence": 1, "reason": "spoken health card"}
+{"id": "en-call-153", "action": "add", "type": "NAME", "surface": "mark", "occurrence": 1, "reason": "caller first name"}
+{"id": "en-call-153", "action": "add", "type": "NAME", "surface": "hope", "occurrence": 1, "reason": "patient first name"}
+{"id": "en-call-155", "action": "add", "type": "POSTAL_CODE", "surface": "m five v two t six", "occurrence": 1, "reason": "spoken postal"}
+{"id": "en-call-155", "action": "add", "type": "POSTAL_CODE", "surface": "m5v 2t6", "occurrence": 1, "reason": "postal"}
+{"id": "en-call-157", "action": "add", "type": "DATE", "surface": "the twentieth", "occurrence": 1, "reason": "spoken date"}
+{"id": "en-call-160", "action": "add", "type": "DONOR_ID", "surface": "c b two zero four one eight s three", "occurrence": 1, "reason": "repeated donor id"}
+{"id": "en-call-161", "action": "add", "type": "DATE", "surface": "the eighth", "occurrence": 1, "reason": "spoken date"}
+{"id": "en-call-161", "action": "add", "type": "DATE", "surface": "the eighteenth", "occurrence": 1, "reason": "spoken date"}
+{"id": "en-call-176", "action": "add", "type": "MRN", "surface": "zero zero four eight two one three", "occurrence": 1, "reason": "spoken MRN"}
+{"id": "en-call-176", "action": "add", "type": "NAME", "surface": "whitney", "occurrence": 1, "reason": "patient first name"}
+{"id": "en-call-185", "action": "add", "type": "DATE", "surface": "the eighteenth", "occurrence": 1, "reason": "spoken appt date"}
+{"id": "en-call-196", "action": "add", "type": "NAME", "surface": "beth", "occurrence": 2, "reason": "name in agent turn"}
+{"id": "en-email-197", "action": "add", "type": "NAME", "surface": "Jess", "occurrence": 2, "reason": "signature"}
+{"id": "en-email-203", "action": "add", "type": "NAME", "surface": "Lauren", "occurrence": 1, "reason": "signature"}
+{"id": "en-email-207", "action": "add", "type": "DATE", "surface": "Dec 1", "occurrence": 1, "reason": "shipping date tied to patient"}
+{"id": "en-email-208", "action": "add", "type": "NAME", "surface": "Carmen", "occurrence": 1, "reason": "signature"}
+{"id": "en-email-215", "action": "add", "type": "NAME", "surface": "Mireille", "occurrence": 1, "reason": "signature"}
+{"id": "en-email-220", "action": "add", "type": "NAME", "surface": "Bill", "occurrence": 1, "reason": "nickname of patient husband"}
+{"id": "en-note-246", "action": "add", "type": "NAME", "surface": "kay", "occurrence": 1, "reason": "nickname"}
+{"id": "en-note-254", "action": "add", "type": "AGE", "surface": "91", "occurrence": 1, "reason": "age over 89"}
+{"id": "en-note-255", "action": "add", "type": "PROVIDER", "surface": "Holly", "occurrence": 2, "reason": "staff name"}
+{"id": "en-note-255", "action": "add", "type": "PROVIDER", "surface": "Hope Bergman", "occurrence": 1, "reason": "staff name"}
+{"id": "en-note-260", "action": "add", "type": "NAME", "surface": "Cassandra Boyle", "occurrence": 1, "reason": "patient full name"}
+{"id": "fr-chat-023", "action": "add", "type": "ADDRESS", "surface": "Ottawa", "occurrence": 1, "reason": "partner location"}
+{"id": "fr-call-029", "action": "add", "type": "HEALTH_CARD", "surface": "t r e m neuf zéro un deux trois quatre cinq six", "occurrence": 1, "reason": "spoken card number"}
+{"id": "es-call-025", "action": "add", "type": "NAME", "surface": "hernández", "occurrence": 2, "reason": "repeated surname"}
+{"id": "es-call-025", "action": "add", "type": "NAME", "surface": "h e r n á n d e z", "occurrence": 1, "reason": "spelled surname"}
+{"id": "es-email-034", "action": "add", "type": "NAME", "surface": "Laura", "occurrence": 1, "reason": "signature"}
+{"id": "en-sms-008", "action": "remove", "type": "ADDRESS", "surface": "Dundas St", "occurrence": 1, "reason": "clinic parking lot"}
+{"id": "en-sms-022", "action": "remove", "type": "ADDRESS", "surface": "downtown location", "occurrence": 1, "reason": "clinic location"}
+{"id": "en-sms-026", "action": "remove", "type": "EMPLOYER", "surface": "Mount Sinai Hospital lab", "occurrence": 1, "reason": "lab, not workplace"}
+{"id": "en-chat-111", "action": "remove", "type": "DATE", "surface": "Sunday", "occurrence": 1, "reason": "bare weekday"}
+{"id": "en-chat-114", "action": "remove", "type": "DATE", "surface": "yesterday", "occurrence": 1, "reason": "relative word"}
+{"id": "en-email-212", "action": "remove", "type": "DATE", "surface": "Saturday, November 22", "occurrence": 1, "reason": "clinic event"}
+{"id": "en-email-215", "action": "remove", "type": "EMPLOYER", "surface": "Health Sciences North", "occurrence": 1, "reason": "lab, not workplace"}
+{"id": "en-email-218", "action": "remove", "type": "EMAIL", "surface": "billing@example.com", "occurrence": 1, "reason": "clinic email"}
+{"id": "en-email-218", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Ellen Brandt", "occurrence": 1, "reason": "billing staff"}
+{"id": "en-email-219", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Dr. Alan Brandt", "occurrence": 1, "reason": "clinician"}
+{"id": "es-call-030", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "doctora ramos", "occurrence": 1, "reason": "clinician"}
