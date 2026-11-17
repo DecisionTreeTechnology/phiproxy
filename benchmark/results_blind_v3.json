@@ -1,7 +1,7 @@
 {
   "regex": {
     "recall": 0.6548117154811716,
-    "precision": 0.9244444444444444,
+    "precision": 0.9285714285714286,
     "spans": 956,
     "missed": 330,
     "leaked_char_rate": 0.29314481576692375,
@@ -42,11 +42,11 @@
     },
     "clean_messages": 110,
     "clean_masked_rate": 0.11818181818181818,
-    "false_positives": 51
+    "false_positives": 48
   },
   "regex+known": {
     "recall": 0.7489539748953975,
-    "precision": 0.9333333333333333,
+    "precision": 0.9368686868686869,
     "spans": 956,
     "missed": 240,
     "leaked_char_rate": 0.1946872322193659,
@@ -87,11 +87,11 @@
     },
     "clean_messages": 110,
     "clean_masked_rate": 0.11818181818181818,
-    "false_positives": 53
+    "false_positives": 50
   },
   "regex+gliner": {
     "recall": 0.9131799163179917,
-    "precision": 0.8739583333333333,
+    "precision": 0.9109663409337676,
     "spans": 956,
     "missed": 83,
     "leaked_char_rate": 0.07609254498714653,
@@ -131,12 +131,12 @@
       "pl": 0.9655172413793104
     },
     "clean_messages": 110,
-    "clean_masked_rate": 0.2,
-    "false_positives": 121
+    "clean_masked_rate": 0.14545454545454545,
+    "false_positives": 82
   },
   "regex+known+gliner": {
     "recall": 0.946652719665272,
-    "precision": 0.8767535070140281,
+    "precision": 0.9124087591240876,
     "spans": 956,
     "missed": 51,
     "leaked_char_rate": 0.04207369323050557,
@@ -176,7 +176,7 @@
       "pl": 0.9770114942528736
     },
     "clean_messages": 110,
-    "clean_masked_rate": 0.2,
-    "false_positives": 123
+    "clean_masked_rate": 0.14545454545454545,
+    "false_positives": 84
   }
 }

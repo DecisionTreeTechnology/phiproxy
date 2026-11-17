@@ -73,3 +73,31 @@ def test_model_guess_on_a_clinician_is_not_masked():
     m = Masker(detectors=[RegexDetector(), g])
     out = m.mask("Dr. Haddad will call Sarah", "s").text
     assert out == "Dr. Haddad will call [NAME_1]"
+
+
+def test_drops_speaker_labels_and_role_words_in_other_languages():
+    spans = {"Appelante": "person", "Persona que llama": "person", "mi mamá": "person",
+             "Estimados pacientes": "person", "Reply C": "person", "pani Nadii": "person",
+             "K O W": "person"}
+    text = ("Appelante: oui\nPersona que llama: sí, mi mamá\nEstimados pacientes,\n"
+            "Reply C to cancel. Dziękujemy pani Nadii! CALLER: K O W.")
+    assert detect(spans, text) == {(T.NAME, "pani Nadii"), (T.NAME, "K O W")}
+
+
+def test_person_with_a_title_or_credential_is_a_clinician():
+    spans = {"dr Wójcik": "person", "wójcika": "person", "Rohan Iyer": "person",
+             "Panie doktorze Okafor": "person", "N. Haddad": "person", "Ewa Nowak": "person",
+             "Sarah": "person"}
+    text = ("dr Wójcik kazała, wizyta u doktora wójcika. Rohan Iyer, MD\n"
+            "Panie doktorze Okafor. - N. Haddad RN\nlek. Ewa Nowak\nSarah called")
+    found = detect(spans, text)
+    assert {x for x in found if x[0] is T.NAME} == {(T.NAME, "Sarah")}
+    assert len({x for x in found if x[0] is T.PROVIDER}) == 6
+
+
+def test_extensions_rooms_and_lots_are_not_places():
+    spans = {"ext. 2240": "city", "extension two zero four": "city", "Room 108": "city",
+             "boardroom A": "city", "lot 4412-C": "city", "front desk": "city", "Sudbury": "city"}
+    text = ("call ext. 2240 or extension two zero four, Room 108, boardroom A, "
+            "lot 4412-C at the front desk. I live in Sudbury")
+    assert detect(spans, text) == {(T.ADDRESS, "Sudbury")}
