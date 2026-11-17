@@ -1,0 +1,149 @@
+{"id":"v2-en-note-001","action":"add","type":"DATE","surface":"Mar 03 2026","occurrence":1,"reason":"fax header date tied to patient referral"}
+{"id":"v2-en-note-004","action":"add","type":"EMPLOYER","surface":"Northern Tool and Die","occurrence":1,"reason":"employer group of member"}
+{"id":"v2-en-note-009","action":"add","type":"NAME","surface":"Dev","occurrence":2,"reason":"partner first name"}
+{"id":"v2-en-note-011","action":"add","type":"NAME","surface":"SM1TH, JENN1FER L.","occurrence":1,"reason":"OCR patient name"}
+{"id":"v2-en-note-013","action":"add","type":"PROVIDER","surface":"Vasquez","occurrence":2,"reason":"Dr. Vasquez salutation"}
+{"id":"v2-en-note-013","action":"add","type":"NAME","surface":"Reyes","occurrence":2,"reason":"patient surname Ms. Reyes"}
+{"id":"v2-en-note-018","action":"remove","type":"PROVIDER","surface":"Hirsch & Dale","occurrence":1,"reason":"law firm, not clinician/staff"}
+{"id":"v2-en-note-019","action":"add","type":"PROVIDER","surface":"Grace","occurrence":1,"reason":"clinic staff first name"}
+{"id":"v2-en-note-019","action":"add","type":"PROVIDER","surface":"Will","occurrence":1,"reason":"clinic staff first name"}
+{"id":"v2-en-note-019","action":"add","type":"PROVIDER","surface":"Hope","occurrence":1,"reason":"clinic staff first name"}
+{"id":"v2-en-note-019","action":"add","type":"PROVIDER","surface":"Bill","occurrence":1,"reason":"clinic staff first name"}
+{"id":"v2-en-note-025","action":"add","type":"PROVIDER","surface":"Achebe","occurrence":1,"reason":"Dr. Achebe"}
+{"id":"v2-en-note-027","action":"add","type":"DATE","surface":"1989-03-12","occurrence":1,"reason":"chart DOB"}
+{"id":"v2-en-note-033","action":"add","type":"ADDRESS","surface":"Kyiv","occurrence":1,"reason":"place of birth, city person comes from"}
+{"id":"v2-en-note-040","action":"retype","from":"NAME","type":"PROVIDER","surface":"Raymond Sutherland","occurrence":1,"reason":"billing contact staff"}
+{"id":"v2-en-em-001","action":"add","type":"PROVIDER","surface":"Maria","occurrence":1,"reason":"nurse addressed in greeting"}
+{"id":"v2-en-em-001","action":"add","type":"PROVIDER","surface":"Maria Santos","occurrence":1,"reason":"nurse in quoted header"}
+{"id":"v2-en-em-001","action":"add","type":"DATE","surface":"Oct 12, 2026","occurrence":1,"reason":"quote header date"}
+{"id":"v2-en-em-001","action":"add","type":"NAME","surface":"Alicia","occurrence":2,"reason":"patient signature"}
+{"id":"v2-en-em-004","action":"add","type":"NAME","surface":"Ianelli","occurrence":2,"reason":"Ms. Ianelli patient"}
+{"id":"v2-en-em-005","action":"add","type":"PROVIDER","surface":"Faith","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-em-005","action":"add","type":"PROVIDER","surface":"Hope","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-em-005","action":"add","type":"PROVIDER","surface":"Joy","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-em-005","action":"add","type":"PROVIDER","surface":"Grace","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-em-005","action":"add","type":"PROVIDER","surface":"Will","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-em-005","action":"add","type":"PROVIDER","surface":"Bill","occurrence":1,"reason":"staff signature"}
+{"id":"v2-en-em-006","action":"add","type":"NAME","surface":"Karen","occurrence":2,"reason":"patient signature"}
+{"id":"v2-en-em-006","action":"add","type":"DATE","surface":"Nov 2, 2026","occurrence":1,"reason":"quoted message date"}
+{"id":"v2-en-em-006","action":"add","type":"DATE","surface":"Nov 2, 2026","occurrence":2,"reason":"quoted message date"}
+{"id":"v2-en-em-009","action":"add","type":"PROVIDER","surface":"Hartwell","occurrence":1,"reason":"Dr. Hartwell"}
+{"id":"v2-en-em-011","action":"add","type":"NAME","surface":"Fiona","occurrence":2,"reason":"signature"}
+{"id":"v2-en-em-012","action":"add","type":"ID","surface":"jsingh1988","occurrence":1,"reason":"personal portal username"}
+{"id":"v2-en-em-015","action":"add","type":"PROVIDER","surface":"Lal","occurrence":1,"reason":"Dr. Lal"}
+{"id":"v2-en-em-017","action":"add","type":"NAME","surface":"Gabriel Santos-Pereira","occurrence":2,"reason":"signature"}
+{"id":"v2-en-em-018","action":"add","type":"NAME","surface":"Rebecca Mullins","occurrence":1,"reason":"patient full name"}
+{"id":"v2-en-em-020","action":"add","type":"NAME","surface":"Wanda","occurrence":2,"reason":"signature"}
+{"id":"v2-en-em-022","action":"add","type":"DATE","surface":"March 6","occurrence":1,"reason":"return-to-work date"}
+{"id":"v2-en-em-031","action":"add","type":"NAME","surface":"Jonathan Lee","occurrence":1,"reason":"patient name"}
+{"id":"v2-en-em-031","action":"add","type":"NAME","surface":"John Lee","occurrence":1,"reason":"patient name"}
+{"id":"v2-en-call-002","action":"add","type":"DATE","surface":"september thirtieth nineteen eighty eight","occurrence":1,"reason":"spoken DOB by caller"}
+{"id":"v2-en-call-002","action":"add","type":"MRN","surface":"zero zero seven one two four five","occurrence":1,"reason":"spoken file number by caller"}
+{"id":"v2-en-call-003","action":"add","type":"PHONE","surface":"four one six, five five five, oh one three seven","occurrence":1,"reason":"spoken repeat of phone"}
+{"id":"v2-en-call-004","action":"add","type":"NAME","surface":"R-A-C-H-E-L","occurrence":1,"reason":"spelled first name"}
+{"id":"v2-en-call-004","action":"add","type":"NAME","surface":"O-Y-E-L-A-R-A-N","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-en-call-006","action":"add","type":"NAME","surface":"E Z E hyphen W I L L I A M S","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-en-call-006","action":"add","type":"NAME","surface":"Eze-Williams","occurrence":2,"reason":"Ms. Eze-Williams"}
+{"id":"v2-en-call-006","action":"add","type":"PROVIDER","surface":"Lal","occurrence":1,"reason":"Dr. Lal"}
+{"id":"v2-en-call-008","action":"add","type":"PROVIDER","surface":"Jon","occurrence":1,"reason":"billing staff self-intro"}
+{"id":"v2-en-call-008","action":"add","type":"ACCOUNT","surface":"four four zero two one nine","occurrence":1,"reason":"invoice number tied to person"}
+{"id":"v2-en-call-009","action":"add","type":"PROVIDER","surface":"Faith","occurrence":1,"reason":"lab staff"}
+{"id":"v2-en-call-009","action":"add","type":"PROVIDER","surface":"Faith","occurrence":2,"reason":"lab staff"}
+{"id":"v2-en-call-013","action":"add","type":"ADDRESS","surface":"fifty-five, that's five five, Riverbend Drive Northwest","occurrence":1,"reason":"spoken street address"}
+{"id":"v2-en-call-013","action":"add","type":"ADDRESS","surface":"Calgary","occurrence":1,"reason":"city of person"}
+{"id":"v2-en-call-013","action":"add","type":"ADDRESS","surface":"Calgary","occurrence":2,"reason":"city of person"}
+{"id":"v2-en-call-013","action":"add","type":"POSTAL_CODE","surface":"T three A, four B seven","occurrence":1,"reason":"spoken postal code"}
+{"id":"v2-en-call-013","action":"add","type":"POSTAL_CODE","surface":"T3A 4B7","occurrence":1,"reason":"postal code"}
+{"id":"v2-en-call-014","action":"add","type":"ID","surface":"C F seven seven eight one","occurrence":1,"reason":"spoken file number"}
+{"id":"v2-en-call-016","action":"remove","type":"ADDRESS","surface":"Lawrence Avenue","occurrence":1,"reason":"pharmacy location, not where person lives"}
+{"id":"v2-en-call-018","action":"add","type":"HEALTH_CARD","surface":"four seven two nine one one zero six three K T","occurrence":1,"reason":"spoken health card"}
+{"id":"v2-en-call-018","action":"add","type":"HEALTH_CARD","surface":"Four seven two nine, one one zero, three six","occurrence":1,"reason":"corrected spoken health card"}
+{"id":"v2-en-call-019","action":"add","type":"NAME","surface":"T Y R O N E","occurrence":1,"reason":"spelled name"}
+{"id":"v2-en-call-019","action":"add","type":"NAME","surface":"Bishop","occurrence":2,"reason":"surname repeated"}
+{"id":"v2-en-call-019","action":"add","type":"DATE","surface":"the second","occurrence":1,"reason":"specific day of month for chemo start"}
+{"id":"v2-en-call-020","action":"remove","type":"EMPLOYER","surface":"Northgate Medical","occurrence":1,"reason":"referring clinician's practice, not a patient employer"}
+{"id":"v2-en-call-023","action":"add","type":"DONOR_ID","surface":"D twenty thousand seven seventy-one","occurrence":1,"reason":"spoken donor straw id"}
+{"id":"v2-en-call-025","action":"add","type":"NAME","surface":"Dorothea Kapoor","occurrence":1,"reason":"full name"}
+{"id":"v2-en-call-025","action":"add","type":"PHONE","surface":"four one six... five five five... one one seven","occurrence":1,"reason":"spoken phone"}
+{"id":"v2-en-call-029","action":"remove","type":"EMPLOYER","surface":"Shoppers-Rx Dundas","occurrence":1,"reason":"pharmacy, not patient employer"}
+{"id":"v2-en-call-030","action":"add","type":"PROVIDER","surface":"will","occurrence":1,"reason":"lab staff first name"}
+{"id":"v2-en-call-030","action":"add","type":"PROVIDER","surface":"Will","occurrence":1,"reason":"lab staff"}
+{"id":"v2-en-call-030","action":"add","type":"PROVIDER","surface":"Will","occurrence":2,"reason":"billing staff"}
+{"id":"v2-en-call-030","action":"add","type":"PROVIDER","surface":"Will","occurrence":3,"reason":"lab staff"}
+{"id":"v2-en-call-032","action":"add","type":"NAME","surface":"Nguyen","occurrence":1,"reason":"spoken patient name"}
+{"id":"v2-en-call-032","action":"add","type":"NAME","surface":"N G U Y E N","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-en-call-032","action":"add","type":"NAME","surface":"Thi Lan","occurrence":1,"reason":"given name"}
+{"id":"v2-en-call-032","action":"add","type":"DATE","surface":"twenty-two eleven nineteen ninety","occurrence":1,"reason":"spoken DOB"}
+{"id":"v2-en-call-032","action":"add","type":"DATE","surface":"twenty-second of November nineteen ninety","occurrence":1,"reason":"spoken DOB"}
+{"id":"v2-en-call-039","action":"add","type":"DATE","surface":"one four, oh seven, nineteen eighty-nine","occurrence":1,"reason":"spoken DOB"}
+{"id":"v2-en-call-039","action":"add","type":"DATE","surface":"fourteenth of July","occurrence":1,"reason":"spoken DOB"}
+{"id":"v2-en-sms-002","action":"add","type":"NAME","surface":"marcus","occurrence":1,"reason":"sender first name"}
+{"id":"v2-en-sms-004","action":"add","type":"NAME","surface":"Jess Tavares","occurrence":1,"reason":"patient name"}
+{"id":"v2-en-sms-008","action":"add","type":"PROVIDER","surface":"Hartwell","occurrence":1,"reason":"Dr. Hartwell"}
+{"id":"v2-en-sms-025","action":"add","type":"NAME","surface":"Lena Fischer","occurrence":1,"reason":"signature name"}
+{"id":"v2-en-em-006","action":"add","type":"DATE","surface":"the 20th","occurrence":1,"reason":"day of month for embryo move"}
+{"id":"v2-en-em-018","action":"add","type":"DATE","surface":"the 18th","occurrence":1,"reason":"transfer date"}
+{"id":"v2-en-em-018","action":"add","type":"DATE","surface":"the 20th","occurrence":1,"reason":"requested transfer date"}
+{"id":"v2-en-sms-017","action":"add","type":"DATE","surface":"the 20th","occurrence":1,"reason":"appointment day, consistent with 'the 12th'"}
+{"id":"v2-en-sms-029","action":"add","type":"DATE","surface":"20th","occurrence":1,"reason":"appointment day of month"}
+{"id":"v2-en-chat-001","action":"add","type":"NAME","surface":"Ruiz","occurrence":1,"reason":"surname of Dana Ruiz"}
+{"id":"v2-en-chat-001","action":"add","type":"MRN","surface":"0071245","occurrence":1,"reason":"file number given by visitor"}
+{"id":"v2-en-chat-004","action":"add","type":"NAME","surface":"Tamara","occurrence":2,"reason":"patient first name in agent reply"}
+{"id":"v2-en-chat-009","action":"add","type":"DATE","surface":"Nov 24","occurrence":1,"reason":"patient appointment date"}
+{"id":"v2-en-chat-009","action":"add","type":"DATE","surface":"Nov 24","occurrence":2,"reason":"patient appointment date"}
+{"id":"v2-en-chat-016","action":"remove","type":"ID","surface":"E12345678","occurrence":1,"reason":"generic example format, not a person's number"}
+{"id":"v2-en-call-042","action":"add","type":"PROVIDER","surface":"Grace","occurrence":2,"reason":"staff first name in greeting"}
+{"id":"v2-en-call-042","action":"add","type":"DATE","surface":"fourth of April, sixty-eight","occurrence":1,"reason":"spoken DOB"}
+{"id":"v2-en-call-050","action":"add","type":"ADDRESS","surface":"two twenty-one Pine Street, Apartment six","occurrence":1,"reason":"person's old street address"}
+{"id":"v2-en-call-050","action":"add","type":"ADDRESS","surface":"Thunder Bay","occurrence":1,"reason":"person's city"}
+{"id":"v2-en-call-050","action":"add","type":"POSTAL_CODE","surface":"P seven B, three C two","occurrence":1,"reason":"spoken postal code"}
+{"id":"v2-en-call-050","action":"add","type":"POSTAL_CODE","surface":"P zero T one A zero","occurrence":1,"reason":"spoken postal code"}
+{"id":"v2-en-call-053","action":"add","type":"NAME","surface":"K O W","occurrence":1,"reason":"spelled surname letters"}
+{"id":"v2-en-call-053","action":"add","type":"NAME","surface":"K O W","occurrence":2,"reason":"spelled surname letters"}
+{"id":"v2-en-call-053","action":"add","type":"DATE","surface":"seven four eighty-seven","occurrence":1,"reason":"spoken DOB"}
+{"id":"v2-en-call-053","action":"add","type":"DATE","surface":"April seventh","occurrence":1,"reason":"corrected spoken DOB"}
+{"id":"v2-en-call-054","action":"add","type":"PHONE","surface":"six oh four, five five five, oh one three four","occurrence":1,"reason":"spoken patient phone"}
+{"id":"v2-en-call-056","action":"add","type":"NAME","surface":"B-R-E-N-D-A K-O-W-A-L-S-K-I","occurrence":1,"reason":"spelled name"}
+{"id":"v2-en-call-059","action":"add","type":"NAME","surface":"J-A-M-A-L","occurrence":1,"reason":"spelled name"}
+{"id":"v2-en-note-044","action":"add","type":"NAME","surface":"Tremblay","occurrence":1,"reason":"Ms. Tremblay patient"}
+{"id":"v2-en-note-044","action":"add","type":"PROVIDER","surface":"Lal","occurrence":1,"reason":"Dear Dr. Lal"}
+{"id":"v2-en-note-057","action":"add","type":"NAME","surface":"Samir","occurrence":2,"reason":"patient first name repeated"}
+{"id":"v2-en-em-035","action":"add","type":"PROVIDER","surface":"Will","occurrence":1,"reason":"lab staff signature"}
+{"id":"v2-en-em-037","action":"add","type":"DATE","surface":"2027-02-20","occurrence":1,"reason":"travel end date"}
+{"id":"v2-en-sms-039","action":"add","type":"PROVIDER","surface":"Lal","occurrence":1,"reason":"Dr Lal"}
+{"id":"v2-en-note-060","action":"add","type":"PROVIDER","surface":"Hope","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-note-060","action":"add","type":"PROVIDER","surface":"Faith","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-note-060","action":"add","type":"PROVIDER","surface":"Grace","occurrence":1,"reason":"staff first name"}
+{"id":"v2-en-sms-041","action":"add","type":"PROVIDER","surface":"Will","occurrence":1,"reason":"staff covering"}
+{"id":"v2-en-sms-041","action":"add","type":"PROVIDER","surface":"Grace","occurrence":1,"reason":"staff first name"}
+{"id":"v2-fr-call-002","action":"add","type":"DATE","surface":"le vingt-deux novembre mille neuf cent quatre-vingt-dix","occurrence":1,"reason":"spoken DOB by caller"}
+{"id":"v2-fr-call-005","action":"add","type":"NAME","surface":"N-G-U-Y-E-N","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-fr-call-005","action":"add","type":"NAME","surface":"Thi Lan","occurrence":1,"reason":"given name"}
+{"id":"v2-fr-call-006","action":"add","type":"PHONE","surface":"quatre un six, cinq cinq cinq, zéro un un sept","occurrence":1,"reason":"spoken phone"}
+{"id":"v2-fr-chat-002","action":"add","type":"NAME","surface":"Hélène","occurrence":2,"reason":"patient first name by agent"}
+{"id":"v2-fr-em-001","action":"add","type":"NAME","surface":"Bouchard","occurrence":2,"reason":"Mme Bouchard patient"}
+{"id":"v2-fr-em-004","action":"add","type":"DATE","surface":"3 novembre 2026","occurrence":1,"reason":"quoted message date"}
+{"id":"v2-fr-em-007","action":"add","type":"DATE","surface":"24 novembre","occurrence":1,"reason":"patient appointment date"}
+{"id":"v2-fr-call-009","action":"remove","type":"EMPLOYER","surface":"Jean Coutu","occurrence":1,"reason":"pharmacy, not a patient employer"}
+{"id":"v2-fr-em-010","action":"retype","from":"PROVIDER","type":"NAME","surface":"Hélène Marcoux","occurrence":1,"reason":"lawyer, not clinician or clinic staff"}
+{"id":"v2-es-call-002","action":"add","type":"DATE","surface":"el quince de agosto de mil novecientos ochenta y nueve","occurrence":1,"reason":"spoken DOB by caller"}
+{"id":"v2-es-call-004","action":"add","type":"NAME","surface":"G-U-T-I-E-R-R-E-Z","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-es-call-007","action":"add","type":"PHONE","surface":"cuatro uno seis... cinco cinco cinco... uno uno siete","occurrence":1,"reason":"spoken phone"}
+{"id":"v2-es-chat-002","action":"add","type":"NAME","surface":"Yesenia","occurrence":2,"reason":"patient first name by agent"}
+{"id":"v2-es-em-001","action":"add","type":"NAME","surface":"Beltrán","occurrence":2,"reason":"Sra. Beltrán patient"}
+{"id":"v2-es-call-010","action":"remove","type":"EMPLOYER","surface":"Farmacia La Esperanza","occurrence":1,"reason":"pharmacy, not a patient employer"}
+{"id":"v2-es-em-007","action":"add","type":"DATE","surface":"8 de septiembre","occurrence":1,"reason":"restated DOB"}
+{"id":"v2-pl-call-002","action":"add","type":"DATE","surface":"czwartego kwietnia tysiąc dziewięćset osiemdziesiątego siódmego","occurrence":1,"reason":"spoken DOB by caller"}
+{"id":"v2-pl-call-005","action":"add","type":"NAME","surface":"S-Z-C-Z-E-P-A-Ń-S-K-A","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-pl-call-007","action":"add","type":"PHONE","surface":"cztery jeden sześć... pięć pięć pięć... zero jeden jeden siedem","occurrence":1,"reason":"spoken phone"}
+{"id":"v2-pl-chat-002","action":"add","type":"NAME","surface":"Justyno","occurrence":1,"reason":"patient first name (vocative) by agent"}
+{"id":"v2-pl-em-001","action":"add","type":"NAME","surface":"Bielecką","occurrence":1,"reason":"patient surname, declined form"}
+{"id":"v2-pl-call-009","action":"remove","type":"EMPLOYER","surface":"Cefarm","occurrence":1,"reason":"pharmacy, not a patient employer"}
+{"id":"v2-pl-em-006","action":"add","type":"DATE","surface":"8 września","occurrence":1,"reason":"restated DOB"}
+{"id":"v2-he-call-005","action":"add","type":"NAME","surface":"ג-ו-ל-ד-ב-ר-ג","occurrence":1,"reason":"spelled surname"}
+{"id":"v2-he-chat-002","action":"add","type":"NAME","surface":"מורן","occurrence":2,"reason":"patient first name by agent"}
+{"id":"v2-he-em-001","action":"add","type":"NAME","surface":"ברק","occurrence":2,"reason":"patient surname in body"}
+{"id":"v2-mixed-chat-002","action":"add","type":"NAME","surface":"Marisol","occurrence":2,"reason":"patient first name by agent"}
+{"id":"v2-mixed-call-003","action":"add","type":"NAME","surface":"H-É-L-È-N-E","occurrence":1,"reason":"spelled first name"}
+{"id":"v2-mixed-note-002","action":"add","type":"DATE","surface":"3 April","occurrence":1,"reason":"clarified DOB"}
+{"id":"v2-mixed-note-002","action":"add","type":"DATE","surface":"March 4","occurrence":1,"reason":"erroneous DOB entry"}
