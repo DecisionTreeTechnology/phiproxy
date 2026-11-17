@@ -239,4 +239,27 @@ def test_number_then_doctor_is_not_a_street(text):
 
 def test_street_with_unit_still_found():
     found = [e.text for e in RegexDetector().detect("new address is 78 Elm Crescent, Unit 4B, London")]
-    assert "78 Elm Crescent, Unit 4B" in found
+    assert any(f.startswith("78 Elm Crescent, Unit 4B") for f in found)
+
+
+def test_streets_named_first_and_city():
+    d = RegexDetector()
+
+    def addr(t):
+        return [e.text for e in d.detect(t) if e.type is T.ADDRESS]
+
+    assert addr("Notre adresse : 88 rue des Érables, Saint-Jérôme") == ["88 rue des Érables, Saint-Jérôme"]
+    assert addr("DIRECCIÓN: 1205 Calle Mayor, Apt 3, San Antonio") == ["1205 Calle Mayor, Apt 3, San Antonio"]
+    assert addr("adres: ul. Kościuszki 12/4, Toruń") == ["ul. Kościuszki 12/4, Toruń"]
+    assert addr("כתובת: רחוב הרצל 14, חיפה") == ["רחוב הרצל 14, חיפה"]
+    assert addr("22 Pine Ridge Dr, Whitby") == ["22 Pine Ridge Dr, Whitby"]
+    assert not addr("la rue est fermée, et le boulevard aussi")
+    zips = [e.text for e in d.detect("DIRECCIÓN: Calle Mayor, San Antonio, 78201\nTEL") if e.type is T.ZIP]
+    assert zips == ["78201"]
+
+
+def test_allowed_street_and_city_pass_together():
+    from phiproxy import Masker, Policy
+
+    m = Masker(detectors=[RegexDetector()], policy=Policy(allow=["1450 West Georgia Street", "Vancouver"]))
+    assert not m.detect("Visit us at 1450 West Georgia Street, Vancouver.")

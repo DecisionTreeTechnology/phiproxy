@@ -419,6 +419,8 @@ def courtesy_rules(
 
 # Spelled-out words ("k o w a l c z y k", "S-Z-C-Z-E-P-A-Ń-S-K-A", "ג-ו-ל-ד-ב-ר-ג").
 SPELLED = (
-    rf"(?<![\w\-])[A-Za-z{_UP}{_LO}](?:(?:\s+|-)(?:hyphen\s+|dash\s+)?[A-Za-z{_UP}{_LO}]){{3,}}(?![\w\-])|"
+    # "K as in kilo O W A L C H U K", "H A, N G U Y E N"
+    rf"(?<![\w\-'’])[A-Za-z{_UP}{_LO}](?:\s+as\s+in\s+[a-z]+)?"
+    rf"(?:(?:\s+|-|,\s*)(?:hyphen\s+|dash\s+)?[A-Za-z{_UP}{_LO}](?:\s+as\s+in\s+[a-z]+)?){{3,}}(?![\w\-])|"
     rf"(?<![\w\-])[{_HE}](?:-[{_HE}]){{3,}}(?![\w\-])"
 )

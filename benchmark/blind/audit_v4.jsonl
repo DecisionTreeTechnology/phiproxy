@@ -1,0 +1,50 @@
+{"id": "v4-en-chat-022", "action": "add", "type": "EMAIL", "surface": "kat.m.oconnor", "occurrence": 1, "reason": "corrected email local part typed by visitor"}
+{"id": "v4-en-call-002", "action": "add", "type": "DATE", "surface": "July fourteenth", "occurrence": 1, "reason": "agent reads back patient date of birth"}
+{"id": "v4-en-call-010", "action": "add", "type": "NAME", "surface": "H O P E", "occurrence": 1, "reason": "patient name spelled letter by letter"}
+{"id": "v4-en-call-011", "action": "add", "type": "DATE", "surface": "eighteenth", "occurrence": 1, "reason": "patient appointment date (day of month)"}
+{"id": "v4-en-call-011", "action": "add", "type": "DATE", "surface": "twenty-fourth", "occurrence": 1, "reason": "appointment date offered to patient"}
+{"id": "v4-en-call-011", "action": "add", "type": "DATE", "surface": "twenty-sixth", "occurrence": 1, "reason": "appointment date offered to patient"}
+{"id": "v4-en-call-011", "action": "add", "type": "DATE", "surface": "Twenty-sixth", "occurrence": 1, "reason": "patient new appointment date"}
+{"id": "v4-en-call-013", "action": "add", "type": "DATE", "surface": "November", "occurrence": 1, "reason": "month of patient last period"}
+{"id": "v4-en-call-014", "action": "add", "type": "NAME", "surface": "R E E S", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v4-en-call-024", "action": "add", "type": "DATE", "surface": "twelfth", "occurrence": 1, "reason": "retrieval date recorded on patient form"}
+{"id": "v4-en-call-024", "action": "add", "type": "DATE", "surface": "Twenty-first of October", "occurrence": 1, "reason": "agent repeats patient retrieval date"}
+{"id": "v4-en-call-029", "action": "add", "type": "PHONE", "surface": "five oh three", "occurrence": 1, "reason": "area code of callback number, first attempt"}
+{"id": "v4-en-call-029", "action": "add", "type": "PHONE", "surface": "Five oh three, five five five, zero one four zero", "occurrence": 1, "reason": "agent reads back full callback number"}
+{"id": "v4-en-call-029", "action": "add", "type": "NAME", "surface": "L I N D H O L M", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v4-en-call-031", "action": "add", "type": "SIN", "surface": "Five two seven, one one eight, three four zero", "occurrence": 1, "reason": "agent reads back full SIN"}
+{"id": "v4-en-call-033", "action": "add", "type": "NAME", "surface": "H A, N G U Y E N", "occurrence": 1, "reason": "name spelled letter by letter"}
+{"id": "v4-en-call-045", "action": "add", "type": "ADDRESS", "surface": "Bellevue", "occurrence": 1, "reason": "city where the calling pharmacist works"}
+{"id": "v4-en-email-001", "action": "add", "type": "DATE", "surface": "October", "occurrence": 1, "reason": "month of patient receipt"}
+{"id": "v4-en-email-006", "action": "add", "type": "PROVIDER", "surface": "G.", "occurrence": 1, "reason": "doctor signature initial (Grace Okafor); pl-email-004 labels the same pattern"}
+{"id": "v4-en-email-012", "action": "add", "type": "DONOR_ID", "surface": "4471", "occurrence": 1, "reason": "donor number in subject line"}
+{"id": "v4-en-email-022", "action": "add", "type": "DATE", "surface": "10th", "occurrence": 1, "reason": "date tied to partner stay"}
+{"id": "v4-en-email-025", "action": "add", "type": "NAME", "surface": "Kenji", "occurrence": 2, "reason": "intended parent signature"}
+{"id": "v4-en-email-026", "action": "add", "type": "PROVIDER", "surface": "H", "occurrence": 2, "reason": "nurse signature initial (Hope Delgado)"}
+{"id": "v4-en-note-001", "action": "add", "type": "DATE", "surface": "11/12", "occurrence": 1, "reason": "date of patient referral fax"}
+{"id": "v4-en-note-001", "action": "add", "type": "PHONE", "surface": "604 555 0191", "occurrence": 1, "reason": "referring doctor office fax number (labelled in en-call-025)"}
+{"id": "v4-en-note-007", "action": "add", "type": "ADDRESS", "surface": "Vancouver", "occurrence": 1, "reason": "city of intended parents home address"}
+{"id": "v4-en-note-007", "action": "add", "type": "EMPLOYER", "surface": "Sood Law", "occurrence": 1, "reason": "lawyer firm, same as labelled Holt & Partners LLP"}
+{"id": "v4-en-note-010", "action": "add", "type": "DATE", "surface": "2025-11-01", "occurrence": 1, "reason": "invoice date on a patient invoice"}
+{"id": "v4-en-note-011", "action": "add", "type": "DATE", "surface": "11/14", "occurrence": 1, "reason": "date of phone note about a patient"}
+{"id": "v4-en-note-015", "action": "add", "type": "EMPLOYER", "surface": "Holt & Partners LLP", "occurrence": 1, "reason": "lawyer firm, labelled EMPLOYER in en-email-005 and en-note-007"}
+{"id": "v4-en-note-017", "action": "add", "type": "DATE", "surface": "Dec", "occurrence": 1, "reason": "month of patient cycle"}
+{"id": "v4-en-note-017", "action": "add", "type": "DATE", "surface": "Jan", "occurrence": 1, "reason": "month of patient transfer"}
+{"id": "v4-en-note-025", "action": "add", "type": "DATE", "surface": "January", "occurrence": 1, "reason": "month patient treatment resumes"}
+{"id": "v4-en-chat-038", "action": "add", "type": "DATE", "surface": "21st", "occurrence": 1, "reason": "patient transfer date"}
+{"id": "v4-en-call-046", "action": "add", "type": "NAME", "surface": "p i k e", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v4-en-call-046", "action": "add", "type": "DATE", "surface": "twenty first", "occurrence": 1, "reason": "patient HSG date"}
+{"id": "v4-fr-sms-004", "action": "add", "type": "DATE", "surface": "28", "occurrence": 1, "reason": "date tied to partner"}
+{"id": "v4-fr-call-001", "action": "add", "type": "NAME", "surface": "D U F R E S N E", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v4-fr-call-002", "action": "add", "type": "DATE", "surface": "Quatorze, zéro sept, quatre-vingt-neuf", "occurrence": 1, "reason": "agent reads back date of birth"}
+{"id": "v4-fr-email-005", "action": "add", "type": "DATE", "surface": "janvier", "occurrence": 1, "reason": "month patient moves"}
+{"id": "v4-fr-email-005", "action": "add", "type": "DATE", "surface": "janvier", "occurrence": 2, "reason": "month of requested appointment"}
+{"id": "v4-es-call-001", "action": "add", "type": "NAME", "surface": "fuentes", "occurrence": 1, "reason": "surname repeated"}
+{"id": "v4-es-call-002", "action": "add", "type": "DATE", "surface": "Nueve, cero cinco, ochenta y ocho", "occurrence": 1, "reason": "agent reads back date of birth"}
+{"id": "v4-pl-call-001", "action": "add", "type": "NAME", "surface": "N O W A K", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v4-pl-call-002", "action": "add", "type": "DATE", "surface": "Czternasty, zero siedem, osiemdziesiąt dziewięć", "occurrence": 1, "reason": "agent reads back date of birth"}
+{"id": "v4-he-call-002", "action": "add", "type": "DATE", "surface": "חמש, אפס שמונה, תשעים", "occurrence": 1, "reason": "agent reads back date of birth"}
+{"id": "v4-mixed-call-003", "action": "add", "type": "NAME", "surface": "Julie", "occurrence": 2, "reason": "first name repeated"}
+{"id": "v4-mixed-call-003", "action": "add", "type": "NAME", "surface": "M O R E A U", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v4-en-call-018", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Rose", "occurrence": 2, "reason": "caller is asking for nurse Rose, not naming herself"}
+{"id": "v4-en-note-032", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "J. Whitlock", "occurrence": 1, "reason": "outside pharmacist (RPh) is a clinician, not a private person"}

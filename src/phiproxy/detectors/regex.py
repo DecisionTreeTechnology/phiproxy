@@ -20,7 +20,7 @@ _MONTHS = (
     "sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
 )
 # Month words that are also ordinary English words; only count them when capitalized.
-_AMBIGUOUS_MONTHS = {"may", "mar", "march", "jan", "june", "july", "aug", "sep", "dec"}
+_AMBIGUOUS_MONTHS = {"may", "mar", "march", "jan", "june", "july", "sep"}
 
 _US_STATES = (
     "AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|"
@@ -200,8 +200,10 @@ def _places() -> tuple[dict[str, bool], re.Pattern[str]]:
 
 
 _STREET = (
-    rf"\b\d{{1,6}}\s+(?:[A-Za-z0-9'\-]+\s+){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
+    rf"\b\d{{1,6}}[^\S\n]{{1,2}}(?:[A-Za-z0-9'\-]+[^\S\n]{{1,2}}){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
     r"(?:,?\s*(?:apt|apartment|unit|suite|ste|#)\.?\s*[A-Za-z0-9\-]+)?"
+    # The city right after: "22 Pine Ridge Dr, Whitby".
+    r"(?:,[^\S\n]*(?-i:[A-Z][\w'\-]+(?:[^\S\n][A-Z][\w'\-]+)?)(?![^\S\n]*(?:\(|\d{3}\b)))?"
 )
 _STREET_SUFFIX_RE = re.compile(f"(?:{_STREET_SUFFIX})", re.I)
 
@@ -328,6 +330,23 @@ def _build_rules() -> list[_Rule]:
         I,
         group=1,
     )
+    # National identifiers of international patients.
+    # Mexican CURP and RFC: "FUSD880412MDFNLN07", "NAVG800312015".
+    add(EntityType.ID, r"\b[A-Z]{4}\d{6}[HMX][A-Z]{5}[A-Z0-9]\d\b")
+    add(EntityType.ID, r"\b[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}\b")
+    # Spanish DNI and NIE: "50812345K", "X1234567L".
+    add(EntityType.ID, r"\b(?:\d{8}|[XYZ]\d{7})-?[A-HJ-NP-TV-Z]\b")
+    # French social security number (NIR): "2 90 03 75 112 233 45".
+    add(EntityType.ID, r"\b[12][\s.]?\d{2}[\s.]?(?:0[1-9]|1[0-2]|[2-9]\d)[\s.]?(?:\d{2}|2[AB])[\s.]?\d{3}[\s.]?\d{3}(?:[\s.]?\d{2})?\b")
+    # French phone numbers: "06 55 50 01 23", "01.45.55.01.23".
+    add(EntityType.PHONE, r"(?<![\d+])\b0[1-9](?:[\s.]\d{2}){4}\b")
+    # IPv6: "2001:db8:4a1c::17".
+    add(
+        EntityType.IP_ADDRESS,
+        r"(?<![\w:])[0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7}(?![\w:])",
+        I,
+        check=lambda m: "::" in m.group(0) or m.group(0).count(":") == 7,
+    )
     # Israeli and other local numbers with a leading 0 area code: "03-555-0147", "054-555-0147".
     add(EntityType.PHONE, r"(?<![\w\-])0\d{1,2}-\d{3}-\d{4}\b")
     # Numbers read out digit by digit after an ID keyword: "medical record number ... four eight two nine one seven",
@@ -344,7 +363,8 @@ def _build_rules() -> list[_Rule]:
     # North American phone numbers, any common formatting.
     add(
         EntityType.PHONE,
-        r"(?<![\w+])(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})[\s.\-]?\d{3}[\s.\-]?\d{4}\b"
+        r"(?<![\w+])(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})(?:[\s.\-]?|\s*(?:\.\.\.|…)\s*)\d{3}"
+        r"(?:[\s.\-]?|\s*(?:\.\.\.|…)\s*)\d{4}\b"
         r"(?:\s*(?:x|ext\.?)\s*\d{1,5})?",
         I,
     )
@@ -356,7 +376,8 @@ def _build_rules() -> list[_Rule]:
     # Spoken emails: "chen dot wei at example dot com", "julie point savard arobase ...".
     add(
         EntityType.EMAIL,
-        r"\b\w+(?:\s+(?:dot|point|punto|kropka|underscore|dash)\s+\w+)*\s+(?:at|arobase|arroba|ma[łl]pa)\s+"
+        rf"\b\w+(?:\s+(?:dot|point|punto|kropka|underscore|dash)\s+\w+(?:[\s\-]+(?:{_SPOKEN_NUMBER}))*)*"
+        r"\s+(?:at|arobase|arroba|ma[łl]pa)\s+"
         r"\w+(?:\s+(?:dot|point|punto|kropka)\s+\w+)*\s+(?:dot|point|punto|kropka)\s+"
         r"(?:com|org|net|ca|edu|gov|io|co|uk|fr|es|pl|il)\b",
         I,
@@ -403,6 +424,16 @@ def _build_rules() -> list[_Rule]:
         rf"\b(?:{_WEEKDAY})\s+(?:the\s+)?(?:{_ORDINAL_WORDS})\b",
         I,
     )
+    # A spoken day of the month on its own: "can we do the twentieth instead?", "no,
+    # the eighteenth". Only when no noun follows ("the third embryo", "the second time").
+    add(
+        EntityType.DATE,
+        rf"\b(?:on|for|to|from|until|till|by|before|after|do|is|no|not|it'?s)\s+the\s+"
+        rf"((?:{_ORDINAL_WORDS.replace(')|first|', ')|', 1)}))(?=\s*(?:[.,?!;)/\n]|$|instead|right|then|works|"
+        rf"so|at|or|okay|ok|please|correct|is|was|of\s+(?:this|next|the)\s+month))",
+        I,
+        group=1,
+    )
     # French, Spanish, Polish, Hebrew: "le 12 mai 1990", "1er décembre", "jueves 6 de noviembre".
     add(
         EntityType.DATE,
@@ -423,7 +454,7 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.DATE,
         rf"(?<!\w)[בלמ]?-?{_DAY_WORDS_HE}(?:\s+{_DAY_WORDS_HE})*\s+ב(?:{_MONTHS_ML})(?!\w)"
-        rf"(?:\s+(?:{_YEAR_WORDS})(?!\w)){{0,8}}",
+        rf"(?:,?\s+(?:{_YEAR_WORDS})(?!\w)){{0,8}}",
     )
     # Month and year: "May 2024", "Feb 2021", "août 2025", "marzo de 2024".
     add(
@@ -439,6 +470,15 @@ def _build_rules() -> list[_Rule]:
         r"(?<![\d])\b\d{1,2}(?:er)?\s+(?:janv|f[ée]vr|avr|juil|sept|d[ée]c|ene|abr|ago|dic|sty|lut|kwi|cze|lip|sie|wrz|pa[źz]|lis|gru)\b\.?",
         I,
     )
+    # Hebrew calendar dates: "כ״ג בחשוון תשנ״א", "ט״ו באב", "א׳ באדר ב׳".
+    add(
+        EntityType.DATE,
+        r"(?<![\w״\"'׳])(?:[א-ל][״\"][א-ט]|[א-ל][׳'])\s+ב?(?:תשרי|מרחשוון|חשוון|חשון|כסלו|כסליו|טבת|שבט|"
+        r"אדר(?:\s+[אב][׳'])?|ניסן|אייר|סיוון|סיון|תמוז|אב|אלול)(?![א-ת])"
+        r"(?:,?\s+(?:ה[׳'])?ת[א-ת]{1,2}[״\"][א-ת])?",
+    )
+    # Hebrew abbreviated months: "12 בנוב׳".
+    add(EntityType.DATE, r"(?<!\d)\d{1,2}\s+ב?(?:ינו|פבר|אפר|יונ|יול|אוג|ספט|אוק|נוב|דצמ)[׳'](?!\w)")
     # Day-first dates without a year: unambiguous ones ("14/03") anywhere, others after a
     # date word ("el 14/03", "punkcja 9.11", "ב-14.3").
     add(EntityType.DATE, r"(?<![\d/.])\b(?!24/7\b)(?:1[3-9]|2\d|3[01])[/.](?:0?[1-9]|1[0-2])\b(?![/.]?\d)")
@@ -466,14 +506,14 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.DATE,
-        rf"\b(?:the\s+)?(?:{_ORDINAL_WORDS})\s+of\s+(?P<month>{_MONTHS})\s+{_SPOKEN_YEAR}\b",
+        rf"\b(?:the\s+)?(?:{_ORDINAL_WORDS})\s+of\s+(?P<month>{_MONTHS}),?\s+{_SPOKEN_YEAR}\b",
         I,
     )
     add(
         EntityType.DATE,
         rf"\b(?:date\s+of\s+birth|birth\s*date|d\.?o\.?b\.?|born(?:\s+on)?)\b[^\n]{{0,25}}?(?:\n[^:\n]{{1,20}}:[ \t]*)?"
         rf"(?:(?:it'?s|his\s+is|hers?\s+is|is|um|uh)[\s,]+)*"
-        rf"((?:(?:{_SPOKEN_NUMBER})[\s\-]+){{2,7}}(?:{_SPOKEN_NUMBER}))\b",
+        rf"((?:(?:{_SPOKEN_NUMBER})(?:\s*,\s*|[\s\-]+)){{2,9}}(?:{_SPOKEN_NUMBER}))\b",
         I,
         group=1,
     )
@@ -496,6 +536,16 @@ def _build_rules() -> list[_Rule]:
 
     add(EntityType.ADDRESS, _STREET, I, check=_street_check)
     add(EntityType.ADDRESS, r"\b(?:p\.?\s?o\.?\s*box|postal\s*box)\s*\d+\b", I)
+    # Streets named first, in French, Spanish, Polish and Hebrew: "88 rue des Érables",
+    # "1205 Calle Mayor", "ul. Kościuszki 12/4", "רחוב הרצל 14", then the city if any.
+    add(
+        EntityType.ADDRESS,
+        r"(?<!\w)(?:\d{1,5}[,\s]+)?(?i:rue|boulevard|boul\.|chemin|calle|avenida|carrera|paseo|ul\.|ulica|ulicy|"
+        r"ulic[ęe]|aleja|al\.)[^\S\n]+(?:(?i:de\s+la|des|du|de|del|la|le)\s+)?(?:[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+|\d{1,3}\b)"
+        r"(?:[^\S\n]+[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+){0,2}(?:[^\S\n]*,?[^\S\n]*(?:\d{1,5}(?:/\d{1,4})?[A-Za-z]?|#\s*\d+-\d+)\b)?"
+        r"(?:,[^\S\n]*(?i:apt|apto|apartment|unit|suite|ste|piso|m\.|lok\.)\.?\s*[\w\-]+)?(?:,[^\S\n]*(?!(?i:apt|apto|unit|suite|ste)\b)[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+(?:[^\S\n][A-ZÀ-Ý][\w'\-]+)?)?",
+    )
+    add(EntityType.ADDRESS, r"(?<![א-ת])(?:רחוב|רח[׳'])\s+[א-ת][א-ת\-\"״]+(?:\s+[א-ת][א-ת\-]+)?(?:\s+\d{1,4})?(?:,\s*[א-ת][א-ת\-]+(?:\s+[א-ת][א-ת\-]+)?)?")
     # Cities and towns where a person lives or comes from ("I live in Sudbury").
     R.append(_Rule(EntityType.ADDRESS, _places()[1], group=0, check=_place_check))
 
@@ -505,9 +555,14 @@ def _build_rules() -> list[_Rule]:
         r"\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][\s\-]?\d[ABCEGHJ-NPRSTV-Z]\d\b",
         I,
     )
+    # Polish ("31-147 Kraków") and French ("..., 33000 Bordeaux") postal codes before a city.
+    add(EntityType.POSTAL_CODE, r"(?<![\d\-])\b(\d{2}-\d{3})\s+[A-ZŁŚŻŹĆ][\wąćęłńóśźż\-]+", group=1)
+    add(EntityType.POSTAL_CODE, r"(?:,|^|\n)[^\S\n]*(\d{5})[^\S\n]+(?:[A-ZÀ-Ý][\wà-ÿ'\-]+)(?!\s+(?:st|street|ave|rd|road|dr)\b)", re.M, group=1)
     # US ZIP only with context (a bare 5-digit number is too ambiguous).
     add(EntityType.ZIP, rf"\b(?:{_US_STATES})\s+(\d{{5}}(?:-\d{{4}})?)\b", group=1)
     add(EntityType.ZIP, r"\bzip(?:\s*code)?\s*(?:is|:)?\s*(\d{5}(?:-\d{4})?)\b", I, group=1)
+    # A city and a ZIP at the end of an address line: "San Antonio, 78201".
+    add(EntityType.ZIP, r"\b[A-Z][a-z]+(?:[^\S\n][A-Z][a-z]+)?,?[^\S\n]+(\d{5}(?:-\d{4})?)[^\S\n]*$", re.M, group=1)
     add(
         EntityType.ZIP,
         r"\b(?:c[óo]digo\s+postal|code\s+postal|kod(?:\s+pocztowy)?|zip|מיקוד)\s*:?\s*(\d{5}(?:-\d{4})?)\b",
@@ -557,6 +612,19 @@ class RegexDetector:
     extra_rules: list[_Rule] = field(default_factory=list)
 
     def detect(self, text: str) -> list[Entity]:
+        out = self._detect(text)
+        # Faxed and scanned text: "6O4-555-Ol74", "9l42 337 O58". Read the numbers
+        # again with look-alike letters as digits; keep what touches a changed letter.
+        shadow = _ocr_shadow(text)
+        if shadow != text:
+            changed = [i for i, (a, b) in enumerate(zip(text, shadow)) if a != b]
+            for e in self._detect(shadow):
+                if e.type in _NAME_GROUP_TYPES or not any(e.start <= i < e.end for i in changed):
+                    continue
+                out.append(Entity(e.type, e.start, e.end, text[e.start : e.end], self.name))
+        return out
+
+    def _detect(self, text: str) -> list[Entity]:
         out: list[Entity] = []
         for rule in [*_RULES, *self.extra_rules]:
             if self.enabled is not None and rule.type not in self.enabled:
@@ -584,3 +652,32 @@ _STREET_RE = re.compile(_STREET, re.IGNORECASE)
 
 def _street_spans(text: str) -> list[tuple[int, int]]:
     return [m.span() for m in _STREET_RE.finditer(text) if _street_check(m)]
+
+
+_OCR_TOKEN = re.compile(r"[0-9A-Za-z]+")
+_OCR_DIGIT = str.maketrans("OolI", "0011")
+
+
+def _ocr_shadow(text: str) -> str:
+    """``text`` with O/o/l/I read as digits inside number-like tokens (same length)."""
+    toks = list(_OCR_TOKEN.finditer(text))
+    numeric = [bool(re.fullmatch(r"[0-9OolI]+", t.group(0))) for t in toks]
+    has_digit = [n and any(c.isdigit() for c in t.group(0)) for n, t in zip(numeric, toks)]
+    convert = [h and not t.group(0).isdigit() for h, t in zip(has_digit, toks)]
+    # Short letter-only tokens joined to a number by "/", "-" or "." ("O9/Ol/199O").
+    for _ in range(3):
+        for i, t in enumerate(toks):
+            if convert[i] or not numeric[i] or len(t.group(0)) > 2:
+                continue
+            for j in (i - 1, i + 1):
+                if 0 <= j < len(toks) and has_digit[j]:
+                    a, b = sorted((i, j))
+                    if re.fullmatch(r"[/\-.]", text[toks[a].end() : toks[b].start()]):
+                        convert[i] = has_digit[i] = True
+    if not any(convert):
+        return text
+    out = list(text)
+    for t, c in zip(toks, convert):
+        if c:
+            out[t.start() : t.end()] = t.group(0).translate(_OCR_DIGIT)
+    return "".join(out)

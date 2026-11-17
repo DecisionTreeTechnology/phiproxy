@@ -63,14 +63,31 @@ def _allow_pattern(value: str) -> Optional[re.Pattern[str]]:
     digits = re.sub(r"\D", "", value)
     if len(digits) >= 7 and len(digits) >= len(re.sub(r"[\s().+\-]", "", value)) - 1:
         # Phone-like: same digits, any separators ("613-555-0100" = "(613) 555 0100").
-        return re.compile(r"(?<!\d)(?:\+?1\D{0,3})?\(?" + r"\D{0,3}".join(digits[-10:]) + r"(?!\d)")
+        # Scanned faxes read 0 as O and 1 as l: "613-555-O188".
+        alike = {"0": "[0Oo]", "1": "[1lI]"}
+        body = r"[^\w]{0,3}".join(alike.get(d, d) for d in digits[-10:])
+        return re.compile(r"(?<![\dOolI])(?:\+?1\D{0,3})?\(?" + body + r"(?![\dOolI])")
     if not value:
         return None
     if value.startswith("@"):
         # Every address at the clinic's email domain: "@clinic.example.org".
         return re.compile(r"[\w.+\-]+" + re.escape(value) + r"(?![\w.\-])", re.IGNORECASE)
-    words = [re.escape(w) for w in value.split()]
+    # Scanned text swaps look-alikes: "Cedar Coast Fert1lity", "C1inic".
+    alike = {"l": "[lIi1]", "i": "[lIi1]", "1": "[lIi1]", "o": "[oO0]", "0": "[oO0]"}
+    words = ["".join(alike.get(c.lower(), re.escape(c)) for c in w) for w in value.split()]
     return re.compile(r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)", re.IGNORECASE)
+
+
+def _covered(e: Entity, allowed: list[tuple[int, int]]) -> bool:
+    """Every letter and digit of ``e`` is inside allowed spans ("1450 West Georgia Street,
+    Vancouver" when the street and the city are each allowed)."""
+    inside = set()
+    for a, b in allowed:
+        if a < e.end and e.start < b:
+            inside.update(range(max(a, e.start), min(b, e.end)))
+    return bool(inside) and all(
+        i in inside for i, ch in enumerate(e.text, e.start) if ch.isalnum()
+    )
 
 
 @dataclass
@@ -146,11 +163,7 @@ class Masker:
         ]
         if self._allow:
             allowed = [m.span() for p in self._allow for m in p.finditer(text)]
-            found = [
-                e
-                for e in found
-                if e.source == "known" or not any(a <= e.start and e.end <= b for a, b in allowed)
-            ]
+            found = [e for e in found if e.source == "known" or not _covered(e, allowed)]
         if self._staff:
             names = [e for e in found if e.type is EntityType.NAME and e.source != "known"]
             cued = self._staff.cued_words(text, names)

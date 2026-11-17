@@ -30,7 +30,7 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 ## What makes it different
 
 - **Your own records as a detector.** Pass the identifiers you already hold for the patient (name, DOB, phone, health card). Exact and one-typo matching against them catches lowercase names and misspellings that pattern matching misses. On the blind benchmark below this lifts recall from 57% to 80%.
-- **Optional local model.** `phiproxy[gliner]` adds a small named-entity model that runs on your own machine and finds names, cities and workplaces that no rule or record covers ("my husband ravi", "I live in Sudbury"). With it, recall on a blind set written after the fixes was 92%, at about 50 ms per message on CPU.
+- **Optional local model.** `phiproxy[gliner]` adds a small named-entity model that runs on your own machine and finds names, cities and workplaces that no rule or record covers ("my husband ravi", "I live in Sudbury"). With it, recall on the newest blind set, scored once before any fix, was 88%, at about 50 ms per message on CPU.
 - **Your clinic's own details pass.** `Policy(allow=["Harborview Reproductive Centre", "613-555-0100", "@clinic.example.org"])` lets the clinic's name, phone numbers, address and email domain reach the model unmasked, so answers keep them. Anything that matches the patient's own record is still masked.
 - **Your staff pass, patients who share their names do not.** `Policy(staff=["Jocelyn Paré", "Will Barnes"])`: a staff member's full name passes anywhere; a first name or surname alone passes only next to a staff cue ("Jocelyn in billing", "AGENT: ... this is Will", "call Hsu at ext. 2240", "Sig: T. Kowalski"). "Will is picking me up" stays masked, because a patient's husband can be called Will too.
 - **Stable tokens per conversation.** The same value gets the same token on every turn of a session, so the model can follow who is who and provider prompt caching keeps working. Tokens are sequential, not derived from the value (see 45 CFR 164.514(c)).
@@ -154,31 +154,31 @@ Presidio is also supported: `pip install phiproxy[presidio]` and add `PresidioDe
 
 ## Benchmark
 
-`benchmark/` holds four synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters, insurance letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
+`benchmark/` holds five synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters, insurance letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
 
 - **v0** (288 messages, English): template-based, written by the detector authors.
-- **blind v1, v2, v3** (420, 400 and 360 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by a different AI model (Opus, Sonnet, Fable) that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). v3 is US-heavy and mentions people without cue words ("Can Omar come in with me?"). A second annotator, also blind to the code, corrected the labels.
+- **blind v1, v2, v3, v4** (420, 400, 360 and 400 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by an AI model (Opus, Sonnet, Fable, Opus again with a new brief) that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). v3 is US-heavy and mentions people without cue words ("Can Omar come in with me?"). v4 comes from a British Columbia clinic with international patients, and has spoken and corrected numbers, scanned faxes, internal staff notes, the clinic's own staff roster, and patients who share a staff member's name. A second annotator, also blind to the code, corrected the labels.
 
 Each blind set was scored once with the detectors frozen, then used to find gaps. So each set's first score is a test of the fixes made on the sets before it:
 
-| recall, first score on unseen text | v1 | v2 | v3 |
-|---|---|---|---|
-| regex | 36.0% | 57.3% | 58.4% |
-| regex + known entities | 54.1% | 80.2% | 68.3% |
-| regex + local model | 77.3% | 87.9% | 84.2% |
-| regex + known + local model | 79.2% | **92.3%** | **88.1%** |
+| recall, first score on unseen text | v1 | v2 | v3 | v4 |
+|---|---|---|---|---|
+| regex | 36.0% | 57.3% | 58.4% | 66.1% |
+| regex + known entities | 54.1% | 80.2% | 68.3% | 73.8% |
+| regex + local model | 77.3% | 87.9% | 84.2% | 86.5% |
+| regex + known + local model | 79.2% | 92.3% | 88.1% | **88.4%** |
 
-| v3 first score, regex + known + local model | |
+| v4 first score, regex + known + local model | |
 |---|---|
-| by channel | chat 93%, SMS 90%, email 89%, call transcripts 86%, notes 84% |
-| by language | en 88%, fr 88%, es 86%, pl 91%, he 77%, mixed 96% |
-| precision | 82.6% (87.1% with the clinic's own details allowed) |
-| messages without identifiers where something was masked | 31% (20% with the clinic's own details allowed) |
+| by channel | chat 92%, SMS 92%, email 91%, notes 87%, call transcripts 83% |
+| by language | en 89%, fr 83%, es 91%, pl 89%, he 80%, mixed 98% |
+| precision | 71.9% (74.6% with the clinic's own details allowed, 78.8% with the staff list too) |
+| messages without identifiers where something was masked | 61% (54% with the clinic's own details, 48% with the staff list too) |
 
 **How to read this honestly:**
 - Expect real traffic to score lower: these sets are AI-written, not written by clinic staff. v0 overstated recall by about 30 points.
 - Without the local model, names not in your records are the main gap. On v3, where names often come with no cue, the pattern rules alone found 43% of names.
-- After the gaps found on each set were fixed, the current code scores 95% to 97% with the local model on all three blind sets. Those numbers are optimistic, which is why the table above shows first scores.
+- After the gaps found on each set were fixed, the current code scores 91% to 98% with the local model on the four blind sets. Those numbers are optimistic, which is why the table above shows first scores. v4 shows how much: the code that scored 95% to 97% on v1 to v3 scored 88% on v4. Expect about 88% on new text of this kind.
 - Over-masking is real. Most of it is the clinic's own contact details (pass them in `Policy(allow=...)`), staff names (pass them in `Policy(staff=...)`), and holiday dates, which stay masked on purpose.
 - Details, label rules, the corrections and full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
 
