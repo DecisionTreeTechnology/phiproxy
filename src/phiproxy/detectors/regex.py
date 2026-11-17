@@ -13,6 +13,7 @@ from importlib import resources
 from typing import Callable, Optional
 
 from ..entities import Entity, EntityType
+from . import _names
 
 _MONTHS = (
     "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
@@ -44,13 +45,6 @@ _NOT_NAMES = {
     "dear", "i'm", "im", "je", "agent", "user", "bot", "intake", "file", "canada",
 }
 
-_RELATIONS = (
-    "husband|wife|partner|spouse|boyfriend|girlfriend|fianc[eé]e?|son|daughter|"
-    "mom|mother|mum|dad|father|sister|brother|friend|donor|surrogate|carrier|"
-    "grandmother|grandfather|aunt|uncle|cousin|niece|nephew|boss|employer|coworker|colleague"
-)
-
-_NAME = r"[A-Z][a-zA-Z'\-]+(?:[ \t]+[A-Z][a-zA-Z'\-]+)?"
 
 _DIGIT_WORDS = "zero|oh|one|two|three|four|five|six|seven|eight|nine"
 # Digits spoken in French, Spanish, Polish and Hebrew (call transcripts).
@@ -130,14 +124,6 @@ def _name_check(m: re.Match[str]) -> bool:
     first = m.group("name").split()[0].lower()
     return first not in _NOT_NAMES
 
-
-def _weak_name_check(m: re.Match[str]) -> bool:
-    # After "for", "from", "to", a short all-caps word is an acronym (HSG, ICSI),
-    # not a name. Stronger cues ("Patient: NG") keep short all-caps names.
-    name = m.group("name")
-    if name.isupper() and len(name) <= 4:
-        return False
-    return _name_check(m)
 
 
 # Days of the month spoken in French and Spanish ("quatorze", "vingt et un",
@@ -291,7 +277,7 @@ def _build_rules() -> list[_Rule]:
         I,
     )
     # Spelled-out words ("k o w a l c z y k", "W-O-J-C-I-K") are almost always names.
-    add(EntityType.NAME, r"(?<![\w\-])[A-Za-z](?:(?:\s+|-)(?:hyphen\s+|dash\s+)?[A-Za-z]){3,}(?![\w\-])")
+    add(EntityType.NAME, _names.SPELLED)
     # Postal codes read aloud: "n one h four k seven".
     add(
         EntityType.POSTAL_CODE,
@@ -380,39 +366,10 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.ZIP, rf"\b(?:{_US_STATES})\s+(\d{{5}}(?:-\d{{4}})?)\b", group=1)
     add(EntityType.ZIP, r"\bzip(?:\s*code)?\s*(?:is|:)?\s*(\d{5}(?:-\d{4})?)\b", I, group=1)
 
-    # Names introduced by context. Presidio or the known-entity list catch the rest.
-    add(
-        EntityType.NAME,
-        r"\b(?i:my\s+name\s+is|name'?s|this\s+is|it'?s|i\s+am|i'm|signed|regards|sincerely|"
-        r"thanks|thank\s+you|cheers)\s*,?\s+(?P<name>" + _NAME + r")",
-        group=0,
-        check=_name_check,
-    )
-    add(
-        EntityType.NAME,
-        r"\b(?i:my\s+(?:" + _RELATIONS + r")(?:'s\s+name\s+is|\s+is|,)?)\s+(?P<name>" + _NAME + r")",
-        group=0,
-        check=_name_check,
-    )
-    add(
-        EntityType.NAME,
-        r"\b(?i:patient|pt|client|dear|hi|hello|hey)\s*:?\s+(?P<name>" + _NAME + r")",
-        group=0,
-        check=_name_check,
-    )
-    add(
-        EntityType.NAME,
-        r"\b(?i:for|from|to)\s*:?\s+(?P<name>" + _NAME + r")",
-        group=0,
-        check=_weak_name_check,
-    )
-    # Courtesy titles name patients and relatives, not clinicians.
-    add(
-        EntityType.NAME,
-        r"\b(?:Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Sr|Sra|Pan|Pani)\.?\s+(?P<name>" + _NAME + r")",
-        group=0,
-        check=_name_check,
-    )
+    # Names introduced by context (see _names.py). The local model or the
+    # known-entity list catch names with no cue.
+    for pat, flags, check in [*_names.rules(_NOT_NAMES), *_names.courtesy_rules(_NOT_NAMES)]:
+        add(EntityType.NAME, pat, flags, check=check)
     add(
         EntityType.PROVIDER,
         r"\b(?i:dr|dre|dra|doctor|doctora|docteur|docteure|nurse|enf|inf|np|rn)\.?\s+"
