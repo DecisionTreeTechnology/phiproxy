@@ -1,6 +1,7 @@
 """Convert the blind set from inline markup to offset spans.
 
-    python benchmark/blind/convert.py
+    python benchmark/blind/convert.py                  # v1
+    python benchmark/blind/convert.py v2               # benchmark/blind/blind_v2.source.jsonl
 
 Source lines look like ``"text": "hi its [[NAME|jess]] ..."``. The output has the
 markup stripped and character offsets in ``spans``, the same format as v0.
@@ -13,8 +14,6 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).parent
-SRC = HERE / "blind_v1.source.jsonl"
-OUT = HERE.parent / "data" / "patient_comms_blind_v1.jsonl"
 MARK = re.compile(r"\[\[([A-Z_]+)\|(.*?)\]\]", re.S)
 
 
@@ -38,8 +37,13 @@ def convert(marked: str) -> tuple[str, list[dict]]:
 
 
 def main() -> None:
+    import sys
+
+    version = sys.argv[1] if len(sys.argv) > 1 else "v1"
+    src = HERE / f"blind_{version}.source.jsonl"
+    out_path = HERE.parent / "data" / f"patient_comms_blind_{version}.jsonl"
     rows = []
-    for line in SRC.read_text().splitlines():
+    for line in src.read_text().splitlines():
         if not line.strip():
             continue
         r = json.loads(line)
@@ -48,8 +52,8 @@ def main() -> None:
             assert text[s["start"] : s["end"]].strip(), r["id"]
         rows.append({"id": r["id"], "channel": r["channel"], "lang": r["lang"], "text": text,
                      "spans": spans, "known": r.get("known") or {}})
-    OUT.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
-    print(f"wrote {len(rows)} rows, {sum(len(r['spans']) for r in rows)} spans -> {OUT}")
+    out_path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+    print(f"wrote {len(rows)} rows, {sum(len(r['spans']) for r in rows)} spans -> {out_path}")
 
 
 if __name__ == "__main__":

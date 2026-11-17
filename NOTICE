@@ -3,3 +3,9 @@ Copyright 2026 Decision Tree Technology
 
 This product includes software developed by Decision Tree Technology
 (https://decisiontree.tech/).
+
+This product includes place names from GeoNames (https://www.geonames.org/),
+licensed under the Creative Commons Attribution 4.0 License
+(https://creativecommons.org/licenses/by/4.0/). The file
+src/phiproxy/data/places_ca_us.tsv is derived from cities15000.txt
+(Canadian and US places, name and ASCII name only).
