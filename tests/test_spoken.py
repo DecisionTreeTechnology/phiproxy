@@ -64,3 +64,27 @@ def test_spoken_identifiers(text, span):
 )
 def test_spoken_lookalikes(text):
     assert not [e for e in RegexDetector().detect(text) if e.type is not T.DATE]
+
+
+def test_spoken_dates():
+    from phiproxy import RegexDetector
+
+    d = RegexDetector()
+
+    def dates(t):
+        return [e.text for e in d.detect(t) if e.type.value == "DATE"]
+
+    assert dates("my date of birth is one four, oh seven, nineteen eighty-nine, ok")
+    assert dates("date of birth two twenty-six, ninety-four. We need")
+    assert any("ninety-one" in x for x in dates("born the third of May, ninety-one."))
+    assert dates("caller: yes um can we do the twentieth instead")
+    assert dates("agent: ok i have you down for the eighth / caller: no")
+    assert dates("it's oh seven one four nineteen eighty nine")
+    assert dates("שאיבה 12 בנוב׳ 07:30")
+    assert any("תשעים" in x for x in dates("מתקשרת: עשרים ושניים בנובמבר, תשעים"))
+    assert dates("can we move from dec 2 to dec 4?") == ["dec 2", "dec 4"]
+    # Not dates
+    assert not dates("we transferred the second embryo")
+    assert not dates("this is the third time I call")
+    assert not dates("it's the first, right")
+    assert not dates("lot number one two three four five six seven eight")

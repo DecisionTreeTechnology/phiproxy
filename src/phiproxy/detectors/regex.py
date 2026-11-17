@@ -20,7 +20,7 @@ _MONTHS = (
     "sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
 )
 # Month words that are also ordinary English words; only count them when capitalized.
-_AMBIGUOUS_MONTHS = {"may", "mar", "march", "jan", "june", "july", "aug", "sep", "dec"}
+_AMBIGUOUS_MONTHS = {"may", "mar", "march", "jan", "june", "july", "sep"}
 
 _US_STATES = (
     "AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|"
@@ -403,6 +403,16 @@ def _build_rules() -> list[_Rule]:
         rf"\b(?:{_WEEKDAY})\s+(?:the\s+)?(?:{_ORDINAL_WORDS})\b",
         I,
     )
+    # A spoken day of the month on its own: "can we do the twentieth instead?", "no,
+    # the eighteenth". Only when no noun follows ("the third embryo", "the second time").
+    add(
+        EntityType.DATE,
+        rf"\b(?:on|for|to|from|until|till|by|before|after|do|is|no|not|it'?s)\s+the\s+"
+        rf"((?:{_ORDINAL_WORDS.replace(')|first|', ')|', 1)}))(?=\s*(?:[.,?!;)/\n]|$|instead|right|then|works|"
+        rf"so|at|or|okay|ok|please|correct|is|was|of\s+(?:this|next|the)\s+month))",
+        I,
+        group=1,
+    )
     # French, Spanish, Polish, Hebrew: "le 12 mai 1990", "1er décembre", "jueves 6 de noviembre".
     add(
         EntityType.DATE,
@@ -423,7 +433,7 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.DATE,
         rf"(?<!\w)[בלמ]?-?{_DAY_WORDS_HE}(?:\s+{_DAY_WORDS_HE})*\s+ב(?:{_MONTHS_ML})(?!\w)"
-        rf"(?:\s+(?:{_YEAR_WORDS})(?!\w)){{0,8}}",
+        rf"(?:,?\s+(?:{_YEAR_WORDS})(?!\w)){{0,8}}",
     )
     # Month and year: "May 2024", "Feb 2021", "août 2025", "marzo de 2024".
     add(
@@ -439,6 +449,8 @@ def _build_rules() -> list[_Rule]:
         r"(?<![\d])\b\d{1,2}(?:er)?\s+(?:janv|f[ée]vr|avr|juil|sept|d[ée]c|ene|abr|ago|dic|sty|lut|kwi|cze|lip|sie|wrz|pa[źz]|lis|gru)\b\.?",
         I,
     )
+    # Hebrew abbreviated months: "12 בנוב׳".
+    add(EntityType.DATE, r"(?<!\d)\d{1,2}\s+ב?(?:ינו|פבר|אפר|יונ|יול|אוג|ספט|אוק|נוב|דצמ)[׳'](?!\w)")
     # Day-first dates without a year: unambiguous ones ("14/03") anywhere, others after a
     # date word ("el 14/03", "punkcja 9.11", "ב-14.3").
     add(EntityType.DATE, r"(?<![\d/.])\b(?!24/7\b)(?:1[3-9]|2\d|3[01])[/.](?:0?[1-9]|1[0-2])\b(?![/.]?\d)")
@@ -466,14 +478,14 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.DATE,
-        rf"\b(?:the\s+)?(?:{_ORDINAL_WORDS})\s+of\s+(?P<month>{_MONTHS})\s+{_SPOKEN_YEAR}\b",
+        rf"\b(?:the\s+)?(?:{_ORDINAL_WORDS})\s+of\s+(?P<month>{_MONTHS}),?\s+{_SPOKEN_YEAR}\b",
         I,
     )
     add(
         EntityType.DATE,
         rf"\b(?:date\s+of\s+birth|birth\s*date|d\.?o\.?b\.?|born(?:\s+on)?)\b[^\n]{{0,25}}?(?:\n[^:\n]{{1,20}}:[ \t]*)?"
         rf"(?:(?:it'?s|his\s+is|hers?\s+is|is|um|uh)[\s,]+)*"
-        rf"((?:(?:{_SPOKEN_NUMBER})[\s\-]+){{2,7}}(?:{_SPOKEN_NUMBER}))\b",
+        rf"((?:(?:{_SPOKEN_NUMBER})(?:\s*,\s*|[\s\-]+)){{2,9}}(?:{_SPOKEN_NUMBER}))\b",
         I,
         group=1,
     )

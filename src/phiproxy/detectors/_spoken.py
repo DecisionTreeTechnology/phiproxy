@@ -228,7 +228,7 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
             run.spoken += 1
             joins = 0
             continue
-        if len(w) == 1 and w.isalpha() and w.isascii():
+        if len(w) == 1 and w.isalpha() and w.isascii() and text[s - 1 : s] not in ("'", "’"):
             # A single letter belongs to a run only beside a number or another letter.
             nxt = next((t.group(0).lower() for t in tokens[i + 1 :] if t.group(0) not in _PAUSES), "")
             ahead = bool(_number_word(nxt)) or (len(nxt) == 1 and nxt.isalpha()) or nxt in _NATO
@@ -257,6 +257,15 @@ _POSTAL = re.compile(r"[A-Z]\d[A-Z]\d[A-Z]\d")
 _IP = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
 
 
+def _is_date(d: str) -> bool:
+    """Eight digits that read as MMDDYYYY or DDMMYYYY."""
+    year = int(d[4:])
+    if not 1900 <= year <= 2099:
+        return False
+    a, b = int(d[:2]), int(d[2:4])
+    return (1 <= a <= 12 and 1 <= b <= 31) or (1 <= b <= 12 and 1 <= a <= 31)
+
+
 def _classify(s: str) -> Optional[EntityType]:
     plain = s.replace(".", "")
     digits = sum(c.isdigit() for c in plain)
@@ -268,6 +277,8 @@ def _classify(s: str) -> Optional[EntityType]:
     if _POSTAL.fullmatch(plain):
         return EntityType.POSTAL_CODE
     if letters == 0:
+        if digits == 8 and _is_date(plain):
+            return EntityType.DATE  # "oh seven, one four, nineteen eighty nine"
         if digits in (7, 10) or (digits == 11 and plain[0] == "1"):
             return EntityType.PHONE
         if digits >= 9:
