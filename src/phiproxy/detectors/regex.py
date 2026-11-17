@@ -13,7 +13,7 @@ from importlib import resources
 from typing import Callable, Optional
 
 from ..entities import Entity, EntityType
-from . import _names
+from . import _names, _spoken
 
 _MONTHS = (
     "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
@@ -199,6 +199,10 @@ def _places() -> tuple[dict[str, bool], re.Pattern[str]]:
     return names, pattern
 
 
+_STREET = (
+    rf"\b\d{{1,6}}\s+(?:[A-Za-z0-9'\-]+\s+){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
+    r"(?:,?\s*(?:apt|apartment|unit|suite|ste|#)\.?\s*[A-Za-z0-9\-]+)?"
+)
 _STREET_SUFFIX_RE = re.compile(f"(?:{_STREET_SUFFIX})", re.I)
 
 # "30 with Dr. Lal", "25 mcg per Dr.", "a 5 hour drive": a number, then words that
@@ -490,13 +494,7 @@ def _build_rules() -> list[_Rule]:
     # "Esther, 92, lives with them": a capitalized name, then the age between commas.
     add(EntityType.AGE, rf"\b[A-Z][a-z]+,\s+(9\d|1[01]\d),", group=1)
 
-    add(
-        EntityType.ADDRESS,
-        rf"\b\d{{1,6}}\s+(?:[A-Za-z0-9'\-]+\s+){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
-        r"(?:,?\s*(?:apt|apartment|unit|suite|ste|#)\.?\s*[A-Za-z0-9\-]+)?",
-        I,
-        check=_street_check,
-    )
+    add(EntityType.ADDRESS, _STREET, I, check=_street_check)
     add(EntityType.ADDRESS, r"\b(?:p\.?\s?o\.?\s*box|postal\s*box)\s*\d+\b", I)
     # Cities and towns where a person lives or comes from ("I live in Sudbury").
     R.append(_Rule(EntityType.ADDRESS, _places()[1], group=0, check=_place_check))
@@ -575,4 +573,14 @@ class RegexDetector:
                 if end <= start:
                     continue
                 out.append(Entity(rule.type, start, end, text[start:end], self.name))
+        # Identifiers read out loud: "four one six... five five five...", "T three A".
+        spoken = [*_spoken.detect(text), *_spoken.street_numbers(text, _street_spans)]
+        out.extend(e for e in spoken if self.enabled is None or e.type in self.enabled)
         return out
+
+
+_STREET_RE = re.compile(_STREET, re.IGNORECASE)
+
+
+def _street_spans(text: str) -> list[tuple[int, int]]:
+    return [m.span() for m in _STREET_RE.finditer(text) if _street_check(m)]

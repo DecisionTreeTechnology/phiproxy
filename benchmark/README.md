@@ -21,15 +21,16 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 
 | configuration | v0 | v1 first | v2 first | v3 first | v1 now | v2 now | v3 now |
 |---|---|---|---|---|---|---|---|
-| regex | 84.3% | 36.0% | 57.3% | 58.4% | 80.8% | 77.9% | 65.5% |
-| regex + known entities | 94.3% | 54.1% | 80.2% | 68.3% | 85.5% | 88.9% | 74.9% |
-| regex + local model | 98.6% | 77.3% | 87.9% | **84.2%** | 93.4% | 92.5% | 91.3% |
-| regex + known + local model | 99.1% | 79.2% | 92.3% | **88.1%** | 94.7% | 94.9% | 94.7% |
+| regex | 84.3% | 36.0% | 57.3% | 58.4% | 81.7% | 79.9% | 65.9% |
+| regex + known entities | 94.3% | 54.1% | 80.2% | 68.3% | 86.4% | 91.0% | 75.3% |
+| regex + local model | 98.6% | 77.3% | 87.9% | **84.2%** | 94.2% | 94.2% | 91.6% |
+| regex + known + local model | 99.1% | 79.2% | 92.3% | **88.1%** | 95.5% | 96.5% | 95.0% |
 
 - "First" is the score of the frozen code on a set it had never seen. "Now" is the current code, after fixes informed by that set, so it is optimistic.
 - v3 tested the name rules added after v2 (finding names from self-introductions, relatives, chart labels, sign-offs and signature blocks, without a model). On v3, before those rules, the pattern detector found 8% of names and 43.1% of all identifiers; with them, 43% of names and 58.4% overall, at the same precision. With the local model the gain is smaller (82.1% to 84.2%), because the model already finds most names.
 - v0 overstates recall, because it was written by the people who wrote the detectors.
 - On v2 the "known entities" rows are optimistic: for some messages the v2 author filled the patient record from the message itself.
+- Spoken identifiers: after the v3 first score, numbers read out loud are rebuilt before matching (grouped and compound number words in five languages, spelled letters, the phonetic alphabet). "Now" recall on call transcripts with the local model rose from 91% to 94% (v1), 88% to 94% (v2) and 94% to 96% (v3); without the model, from 82% to 86%, 79% to 86% and 77% to 80%. False positives did not rise on any set.
 - v3 first score with the local model, by channel: chat 93%, SMS 90%, email 89%, calls 86%, notes 84%. By language: en 88%, fr 88%, es 86%, pl 91%, he 77%, mixed 96%. By type, the weakest were account numbers (49%: claim, group and certificate numbers without a colon) and donor and embryo codes (38%). Those were fixed after the first score.
 
 ## Results (over-masking)
@@ -37,12 +38,12 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 | regex + known + local model | precision | messages without identifiers where something was masked |
 |---|---|---|
 | v1 now | 91.5% | 16% |
-| v2 now, clinic details allowed | 83.4% | 29% |
+| v2 now, clinic details allowed | 83.6% | 29% |
 | v3 first score, default policy | 82.6% | 31% |
 | v3 first score, clinic details allowed | 87.1% | 20% |
 | v3 now, default policy | 86.5% | 26% |
 | v3 now, clinic details allowed | 91.2% | 15% |
-| v2 now, clinic details and staff list | 85.7% | 27% |
+| v2 now, clinic details and staff list | 85.9% | 27% |
 | v3 now, clinic details and staff list | 93.0% | 15% |
 
 v2 and v3 contain many email footers and letterheads with the fictional clinic's own name, phone, fax, address and email. Those are not patient data, so they are not labelled, and phiproxy masks them unless the deployment lists them in `Policy(allow=[...])`. The "clinic details allowed" rows pass `blind/clinic_v2.json` or `blind/clinic_v3.json` with `--allow`. Most of the rest is holiday and clinic-closure dates (masked on purpose: a date is never exempted, because it could be a birthday), staff first names that are also words ("Will", "Grace", "Hope"), staff names without a title, and card last-four digits the label rules did not ask for.
