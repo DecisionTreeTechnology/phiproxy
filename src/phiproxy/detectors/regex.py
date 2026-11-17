@@ -199,6 +199,28 @@ def _places() -> tuple[dict[str, bool], re.Pattern[str]]:
     return names, pattern
 
 
+_STREET_SUFFIX_RE = re.compile(f"(?:{_STREET_SUFFIX})", re.I)
+
+# "30 with Dr. Lal", "25 mcg per Dr.", "a 5 hour drive": a number, then words that
+# cannot be part of a street name, then a street suffix.
+_NOT_STREET_WORDS = frozenset(
+    """
+    with per at am pm a m p and or to for the by on in of from is was
+    hour hours hr hrs min mins minute minutes sec day days week weeks month months
+    mg mcg ml iu units unit mm cm kg lb lbs oz percent
+    """.split()
+)
+
+
+def _street_check(m: re.Match[str]) -> bool:
+    words = re.findall(r"[A-Za-z]+", m.group(0))
+    for i, w in enumerate(words):  # only the words before the street suffix
+        if _STREET_SUFFIX_RE.fullmatch(w):
+            words = words[:i]
+            break
+    return not any(w.lower() in _NOT_STREET_WORDS for w in words)
+
+
 def _place_check(m: re.Match[str]) -> bool:
     names, _ = _places()
     place = m.group("place")
@@ -473,6 +495,7 @@ def _build_rules() -> list[_Rule]:
         rf"\b\d{{1,6}}\s+(?:[A-Za-z0-9'\-]+\s+){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
         r"(?:,?\s*(?:apt|apartment|unit|suite|ste|#)\.?\s*[A-Za-z0-9\-]+)?",
         I,
+        check=_street_check,
     )
     add(EntityType.ADDRESS, r"\b(?:p\.?\s?o\.?\s*box|postal\s*box)\s*\d+\b", I)
     # Cities and towns where a person lives or comes from ("I live in Sudbury").

@@ -227,3 +227,16 @@ def test_detects_v3_shapes(text, etype, value):
 def test_ignores_v3_lookalikes(text):
     found = {(e.type, e.text) for e in RegexDetector().detect(text)}
     assert not {f for f in found if f[0] in (T.DATE, T.AGE, T.ID, T.ACCOUNT)}, found
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["see you at 9:30 with Dr. Lal", "it's a 5 hour drive.", "25 mcg per Dr. Kaur twice daily"],
+)
+def test_number_then_doctor_is_not_a_street(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type is T.ADDRESS]
+
+
+def test_street_with_unit_still_found():
+    found = [e.text for e in RegexDetector().detect("new address is 78 Elm Crescent, Unit 4B, London")]
+    assert "78 Elm Crescent, Unit 4B" in found

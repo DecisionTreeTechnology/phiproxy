@@ -1,10 +1,10 @@
 {
   "regex": {
-    "recall": 0.6428571428571429,
+    "recall": 0.8428571428571429,
     "precision": 1.0,
     "spans": 560,
-    "missed": 200,
-    "leaked_char_rate": 0.2517758484609313,
+    "missed": 88,
+    "leaked_char_rate": 0.1414759273875296,
     "by_type": {
       "ACCOUNT": 1.0,
       "ADDRESS": 0.5555555555555556,
@@ -14,29 +14,29 @@
       "EMAIL": 1.0,
       "HEALTH_CARD": 1.0,
       "MRN": 1.0,
-      "NAME": 0.3225806451612903,
+      "NAME": 0.7741935483870968,
       "PHONE": 1.0,
       "POSTAL_CODE": 1.0
     },
     "by_channel": {
-      "call": 0.6,
-      "chat": 0.7894736842105263,
-      "note": 0.631578947368421,
-      "sms": 0.5454545454545454
+      "call": 0.8,
+      "chat": 0.8947368421052632,
+      "note": 0.9473684210526315,
+      "sms": 0.7272727272727273
     },
     "by_lang": {
-      "en": 0.6428571428571429
+      "en": 0.8428571428571429
     },
     "clean_messages": 24,
     "clean_masked_rate": 0.0,
     "false_positives": 0
   },
   "regex+known": {
-    "recall": 0.8857142857142857,
+    "recall": 0.9428571428571428,
     "precision": 1.0,
     "spans": 560,
-    "missed": 64,
-    "leaked_char_rate": 0.11444356748224152,
+    "missed": 32,
+    "leaked_char_rate": 0.08307024467245462,
     "by_type": {
       "ACCOUNT": 1.0,
       "ADDRESS": 0.5555555555555556,
@@ -46,29 +46,29 @@
       "EMAIL": 1.0,
       "HEALTH_CARD": 1.0,
       "MRN": 1.0,
-      "NAME": 0.8709677419354839,
+      "NAME": 1.0,
       "PHONE": 1.0,
       "POSTAL_CODE": 1.0
     },
     "by_channel": {
-      "call": 0.9,
+      "call": 1.0,
       "chat": 0.8947368421052632,
-      "note": 0.7894736842105263,
+      "note": 0.9473684210526315,
       "sms": 0.9545454545454546
     },
     "by_lang": {
-      "en": 0.8857142857142857
+      "en": 0.9428571428571428
     },
     "clean_messages": 24,
     "clean_masked_rate": 0.0,
     "false_positives": 0
   },
   "regex+gliner": {
-    "recall": 0.9821428571428571,
+    "recall": 0.9857142857142858,
     "precision": 1.0,
     "spans": 560,
-    "missed": 10,
-    "leaked_char_rate": 0.016574585635359115,
+    "missed": 8,
+    "leaked_char_rate": 0.014798737174427782,
     "by_type": {
       "ACCOUNT": 1.0,
       "ADDRESS": 0.9305555555555556,
@@ -78,18 +78,18 @@
       "EMAIL": 1.0,
       "HEALTH_CARD": 1.0,
       "MRN": 1.0,
-      "NAME": 0.9798387096774194,
+      "NAME": 0.9879032258064516,
       "PHONE": 1.0,
       "POSTAL_CODE": 1.0
     },
     "by_channel": {
       "call": 0.9625,
       "chat": 0.9802631578947368,
-      "note": 0.9868421052631579,
+      "note": 1.0,
       "sms": 0.9886363636363636
     },
     "by_lang": {
-      "en": 0.9821428571428571
+      "en": 0.9857142857142858
     },
     "clean_messages": 24,
     "clean_masked_rate": 0.0,

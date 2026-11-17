@@ -256,11 +256,28 @@ def _first(m: re.Match[str]) -> str:
     return ""
 
 
-# A clinician's name: "Dr. A. Kaur", "RN T. Boateng", "Beth Alvarado, RN".
-_TITLE_BEFORE = re.compile(
-    r"(?i:\b(?:dr|dre|dra|doctor|doctora|docteur|docteure|nurse|rn|np|md|inf|enf)\.?|ד[״\"']ר)\s*$"
+# A clinician's name: "Dr. A. Kaur", "RN T. Boateng", "Beth Alvarado, RN",
+# "lek. Ewa Nowak", "Panie doktorze Okafor", "Surgeon Nwosu".
+_TITLES = (
+    r"dr|dre|dra|doctor|doctora|docteur|docteure|doktor|doktora|doktorze|doktorem|doktorowi|"
+    r"doktorka|doktorki|lek|surgeon|nurse|midwife|rn|rpn|np|md|inf|enf"
 )
-_CREDENTIAL_AFTER = re.compile(r"^,?[ \t]*(?:RN|RPN|NP|MD|M\.D\.|PhD|DO|inf\.?|RM)\b")
+_TITLE_BEFORE = re.compile(rf"(?i:\b(?:{_TITLES})\.?|ד[״\"']ר)\s*$")
+_CREDENTIALS = r"RN|RPN|NP|MD|M\.D\.|PhD|DO|RM|LCSW|MSW|CGC|inf\.?"
+_CREDENTIAL_AFTER = re.compile(rf"^,?[ \t]*(?:{_CREDENTIALS})(?![^\W\d_])")
+_CREDENTIAL_END = re.compile(rf"(?:^|[\s,])(?:{_CREDENTIALS})$")
+_TITLE_IN = re.compile(rf"(?:^|\s)(?i:(?:{_TITLES})\.?|ד[״\"']ר)\s")
+
+
+def is_clinician(text: str, start: int, end: int) -> bool:
+    """True when the name at text[start:end] carries a clinician title or credential."""
+    span = text[start:end]
+    return bool(
+        _TITLE_BEFORE.search(text[max(0, start - 16) : start])
+        or _TITLE_IN.search(span)
+        or _CREDENTIAL_AFTER.match(text[end : end + 10])
+        or _CREDENTIAL_END.search(span)
+    )
 
 
 def make_checks(not_names: frozenset[str] | set[str]):
@@ -274,7 +291,7 @@ def make_checks(not_names: frozenset[str] | set[str]):
         text, start, end = m.string, m.start("name"), m.end("name")
         if _TITLE_BEFORE.search(text[max(0, start - 12) : start]):
             return False
-        if _CREDENTIAL_AFTER.match(text[end : end + 8]):
+        if _CREDENTIAL_AFTER.match(text[end : end + 10]) or _CREDENTIAL_END.search(name):
             return False
         if name.isupper() and "," not in name:
             # "ID", "IVF", "DONOR MATCH": all-caps words are labels, except

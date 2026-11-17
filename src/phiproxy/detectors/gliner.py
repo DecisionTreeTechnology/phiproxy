@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..entities import Entity, EntityType
+from ._names import is_clinician
 
 DEFAULT_MODEL = "urchade/gliner_multi_pii-v1"
 
@@ -57,6 +58,14 @@ _NOT_NAME_WORDS = frozenset(
     yo tú usted ustedes nosotros nosotras él ella ellos ellas mi hola esposo esposa
     ja ty wy oni ona pan pani mój moja cześć mąż żona
     אני אתה את אנחנו הוא היא הם הן שלום
+    appelant appelante appelants persona personas que llama llamó participant participants
+    participante participantes addressee recipient recipients donor oocyte sperm egg
+    partners neighbor neighbour neighbors neighbours friend friends family relative
+    moms mom's mums dads mamá mama mamy papá papa mère père maman babcia babci babcią dziadek
+    osoba osobę osoby towarzyszącą towarzysząca alguien quelqu'un ktoś
+    dear estimado estimada estimados estimadas cher chère chers chères drodzy szanowni
+    pacientes pacjenci pacjentki מטופלים מטופלות יקרים יקרות
+    nvm vm hsg hr it reply bueno name s
     """.split()
 )
 
@@ -81,14 +90,27 @@ def _words(span: str) -> list[str]:
     return re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", span.lower())
 
 
+# Places inside the clinic, phone extensions and lot numbers are not addresses.
+_NOT_PLACE = re.compile(
+    r"(?i)^(?:ext|extension|x|poste|ext\.|wewn|room|rm|suite|ste|boardroom|office|bureau|"
+    r"sala|salle|pokój|lot|lote|front\s+desk|reception|שלוחה|חדר)\b"
+)
+
+
 def _keep(t: EntityType, span: str) -> bool:
     words = _words(span)
     if t is EntityType.NAME:
         # Names have no digits ("embryo 1") and are rarely more than four words.
         if any(ch.isdigit() for ch in span) or len(words) > 4:
             return False
-        return bool(words) and not all(w in _NOT_NAME_WORDS for w in words)
+        # One letter is an initial or a list marker ("Reply C"), not a name alone;
+        # several are a name spelled out ("K O W").
+        if sum(len(w) == 1 for w in words) >= 2:
+            return True
+        return any(w not in _NOT_NAME_WORDS and len(w) > 1 for w in words)
     if t is EntityType.ADDRESS:
+        if _NOT_PLACE.match(span.strip()):
+            return False
         # Bare numbers ("401", "ext 214") are not places; nor are provinces/states.
         if not any(ch.isdigit() for ch in span) and not words:
             return False
@@ -140,6 +162,9 @@ class GlinerDetector:
                     continue
                 start, end = offset + p["start"], offset + p["end"]
                 span = text[start:end]
+                if t is EntityType.NAME and is_clinician(text, start, end):
+                    # "Dr. Wójcik", "Rohan Iyer, MD": a clinician, not the patient.
+                    t = EntityType.PROVIDER
                 if (start, end, t) in seen or len(span.strip()) < 2 or not _keep(t, span):
                     continue
                 seen.add((start, end, t))

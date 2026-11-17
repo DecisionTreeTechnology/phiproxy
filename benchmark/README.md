@@ -36,12 +36,16 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 
 | regex + known + local model | precision | messages without identifiers where something was masked |
 |---|---|---|
-| v1 now | 90.4% | 17% |
-| v2 now, clinic details allowed | 80.5% | 35% |
+| v1 now | 91.5% | 16% |
+| v2 now, clinic details allowed | 83.4% | 29% |
 | v3 first score, default policy | 82.6% | 31% |
 | v3 first score, clinic details allowed | 87.1% | 20% |
+| v3 now, default policy | 86.5% | 26% |
+| v3 now, clinic details allowed | 91.2% | 15% |
 
 v2 and v3 contain many email footers and letterheads with the fictional clinic's own name, phone, fax, address and email. Those are not patient data, so they are not labelled, and phiproxy masks them unless the deployment lists them in `Policy(allow=[...])`. The "clinic details allowed" rows pass `blind/clinic_v2.json` or `blind/clinic_v3.json` with `--allow`. Most of the rest is holiday and clinic-closure dates (masked on purpose: a date is never exempted, because it could be a birthday), staff first names that are also words ("Will", "Grace", "Hope"), staff names without a title, and card last-four digits the label rules did not ask for.
+
+After the v3 first score, the local model's guesses were filtered further: speaker labels and role words in French, Spanish, Polish and Hebrew ("Appelante", "Persona que llama", "Estimados pacientes") are dropped; a person with a clinician title or credential ("dr Wójcik", "Panie doktorze Okafor", "Rohan Iyer, MD", "N. Haddad RN") is treated as a clinician and passes like other clinician names; phone extensions, rooms and lot numbers are no longer places. On v3 this removed a third of the false positives (123 to 84 with clinic details allowed), and recall did not change on any set. These are "now" numbers, measured on the sets used to find the problems.
 
 ## Files
 
