@@ -101,3 +101,12 @@ async def test_known_entities_provider(monkeypatch):
     g = guard(known_entities_provider="fake_lookup:lookup")
     out = await g.async_pre_call_hook(None, None, request("priya here, quick question", patient_id="p-1"), "completion")
     assert "priya" not in json.dumps(out["messages"]).lower()
+
+
+async def test_clinic_details_and_staff_from_config():
+    g = guard(allow="Harborview Reproductive Centre, 613-555-0100", staff=["Jocelyn Paré"])
+    data = request("Harborview Reproductive Centre (613-555-0100): Jocelyn in billing said to call 416-555-0142")
+    out = await g.async_pre_call_hook(None, None, data, "completion")
+    sent = json.dumps(out["messages"], ensure_ascii=False)
+    assert "Harborview Reproductive Centre" in sent and "613-555-0100" in sent
+    assert "Jocelyn" in sent and "416-555-0142" not in sent

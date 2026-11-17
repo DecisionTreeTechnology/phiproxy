@@ -31,7 +31,8 @@ When the reply comes back, phiproxy swaps the stand-ins for the real values, so 
 
 - **Your own records as a detector.** Pass the identifiers you already hold for the patient (name, DOB, phone, health card). Exact and one-typo matching against them catches lowercase names and misspellings that pattern matching misses. On the blind benchmark below this lifts recall from 57% to 80%.
 - **Optional local model.** `phiproxy[gliner]` adds a small named-entity model that runs on your own machine and finds names, cities and workplaces that no rule or record covers ("my husband ravi", "I live in Sudbury"). With it, recall on a blind set written after the fixes was 92%, at about 50 ms per message on CPU.
-- **Your clinic's own details pass.** `Policy(allow=["Harborview Reproductive Centre", "613-555-0100", "@clinic.example.org"])` lets the clinic's name, phone numbers, address, email domain and staff names reach the model unmasked, so answers keep them. Anything that matches the patient's own record is still masked.
+- **Your clinic's own details pass.** `Policy(allow=["Harborview Reproductive Centre", "613-555-0100", "@clinic.example.org"])` lets the clinic's name, phone numbers, address and email domain reach the model unmasked, so answers keep them. Anything that matches the patient's own record is still masked.
+- **Your staff pass, patients who share their names do not.** `Policy(staff=["Jocelyn Paré", "Will Barnes"])`: a staff member's full name passes anywhere; a first name or surname alone passes only next to a staff cue ("Jocelyn in billing", "AGENT: ... this is Will", "call Hsu at ext. 2240", "Sig: T. Kowalski"). "Will is picking me up" stays masked, because a patient's husband can be called Will too.
 - **Stable tokens per conversation.** The same value gets the same token on every turn of a session, so the model can follow who is who and provider prompt caching keeps working. Tokens are sequential, not derived from the value (see 45 CFR 164.514(c)).
 - **Fail closed.** If masking errors, or a request holds media the policy does not allow, the request is rejected and nothing is sent. Clients cannot switch the guardrail off through request metadata.
 - **Clinic-specific identifiers.** Canadian health card numbers (OHIP, RAMQ), SIN, donor and embryo IDs, spoken numbers and dates from call transcripts.
@@ -86,6 +87,8 @@ guardrails:
       mode: [pre_call, post_call]
       default_on: true
       redis_url: os.environ/PHIPROXY_REDIS_URL   # optional; in-memory if unset
+      allow: ["Harborview Reproductive Centre", "613-555-0100", "@harborview.example.org"]
+      staff: ["Jocelyn Paré", "Will Barnes"]     # optional; see above
 
 litellm_settings:
   turn_off_message_logging: true   # otherwise LiteLLM logs hold the restored reply
@@ -176,7 +179,7 @@ Each blind set was scored once with the detectors frozen, then used to find gaps
 - Expect real traffic to score lower: these sets are AI-written, not written by clinic staff. v0 overstated recall by about 30 points.
 - Without the local model, names not in your records are the main gap. On v3, where names often come with no cue, the pattern rules alone found 43% of names.
 - After the gaps found on each set were fixed, the current code scores about 95% with the local model on all three blind sets. Those numbers are optimistic, which is why the table above shows first scores.
-- Over-masking is real. Most of it is the clinic's own contact details (pass them in `Policy(allow=...)`), holiday dates, and staff first names that are also words.
+- Over-masking is real. Most of it is the clinic's own contact details (pass them in `Policy(allow=...)`), staff names (pass them in `Policy(staff=...)`), and holiday dates, which stay masked on purpose.
 - Details, label rules, the corrections and full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
 
 ## Deployment shapes

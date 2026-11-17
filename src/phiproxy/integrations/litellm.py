@@ -10,6 +10,8 @@ config.yaml::
           default_on: true
           redis_url: os.environ/PHIPROXY_REDIS_URL   # optional; in-memory if unset
           date_mode: token                          # or "shift"
+          allow: ["Harborview Reproductive Centre", "613-555-0100", "@harborview.example.org"]
+          staff: ["Jocelyn Paré", "Will Barnes"]    # see phiproxy.staff
 
     litellm_settings:
       turn_off_message_logging: true   # keep unmasked replies out of LiteLLM logs
@@ -56,6 +58,15 @@ def _load_callable(path: str) -> Callable[..., Any]:
     return getattr(importlib.import_module(module), attr)
 
 
+def _as_list(v: Any) -> tuple[str, ...]:
+    """A YAML list, or one comma-separated string (e.g. from an environment variable)."""
+    if not v:
+        return ()
+    if isinstance(v, str):
+        return tuple(x.strip() for x in v.split(",") if x.strip())
+    return tuple(str(x) for x in v)
+
+
 def _as_bool(v: Any) -> bool:
     return v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "yes", "on")
 
@@ -74,6 +85,9 @@ class PhiproxyGuardrail(CustomGuardrail):
         mask_provider_names: bool = False,
         known_entities_provider: Optional[str] = None,
         allow_client_opt_out: bool = False,
+        allow: Any = None,
+        staff: Any = None,
+        staff_need_context: bool = True,
         vault_ttl_seconds: int = 24 * 3600,
         masker: Optional[Masker] = None,
         **kwargs: Any,
@@ -89,6 +103,9 @@ class PhiproxyGuardrail(CustomGuardrail):
                 allow_images=_as_bool(allow_images),
                 allow_audio=_as_bool(allow_audio),
                 allow_files=_as_bool(allow_files),
+                allow=_as_list(allow),
+                staff=_as_list(staff),
+                staff_need_context=_as_bool(staff_need_context),
             )
             if _as_bool(mask_provider_names):
                 policy.disabled_types = set()

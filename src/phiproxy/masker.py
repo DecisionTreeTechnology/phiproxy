@@ -14,6 +14,7 @@ from .detectors.base import Detector, fill_text, merge_entities
 from .detectors.known import KnownEntities, KnownEntityDetector
 from .detectors.regex import RegexDetector
 from .entities import Entity, EntityType
+from .staff import StaffList
 from .vault import InMemoryVault, Vault
 
 
@@ -48,6 +49,13 @@ class Policy:
     # Prefer full names: allowing a bare first name unmasks any patient with it.
     # "@clinic.example.org" allows every address at that email domain.
     allow: Sequence[str] = ()
+    # The clinic's staff, full names preferred ("Jocelyn Paré", "Will Barnes").
+    # A full name passes anywhere; a first name or surname alone passes only
+    # next to a staff cue ("Jocelyn in billing", "AGENT: ... this is Jon",
+    # "call Hsu at ext. 2240"). Record matches stay masked. See phiproxy.staff.
+    staff: Sequence[str] = ()
+    # False: staff first names pass anywhere (unmasks patients who share them).
+    staff_need_context: bool = True
 
 
 def _allow_pattern(value: str) -> Optional[re.Pattern[str]]:
@@ -115,6 +123,7 @@ class Masker:
         self.policy = policy or Policy()
         self._date_detector = RegexDetector(enabled={EntityType.DATE})
         self._allow = [p for p in (_allow_pattern(v) for v in self.policy.allow) if p is not None]
+        self._staff = StaffList(self.policy.staff, need_context=self.policy.staff_need_context)
 
     # ------------------------------------------------------------------ detect
     def detect(self, text: str, known: Optional[KnownEntities] = None) -> list[Entity]:
@@ -142,6 +151,10 @@ class Masker:
                 for e in found
                 if e.source == "known" or not any(a <= e.start and e.end <= b for a, b in allowed)
             ]
+        if self._staff:
+            names = [e for e in found if e.type is EntityType.NAME and e.source != "known"]
+            cued = self._staff.cued_words(text, names)
+            found = [e for e in found if e not in names or not self._staff.passes(text, e, cued)]
         return fill_text(text, merge_entities(found))
 
     # -------------------------------------------------------------------- mask
