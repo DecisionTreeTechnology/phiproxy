@@ -22,10 +22,10 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 
 | configuration | v0 | v1 first | v2 first | v3 first | v4 first | v1 now | v2 now | v3 now | v4 now |
 |---|---|---|---|---|---|---|---|---|---|
-| regex | 87.1% | 36.0% | 57.3% | 58.4% | 66.1% | 84.1% | 82.9% | 67.7% | 70.8% |
-| regex + known entities | 97.1% | 54.1% | 80.2% | 68.3% | 73.8% | 88.6% | 93.2% | 77.0% | 78.5% |
-| regex + local model | 98.6% | 77.3% | 87.9% | 84.2% | **86.5%** | 94.6% | 95.2% | 92.3% | 89.5% |
-| regex + known + local model | 99.1% | 79.2% | 92.3% | 88.1% | **88.4%** | 95.9% | 97.6% | 95.6% | 91.4% |
+| regex | 87.1% | 36.0% | 57.3% | 58.4% | 66.1% | 84.2% | 83.3% | 67.9% | 71.5% |
+| regex + known entities | 97.1% | 54.1% | 80.2% | 68.3% | 73.8% | 88.7% | 93.7% | 78.3% | 80.4% |
+| regex + local model | 98.6% | 77.3% | 87.9% | 84.2% | **86.5%** | 94.6% | 95.4% | 92.4% | 89.9% |
+| regex + known + local model | 99.1% | 79.2% | 92.3% | 88.1% | **88.4%** | 95.9% | 97.7% | 96.3% | 92.0% |
 
 - "First" is the score of the frozen code on a set it had never seen. "Now" is the current code, after fixes informed by that set, so it is optimistic.
 - v3 tested the name rules added after v2 (finding names from self-introductions, relatives, chart labels, sign-offs and signature blocks, without a model). On v3, before those rules, the pattern detector found 8% of names and 43.1% of all identifiers; with them, 43% of names and 58.4% overall, at the same precision. With the local model the gain is smaller (82.1% to 84.2%), because the model already finds most names.
@@ -35,6 +35,7 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 - v4 is the fair test of everything fixed on v1 to v3: 88.4% with the local model, the same as v3's first score (88.1%), while v1 to v3 "now" scored 95% to 97% at that commit. Fixing gaps found on a set lifts that set much more than unseen text, so expect about 88% on new text of this kind, not 95%.
 - v4 first score with the local model, by channel: chat 92%, SMS 92%, email 91%, notes 87%, calls 83%. By language: en 89%, fr 83%, es 91%, pl 89%, he 80%, mixed 98%. Weakest types: dates (74%, mostly bare days and months like "the twelfth", "until January"), health card and member numbers (67%, many scanned with O for 0 and l for 1), SSNs (40%, French and spoken).
 - After the v4 first score: scanned numbers are read again with look-alike letters as digits ("6O4-555-Ol74", "O9/Ol/199O"); spelled names with "as in" ("K as in kilo O W..."); spoken emails with numbers; Mexican CURP and RFC, Spanish DNI and NIE, French social security numbers, French phone numbers, IPv6; Polish and French postal codes; streets named first ("88 rue des Érables", "ul. Kościuszki 12/4", "רחוב הרצל 14") and the city after a street; Hebrew calendar dates ("כ״ג בחשוון"); follicle sizes read out are no longer IDs; fertility drug names and role words are no longer names. These are "now" numbers.
+- Hebrew, after the v4 first score: the patient-record matcher now reads Hebrew words (it read Latin letters only), with one-letter prefixes kept outside the mask ("ולנועה"), matches common Israeli names across scripts (a record "Noa Ben-Ami" matches "נועה" in the message, and the reverse), and Hebrew and Polish letters no longer split words ("Michał"). Cities written in Hebrew (Israeli cities and the cities patients move to, "טורונטו") are found. Hebrew "now" recall with the local model: v3 88% to 96%, v4 86% to 94%; without the model, v3 55% to 71%, v4 58% to 85%. Optimistic, like all "now" numbers.
 - v3 first score with the local model, by channel: chat 93%, SMS 90%, email 89%, calls 86%, notes 84%. By language: en 88%, fr 88%, es 86%, pl 91%, he 77%, mixed 96%. By type, the weakest were account numbers (49%: claim, group and certificate numbers without a colon) and donor and embryo codes (38%). Those were fixed after the first score.
 
 ## Results (over-masking)

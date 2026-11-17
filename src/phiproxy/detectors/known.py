@@ -14,6 +14,9 @@ from datetime import date
 from typing import Iterable, Mapping, Optional, Sequence, Union
 
 from ..entities import Entity, EntityType
+from . import _hebrew
+
+_HEBREW = re.compile(r"[\u0590-\u05FF]")
 
 # First names that are also common English words. A lowercase match of these
 # ("I have hope") is not treated as the name; a capitalized one is.
@@ -204,23 +207,39 @@ class KnownEntityDetector:
             parts = full.split()
             pat = r"\b" + r"\s+".join(re.escape(p) for p in parts) + r"\b"
             out += self._find(text, pat, EntityType.NAME, re.IGNORECASE, canonical=" ".join(parts))
-            for p in re.split(r"[\s\-]+", full):
+            for p in [*re.split(r"[\s\-]+", full), *re.findall(r"\w+-\w+", full)]:
                 p = p.strip(".,'")
-                if len(p) >= 2:
+                # Short Hebrew name parts are also words: בן (son), בת, טל (dew), גל (wave).
+                if len(p) >= 2 and not (_HEBREW.search(p) and len(p) <= 2 and p != full):
                     tokens.setdefault(p.lower(), p)
+                    # The same name in the other script: "Noa" <-> "נועה".
+                    for other in _hebrew.LATIN_TO_HEBREW.get(p.lower(), set()) | _hebrew.HEBREW_TO_LATIN.get(p, set()):
+                        tokens.setdefault(other.lower(), p)
         if not tokens:
             return out
-        for m in re.finditer(r"[A-Za-zÀ-ÖØ-öø-ÿ'\-]+", text):
-            raw = m.group(0)
-            lead = len(raw) - len(raw.lstrip("'-"))
-            word = raw.strip("'-")
+        words = []
+        for m in re.finditer(r"[^\W\d_](?:[^\W\d_]|['\-](?=[^\W\d_]))*", text):
+            words.append((m.start(), m.group(0)))
+            if "-" in m.group(0) and m.group(0).lower() not in tokens:
+                # "Kowalska-Nowak": each part on its own too.
+                for p in re.finditer(r"[^\-]+", m.group(0)):
+                    words.append((m.start() + p.start(), p.group(0)))
+        for wstart, raw in words:
+            lead = 0
+            word = raw
+            if word not in tokens and word[0] in "ובלמהשכ":
+                # Hebrew prefixes stay outside the mask: "ולנועה" -> "נועה".
+                for rest in _hebrew.unprefixed(word):
+                    if rest in tokens:
+                        lead, word = len(word) - len(rest), rest
+                        break
             if word.lower().endswith("'s"):  # possessive: keep the 's outside the mask
                 word = word[:-2]
             if len(word) < 2:
                 continue
             lw = word.lower()
             match = tokens.get(lw)
-            if match is None and self.fuzzy_names and len(lw) >= 4:
+            if match is None and self.fuzzy_names and len(lw) >= 4 and not _HEBREW.search(lw):
                 match = next(
                     (orig for t, orig in tokens.items()
                      if len(t) >= 5 and t[0] == lw[0] and _damerau_leq1(lw, t)),
@@ -230,6 +249,6 @@ class KnownEntityDetector:
                 continue
             if lw in COMMON_WORD_NAMES and not word[0].isupper():
                 continue
-            start = m.start() + lead
+            start = wstart + lead
             out.append(Entity(EntityType.NAME, start, start + len(word), word, self.name, canonical=match))
         return out
