@@ -21,12 +21,12 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev,litellm]"
       - run: pytest -q
-      - name: Benchmark (regex+known must stay at or above 85% recall)
-        run: python benchmark/score.py --config regex+known --min-recall 0.85
-      - name: Blind benchmark v1 (regex+known must stay at or above 70% recall)
-        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v1.jsonl --config regex+known --min-recall 0.70
-      - name: Blind benchmark v2 (regex+known must stay at or above 78% recall)
-        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v2.jsonl --config regex+known --min-recall 0.78
+      - name: Benchmark (regex+known must stay at or above 92% recall)
+        run: python benchmark/score.py --config regex+known --min-recall 0.92
+      - name: Blind benchmark v1 (regex+known must stay at or above 82% recall)
+        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v1.jsonl --config regex+known --min-recall 0.82
+      - name: Blind benchmark v2 (regex+known must stay at or above 85% recall)
+        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v2.jsonl --config regex+known --min-recall 0.85
 
   e2e:
     runs-on: ubuntu-latest

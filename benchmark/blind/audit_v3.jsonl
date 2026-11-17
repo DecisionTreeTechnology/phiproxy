@@ -1,0 +1,2 @@
+{"id": "v3-en-chat-040", "action": "add", "type": "DATE", "surface": "june", "occurrence": 1, "reason": "bare month of patient's planned treatment start; month is a date element more specific than a year (set labels 'June 2026', 'May 2024' elsewhere)"}
+{"id": "v3-he-chat-002", "action": "add", "type": "DATE", "surface": "אוגוסט", "occurrence": 1, "reason": "month of patient's move to Toronto ('באוגוסט', prefix ב outside span); month is more specific than a year"}
