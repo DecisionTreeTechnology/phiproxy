@@ -23,12 +23,12 @@ jobs:
       - run: pytest -q
       - name: Benchmark (regex+known must stay at or above 92% recall)
         run: python benchmark/score.py --config regex+known --min-recall 0.92
-      - name: Blind benchmark v1 (regex+known must stay at or above 82% recall)
-        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v1.jsonl --config regex+known --min-recall 0.82
-      - name: Blind benchmark v2 (regex+known must stay at or above 85% recall)
-        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v2.jsonl --config regex+known --min-recall 0.85
-      - name: Blind benchmark v3 (regex+known must stay at or above 72% recall)
-        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v3.jsonl --config regex+known --min-recall 0.72
+      - name: Blind benchmark v1 (regex+known must stay at or above 85% recall)
+        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v1.jsonl --config regex+known --min-recall 0.85
+      - name: Blind benchmark v2 (regex+known must stay at or above 89% recall)
+        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v2.jsonl --config regex+known --min-recall 0.89
+      - name: Blind benchmark v3 (regex+known must stay at or above 74% recall)
+        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v3.jsonl --config regex+known --min-recall 0.74
 
   e2e:
     runs-on: ubuntu-latest
