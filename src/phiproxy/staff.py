@@ -12,8 +12,13 @@ name, so this is stricter than ``Policy.allow``:
   "T. Kowalski") passes only next to a staff cue: a department or role ("in
   billing", "from the lab", "our counsellor"), an agent introducing themself
   ("AGENT: ... this is Jon", "Grace speaking"), an extension ("call Hsu at
-  ext. 2240"), or a signature label ("Sig:", "Witness:", "Minutes:"). Once a
-  name has a cue in a message, its other mentions in that message pass too;
+  ext. 2240"), a signature or list label ("Sig:", "Witness:", "Attendees:"),
+  the clinic or a health organisation after it ("it's Brittany at Saguaro
+  Fertility"), or a speaker line in a message headed as staff chat. Once a
+  name has a cue in a message, its other mentions in that message pass too,
+  and so does a staff name joined to a passing one by "and" or a comma
+  ("Dr. Castellanos and Darnell", "Okafor, Wrobel, Odette"). A name right
+  after a relative word ("my sister Grace") never passes on a cue;
 - anything that matched the patient's own record stays masked (the masker
   never lets a record match through).
 
@@ -75,6 +80,14 @@ _AFTER = [
         rf"(?:new\s+|nouvelle\s+|nouveau\s+|nueva\s+|nuevo\s+|nowa\s+|nowy\s+)?(?:[\w\-]+\s+){{0,2}}?(?:{_PERSON_ROLE})\b",
         _FLAGS,
     ),
+    # "it's Brittany at Saguaro Fertility", "Nadia from Desert Mercy Hospital"
+    re.compile(
+        r"^\s*,?\s*(?:at|from|with|de|du|del|z|ze)\s+(?:the\s+|la\s+|le\s+|el\s+|l['’])?"
+        r"(?:(?-i:[A-Z])[\w&'’.\-]*\s+){0,4}"
+        r"(?:fertility|ivf|reproductive|reproductiva|reproduction|clinic|clinique|cl[ií]nica|klinik\w*|"
+        r"hospital|h[ôo]pital|medical|m[ée]dical|health|sant[ée]|salud|pharmacy|pharmacie|farmacia|apteka)\b",
+        _FLAGS,
+    ),
     re.compile(r"^\s*,?\s*(?:speaking|ici|al\s+habla|przy\s+telefonie|מדברת|מדבר)\b", _FLAGS),
     # Covering a colleague's work: "Will is covering my retrievals", "Lior cubre la vitrificación".
     re.compile(
@@ -90,7 +103,10 @@ _BEFORE = [
     # Signature and record labels
     re.compile(
         r"\b(?:sig|signed|sign[ée]e?|firma|firmado|podpis|witness|t[ée]moin|testigo|[śs]wiadek|"
-        r"minutes|counsell?ed\s+by|filed\s+by|entered\s+by|ordering|requesting|attending|cc)"
+        r"minutes|counsell?ed\s+by|filed\s+by|entered\s+by|ordering|requesting|attending|cc|"
+        # Staff lists: "Attendees: Okafor, Wrobel, Odette", "On call: Priya".
+        r"attendees|present|pr[ée]sents?|presentes|obecni|speakers|panel(?:ists)?|participants|"
+        r"participantes|asistentes|uczestnicy|on[\s\-]?call|de\s+garde|de\s+guardia|dy[żz]ur\w*)"
         r"\s*[:.]?\s*(?:by\s+)?$",
         _FLAGS,
     ),
@@ -111,6 +127,23 @@ _BEFORE = [
         _FLAGS,
     ),
 ]
+# A message that is staff talking to staff: "Staff chat. Priya: did you call...".
+_INTERNAL = re.compile(
+    r"^\W*(?:(?:staff|team|internal|nurs(?:e|es|ing)|clinical)\s+(?:chat|thread|channel|messages?|huddle)|"
+    r"chat\s+(?:interne|de\s+l['’][ée]quipe|del\s+equipo|interno)|czat\s+zespo\w*|צ['׳]?אט\s+צוות)\b",
+    _FLAGS,
+)
+# Words that join two names in a list: "Okafor, Wrobel", "you and Darnell", "Priya i Colleen".
+_JOIN = re.compile(r"^\s*(?:,|&|/|\band\b|\bet\b|\by\b|\be\b|\bi\b|\boraz\b|\bund\b)\s*(?:(?:and|et|y|i)\s+)?(?:(?:à|a)\s+)?$", _FLAGS)
+# A relative named right before: "my sister Grace", "mi esposo Will". Not staff.
+_RELATIVE_BEFORE = re.compile(
+    r"\b(?:sister|brother|mom|mum|mother|dad|father|wife|husband|partner|spouse|friend|daughter|son|aunt|"
+    r"uncle|cousin|niece|nephew|grand(?:ma|pa|mother|father)|fianc[ée]e?|girlfriend|boyfriend|surrogate|donor|"
+    r"s[œo]eur|fr[èe]re|m[èe]re|p[èe]re|femme|mari|conjointe?|amie?|fille|fils|hermana|hermano|madre|padre|"
+    r"esposa|esposo|pareja|amiga|amigo|hija|hijo|siostra|brat|mama|tata|żona|mąż|córka|syn|"
+    r"אחותי|אחי|אמא|אבא|אשתי|בעלי)[^\S\n]+$",
+    _FLAGS,
+)
 _LIST_TAIL = re.compile(r"(?:[^\W\d_]\.\s*)?[^\W\d_]+(?:[\s\-][^\W\d_]+)?\s*(?:,|&|\band\b|\bet\b|\by\b|\bi\b)\s*$")
 _CUE_WORDS = re.compile(rf"^(?:{_PERSON_ROLE}|{_DEPT})$", _FLAGS)
 
@@ -144,6 +177,11 @@ class StaffList:
     def __bool__(self) -> bool:
         return bool(self._people)
 
+    def on_roster(self, e: Entity) -> bool:
+        """Every word of the span is a staff member's name word."""
+        words = _name_words(e.text)[0]
+        return bool(words) and all(w in self._words for w in words)
+
     def passes(self, text: str, e: Entity, cued: set[str]) -> bool:
         """True if this name span is a staff member. ``cued`` comes from :meth:`cued_words`."""
         all_words, initials = _name_words(e.text)
@@ -163,17 +201,44 @@ class StaffList:
             return True  # "C. Nakamura", "Okafor, G", "Carmen R.", "Sam K"
         if not self.need_context:
             return True
+        if _RELATIVE_BEFORE.search(text[max(0, e.start - 30) : e.start]):
+            return False
         if inner_cue or self._has_cue(text, e.start, e.end):
             return True
         return all(w in cued for w in words)
 
-    def cued_words(self, text: str, spans: Iterable[Entity]) -> set[str]:
-        """Staff words that appear with a cue somewhere in this text."""
+    def cued_words(self, text: str, spans: Iterable[Entity], anchors: Iterable[Entity] = ()) -> set[str]:
+        """Staff words that appear with a cue somewhere in this text.
+
+        ``anchors`` are spans already known to be staff (clinician names the
+        policy lets through). A staff name listed right next to one of them, or
+        next to a staff name that passes, is staff too: "Dr. Castellanos and
+        Darnell", "Attendees: Okafor, Wrobel, Odette".
+        """
+        spans = list(spans)
         out: set[str] = set()
         for e in spans:
             words = [w for w in _name_words(e.text)[0] if w in self._words]
             if words and self._has_cue(text, e.start, e.end):
                 out.update(words)
+        confirmed = list(anchors) + [e for e in spans if self.passes(text, e, out)]
+        pending = [e for e in spans if e not in confirmed]
+        changed = True
+        while changed and pending:
+            changed = False
+            for e in list(pending):
+                words = _name_words(e.text)[0]
+                if not words or not all(w in self._words for w in words):
+                    pending.remove(e)
+                    continue
+                for c in confirmed:
+                    gap = text[c.end : e.start] if c.end <= e.start else text[e.end : c.start]
+                    if len(gap) <= 12 and _JOIN.match(gap):
+                        out.update(words)
+                        confirmed.append(e)
+                        pending.remove(e)
+                        changed = True
+                        break
         return out
 
     @staticmethod
@@ -183,8 +248,11 @@ class StaffList:
         before = text[max(line_start, start - 120) : start]
         if any(p.search(after) for p in _AFTER) or any(p.search(before) for p in _BEFORE):
             return True
+        # A speaker in staff-only chat: "Staff chat. Priya: did you call...".
+        if after.startswith(":") and re.fullmatch(r"\W*|.*[.!?]\s*", before) and _INTERNAL.search(text[:80]):
+            return True
         # Later names in a list after the cue: "Sig: T. Kowalski, M. Reyes".
-        for _ in range(3):
+        for _ in range(8):
             shorter = _LIST_TAIL.sub("", before)
             if shorter == before:
                 return False

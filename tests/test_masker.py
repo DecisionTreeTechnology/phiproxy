@@ -169,3 +169,25 @@ def test_cross_script_name_unmasks_latin_text_from_hebrew_record():
     r = m.mask(t, session_id="s-lat", known=KnownEntities(names=["נועה רוזנברג"]))
     assert "Noa" not in r.text
     assert m.unmask(r.text, session_id="s-lat") == t
+
+
+def test_allowed_address_with_state_code_and_extension():
+    m = Masker(policy=Policy(allow=["4410 East Camelback Road, Suite 300", "Phoenix", "85018", "(602) 555-0700"]))
+    text = "Visit 4410 East Camelback Road, Suite 300, Phoenix AZ 85018 or call (602) 555-0700 ext 224."
+    assert m.mask(text, "s").text == text
+    # A patient's street in the same city is still masked.
+    out = m.mask("I live at 12 Elm Street, Phoenix AZ 85018", "s2").text
+    assert "12 Elm Street" not in out
+
+
+def test_allowed_city_alone_does_not_cover_a_state():
+    from phiproxy.entities import Entity, EntityType
+    from phiproxy.masker import _covered
+
+    text = "I'm in Vancouver WA not BC, the clinic is 1450 West Georgia Street, Vancouver BC"
+    allowed = [(7, 16), (42, 66), (68, 77)]  # "Vancouver", "1450 West Georgia Street", "Vancouver"
+    city = Entity(EntityType.ADDRESS, 7, 19, text[7:19], "model")
+    clinic = Entity(EntityType.ADDRESS, 42, 80, text[42:80], "model")
+    assert text[7:16] == "Vancouver" and text[42:66] == "1450 West Georgia Street" and text[68:77] == "Vancouver"
+    assert not _covered(city, allowed)
+    assert _covered(clinic, allowed)

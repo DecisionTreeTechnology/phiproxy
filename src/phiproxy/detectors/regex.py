@@ -277,8 +277,10 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.ACCOUNT,
         r"\b(?:account|acct|policy|member|insurance\s*id|claim|group|certificate|certificat|contrat|"
-        r"contrato|reclamo|grupo|p[óo]liza|polisa|ledger|invoice|statement)"
-        r"(?:\s*(?:number|no\.?|#|id|num[ée]ro|n[úu]mero|numer))?(?:\s+on\s+the\s+\w+)?\s*(?:is|:|#|es|est|to)?\s*"
+        r"contrato|reclamo|grupo|p[óo]liza|polisa|ledger|invoice|statement|compte|cuenta|konta|konto|"
+        r"(?:application|authori[sz]ation|auth|autorisation|autorizaci[óo]n)\s+(?:reference|ref\.?|r[ée]f[ée]rence|referencia))"
+        r"(?:\s*(?:number|no\.?|#|id|num[ée]ro|n[úu]mero|numer))?(?:\s+on\s+the\s+\w+)?\s*"
+        r"(?:is|:|#|es|est|to|c['’]est|to\s+jest)?\s*"
         r"((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{3,24})\b",
         I,
         group=1,
@@ -328,6 +330,15 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.HEALTH_CARD, r"\b\d{4}[\s\-]\d{3}[\s\-]\d{3}(?:[\s\-]?[A-Z]{2})?\b")
 
     add(EntityType.SSN, r"\b(\d{3})-(\d{2})-(\d{4})\b", check=_ssn_check)
+    # Named as a social security number, any first group: "my social is 972-22-8271".
+    add(EntityType.SSN, r"\b(?:social|ssn|seguro\s+social)\b[^\n\d]{0,20}(\d{3}-\d{2}-\d{4})\b", I, group=1)
+    # Polish nine-digit phones after a phone word: "Mój nowy numer to 555 418 988".
+    add(
+        EntityType.PHONE,
+        r"\b(?:numer\w*|nr|tel\.?|telefon\w*|kom[óo]rk\w*)\b[^\n\d]{0,20}(?<!\d)(\d{3}[\s\-]\d{3}[\s\-]\d{3})\b(?![\s\-]\d)",
+        I,
+        group=1,
+    )
     add(EntityType.SIN, r"\b\d{3}[\s\-]?\d{3}[\s\-]?\d{3}\b", check=_sin_check)
     add(
         EntityType.SIN,
@@ -577,6 +588,16 @@ def _build_rules() -> list[_Rule]:
     )
     # "Esther, 92, lives with them": a capitalized name, then the age between commas.
     add(EntityType.AGE, rf"\b[A-Z][a-z]+,\s+(9\d|1[01]\d),", group=1)
+    # "My mother is 91", "grandma turned 95", "mi abuela tiene 92".
+    add(
+        EntityType.AGE,
+        r"\b(?:mother|mom|mum|father|dad|grand(?:mother|ma|father|pa)|nana|aunt|uncle|abuel[ao]|madre|padre|"
+        r"m[èe]re|p[èe]re|grand-m[èe]re|grand-p[èe]re|babci[ae]|dziadek|mama|tata|she|he)\s+"
+        r"(?:is|turned|turns|will\s+be|just\s+turned|est|a|tiene|cumpli[óo]|ma|sko[ńn]czy[łl]a?)\s+"
+        r"(9\d|1[01]\d)\b(?!\s*(?:%|mg|kg|lbs?|\$|dollars|min|minutes|mm|cm|ml))",
+        I,
+        group=1,
+    )
 
     add(EntityType.ADDRESS, _STREET, I, check=_street_check)
     add(EntityType.ADDRESS, r"\b(?:p\.?\s?o\.?\s*box|postal\s*box)\s*\d+\b", I)
@@ -606,6 +627,17 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.POSTAL_CODE, r"(?:,|^|\n)[^\S\n]*(\d{5})[^\S\n]+(?:[A-ZÀ-Ý][\wà-ÿ'\-]+)(?!\s+(?:st|street|ave|rd|road|dr)\b)", re.M, group=1)
     # US ZIP only with context (a bare 5-digit number is too ambiguous).
     add(EntityType.ZIP, rf"\b(?:{_US_STATES})\s+(\d{{5}}(?:-\d{{4}})?)\b", group=1)
+    # The town on a "City, ST 12345" address line: "Yuma, AZ 85360".
+    add(
+        EntityType.ADDRESS,
+        rf"(?:^|,)[^\S\n]*([A-Z][a-z]+(?:[^\S\n][A-Z][a-z]+){{0,2}}),?[^\S\n]+(?:{_US_STATES})[^\S\n]+\d{{5}}(?:-\d{{4}})?\b",
+        re.M,
+        group=1,
+    )
+    # Mexican postal codes: "CP 83868", "C.P. 06700", "código postal 64000".
+    add(EntityType.POSTAL_CODE, r"\b(?:C\.?[^\S\n]?P\.?|c[óo]digo\s+postal)[^\S\n]*:?[^\S\n]*(\d{5})\b", I, group=1)
+    # Polish postal code after the town: "Łódź, 64-664".
+    add(EntityType.POSTAL_CODE, r"[A-ZŁŚŻŹĆ][\wąćęłńóśźż\-]+,[^\S\n]+(\d{2}-\d{3})\b(?!-)", group=1)
     add(EntityType.ZIP, r"\bzip(?:\s*code)?\s*(?:is|:)?\s*(\d{5}(?:-\d{4})?)\b", I, group=1)
     # A city and a ZIP at the end of an address line: "San Antonio, 78201".
     add(EntityType.ZIP, r"\b[A-Z][a-z]+(?:[^\S\n][A-Z][a-z]+)?,?[^\S\n]+(\d{5}(?:-\d{4})?)[^\S\n]*$", re.M, group=1)
@@ -690,8 +722,23 @@ class RegexDetector:
         # Identifiers read out loud: "four one six... five five five...", "T three A".
         spoken = [*_spoken.detect(text), *_spoken.street_numbers(text, _street_spans)]
         out.extend(e for e in spoken if self.enabled is None or e.type in self.enabled)
-        return out
+        # Numbers that belong to the clinic, a product or an interpreter, not a patient:
+        # "ticket T-40266", "LOT W486069", "interpreter, ID 20931". Appointment
+        # confirmation numbers stay masked: they point to one patient's visit.
+        return [
+            e for e in out
+            if not (e.type in _CLINIC_NUMBER_TYPES and _CLINIC_NUMBER_CUE.search(text[max(0, e.start - 40) : e.start]))
+        ]
 
+
+_CLINIC_NUMBER_TYPES = {
+    EntityType.ID, EntityType.ACCOUNT, EntityType.ZIP, EntityType.SIN, EntityType.MRN, EntityType.POSTAL_CODE,
+}
+_CLINIC_NUMBER_CUE = re.compile(
+    r"(?:\b(?:ticket|tkt|lot|lote|batch|routing|badge|zg[łl]oszeni[ae])\b[^\n\d]{0,25}"
+    r"|\binterpr[eè]t(?:er|e)\b[^\n\d]{0,25})$",
+    re.IGNORECASE,
+)
 
 _STREET_RE = re.compile(_STREET, re.IGNORECASE)
 

@@ -108,3 +108,36 @@ def test_initials_accents_and_new_cues():
     assert ok("I left 2 voicemails with Chris. Not ok", "Chris")
     assert ok("Pani Hannah z recepcji mówiła", "Pani Hannah")
     assert not ok("Will is picking me up", "Will")
+
+
+@pytest.mark.parametrize(
+    "text,name",
+    [
+        ("TEAM MEETING NOTES\nAttendees: Benitez, Kowalski, Jocelyn, Grace. Topics: shipping", "Grace"),
+        ("Speakers: Hsu, Reyes, Pratt.", "Pratt"),
+        ("Dr. Albright and Jocelyn were so patient with us.", "Jocelyn"),
+        ("Thanks to the whole team, especially Daniel Hsu and Grace.", "Grace"),
+        ("Hello Maria it's Tara at Harborview Fertility. Your retrieval is at 7.", "Tara"),
+        ("Staff chat. Miguel: freezer 2 alarm cleared.\nJon: thanks", "Jon"),
+    ],
+)
+def test_staff_lists_clinic_and_staff_chat(text, name):
+    assert name in mask(text, [name, "Daniel Hsu"])
+
+
+@pytest.mark.parametrize(
+    "text,name",
+    [
+        ("Grace and Sunny are coming with me on Friday", "Grace"),  # no staff anchor
+        ("Patient chat. Grace: hi, can I move my scan?", "Grace"),  # not staff-only chat
+        ("my sister Grace at Mercy Hospital is a nurse", "Grace"),
+    ],
+)
+def test_no_staff_anchor_stays_masked(text, name):
+    assert name not in mask(text, [name])
+
+
+def test_staff_sender_with_clinic_address():
+    text = "From: Will Barnes <wbarnes@clinic.example.org>\nTo: Grace <grace@mail.example.com>"
+    out = mask(text, ["Will Barnes", "Will", "Grace"], allow=["@clinic.example.org"])
+    assert "Will" in out and "Grace" not in out

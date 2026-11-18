@@ -1,0 +1,11 @@
+{"id": "v6-en-chat-010", "action": "add", "type": "ACCOUNT", "surface": "77120", "occurrence": 1, "reason": "insurance group number"}
+{"id": "v6-en-chat-015", "action": "add", "type": "ADDRESS", "surface": "Madrid", "occurrence": 1, "reason": "city where intended parents live"}
+{"id": "v6-en-call-013", "action": "add", "type": "ACCOUNT", "surface": "4 4 1 7 9", "occurrence": 1, "reason": "spoken insurance group number"}
+{"id": "v6-en-call-021", "action": "add", "type": "ADDRESS", "surface": "Hermosillo", "occurrence": 1, "reason": "city the partner comes from"}
+{"id": "v6-en-call-031", "action": "add", "type": "DATE", "surface": "October", "occurrence": 1, "reason": "month tied to a person's meeting"}
+{"id": "v6-en-email-009", "action": "add", "type": "ADDRESS", "surface": "Sao Paulo", "occurrence": 1, "reason": "city where the patients live"}
+{"id": "v6-en-email-029", "action": "add", "type": "ADDRESS", "surface": "Tucson", "occurrence": 1, "reason": "city the patient travels from"}
+{"id": "v6-en-note-008", "action": "add", "type": "ACCOUNT", "surface": "4412", "occurrence": 1, "reason": "card number fragment tied to patient"}
+{"id": "v6-es-chat-011", "action": "add", "type": "ADDRESS", "surface": "Tucson", "occurrence": 1, "reason": "city where the uncle lives"}
+{"id": "v6-pl-email-004", "action": "add", "type": "ADDRESS", "surface": "Krakowa", "occurrence": 1, "reason": "inflected city where the couple lives"}
+{"id": "v6-mixed-call-002", "action": "add", "type": "ADDRESS", "surface": "Montréal", "occurrence": 1, "reason": "city where the husband is"}
