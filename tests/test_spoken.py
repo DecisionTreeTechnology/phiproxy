@@ -154,7 +154,7 @@ def test_answers_to_a_question_in_pieces():
     assert (T.DATE, "July one four, eighty nine") in found
     assert (T.PHONE, "zero one four zero") in found
     assert any(t is T.POSTAL_CODE and "V five K one" in x for t, x in found)
-    for day in ("eighteenth", "twenty-fourth", "twenty-sixth", "Twenty-sixth"):
+    for day in ("the eighteenth", "the twenty-fourth", "the twenty-sixth", "Twenty-sixth"):
         assert (T.DATE, day) in found
     texts = " ".join(x for _, x in found)
     assert "seven fifteen" not in texts and "six forty five" not in texts
