@@ -141,3 +141,16 @@ def test_staff_sender_with_clinic_address():
     text = "From: Will Barnes <wbarnes@clinic.example.org>\nTo: Grace <grace@mail.example.com>"
     out = mask(text, ["Will Barnes", "Will", "Grace"], allow=["@clinic.example.org"])
     assert "Will" in out and "Grace" not in out
+
+
+@pytest.mark.parametrize(
+    "text,name",
+    [
+        ("PROCEDURE: Oocyte retrieval. Surgeon: Benitez. Anesthesia: propofol.", "Benitez"),
+        ("Spoke with rep. Verified by Grace on 11/13.", "Grace"),
+        ("Hi Teresa, Grace here from Harborview. Your meds are ready.", "Grace"),
+        ("Forwarded message\nFrom: Daniel Hsu\nDate: Nov 2", "Daniel"),
+    ],
+)
+def test_staff_role_labels_clinic_and_full_names(text, name):
+    assert name in mask(text, [name], allow=["Harborview"])

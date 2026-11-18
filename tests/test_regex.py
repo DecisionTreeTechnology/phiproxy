@@ -316,3 +316,27 @@ def test_appointment_confirmation_stays_masked():
 )
 def test_clinic_numbers_not_identifiers(text):
     assert not [e for e in RegexDetector().detect(text) if e.type.value in ("ID", "ACCOUNT", "ZIP", "AGE", "SIN")]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("prescription RX 7714402 is ready", "RX 7714402"),
+        ("driver's license TX 41982776", "TX 41982776"),
+        ("file number 2026-FAM-00418,", "2026-FAM-00418"),
+        ("authorization number AUTH 66-120-883, valid", "AUTH 66-120-883"),
+        ("dossier 500-17-123456-261 de la Cour", "500-17-123456-261"),
+        ("last four of SSN xxx-xx-6291.", "xxx-xx-6291"),
+        ("viajamos del 9 al 12 de diciembre", "9 al 12 de diciembre"),
+        ("od 9 do 12 grudnia", "9 do 12 grudnia"),
+        ("נוסעים מ-9 עד 12 בדצמבר", "9 עד 12 בדצמבר"),
+        ("miembro GCM 70 4418 21, fecha", "GCM 70 4418 21"),
+    ],
+)
+def test_v7_forms(text, value):
+    assert value in {e.text for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize("text", ["NDC 89067-6591-82 and CPT 58970", "Ext 22401 please", "at 9 to 12 in the morning"])
+def test_v7_lookalikes(text):
+    assert not RegexDetector().detect(text)
