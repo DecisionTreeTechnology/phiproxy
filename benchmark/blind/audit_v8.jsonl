@@ -1,0 +1,16 @@
+{"id": "v8-en-sms-003", "action": "add", "type": "NAME", "surface": "Marco", "occurrence": 2, "reason": "patient first name repeated, unlabelled"}
+{"id": "v8-en-chat-096", "action": "add", "type": "NAME", "surface": "Jordan", "occurrence": 2, "reason": "patient first name repeat"}
+{"id": "v8-en-chat-096", "action": "add", "type": "NAME", "surface": "Jordan", "occurrence": 3, "reason": "patient first name repeat (Jordan's insurer)"}
+{"id": "v8-en-call-106", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Marta", "occurrence": 1, "reason": "pharmacy staff caller"}
+{"id": "v8-en-call-117", "action": "add", "type": "NAME", "surface": "Ferro", "occurrence": 2, "reason": "patient surname after Genevieve"}
+{"id": "v8-en-call-132", "action": "add", "type": "ADDRESS", "surface": "Mexico City", "occurrence": 1, "reason": "city the patient comes from"}
+{"id": "v8-en-email-148", "action": "add", "type": "ACCOUNT", "surface": "PA-2026-771203", "occurrence": 2, "reason": "prior authorization number in body"}
+{"id": "v8-en-email-150", "action": "add", "type": "NAME", "surface": "Delphine Roux", "occurrence": 2, "reason": "name in signature"}
+{"id": "v8-en-email-163", "action": "add", "type": "NAME", "surface": "Ophelia", "occurrence": 4, "reason": "carrier first name in body"}
+{"id": "v8-es-call-019", "action": "add", "type": "NAME", "surface": "Ospina", "occurrence": 1, "reason": "corrected spelling of caller's surname"}
+{"id": "v8-fr-sms-007", "action": "add", "type": "NAME", "surface": "Mathieu", "occurrence": 3, "reason": "partner name as speaker label, other mentions labelled"}
+{"id": "v8-fr-email-027", "action": "add", "type": "NAME", "surface": "Josiane Roy", "occurrence": 2, "reason": "patient name in signature"}
+{"id": "v8-fr-email-029", "action": "add", "type": "NAME", "surface": "Thibault", "occurrence": 2, "reason": "name in signature"}
+{"id": "v8-fr-email-033", "action": "add", "type": "NAME", "surface": "Mireille", "occurrence": 2, "reason": "name in signature"}
+{"id": "v8-fr-email-034", "action": "add", "type": "NAME", "surface": "Alexis", "occurrence": 2, "reason": "name in signature"}
+{"id": "v8-pl-call-013", "action": "add", "type": "NAME", "surface": "P I A T E K", "occurrence": 1, "reason": "surname spelled letter by letter"}

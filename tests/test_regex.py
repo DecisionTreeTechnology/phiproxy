@@ -340,3 +340,83 @@ def test_v7_forms(text, value):
 @pytest.mark.parametrize("text", ["NDC 89067-6591-82 and CPT 58970", "Ext 22401 please", "at 9 to 12 in the morning"])
 def test_v7_lookalikes(text):
     assert not RegexDetector().detect(text)
+
+
+@pytest.mark.parametrize(
+    "text,typ,value",
+    [
+        ("my grandmother is ninety-three and she had breast cancer", "AGE", "ninety-three"),
+        ("Her mother Abena is 91 and was admitted", "AGE", "91"),
+        ("grandpa died June 2 2019 at 91, grandma still alive at 96.", "AGE", "96"),
+        ("mi abuela todavía vive, tiene noventa y cuatro años", "AGE", "noventa y cuatro"),
+        ("Ma grand-mère Yvrose a quatre-vingt-onze ans", "AGE", "quatre-vingt-onze"),
+        ("babcia Helena Wiśniewska, lat 93, cukrzyca", "AGE", "93"),
+        ("סבתא מצד אם, רחל אברהם, בת 94, סוכרת", "AGE", "94"),
+        ("group number GRP 40218, valid", "ACCOUNT", "GRP 40218"),
+        ("The referral number from our PCM is REF 4410-0289.", "ACCOUNT", "REF 4410-0289"),
+        ("Número de cuenta para el reembolso: 0043-77120-9.", "ACCOUNT", "0043-77120-9"),
+        ("Contrat : G-440219  Certificat : 0071 5583 02", "HEALTH_CARD", "0071 5583 02"),
+        ("Mi pasaporte es el AAB204117. Estamos", "ID", "AAB204117"),
+        ("Tracking 1Z 999 AA1 01 2345 6784. Deliver", "ID", "1Z 999 AA1 01 2345 6784"),
+        ("סבא יעקב נפטר ב2.2.2020 בגיל 92", "DATE", "2.2.2020"),
+        ("אני גרה עכשיו ברחוב הנביאים 8, ירושלים\nסוכן", "ADDRESS", "רחוב הנביאים 8, ירושלים"),
+        ("Kraków kod 31-147 tak", "POSTAL_CODE", "31-147"),
+        ("Hi I'm a grad student at Gulfstream State University and the", "EMPLOYER", "Gulfstream State University"),
+        ("employer is Hamilton Steel Workers Local 1005", "EMPLOYER", "Hamilton Steel Workers Local 1005"),
+        ("היא עובדת בחברת נטע טק ונמצאת בשנה", "EMPLOYER", "חברת נטע טק"),
+        ("Seguro: TRICARE Prime, sponsor Cap. Raúl Armas, SSN", "NAME", "Raúl Armas"),
+        ("תמר גולדשטיין, ג ו ל ד ש ט י י ן, אני", "NAME", "ג ו ל ד ש ט י י ן"),
+    ],
+)
+def test_v8_forms(text, typ, value):
+    assert (typ, value) in {(e.type.value, e.text) for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["my mom is 95% sure", "the patient is 91 kg", "I work at home most days", "she works at the moment",
+     "we're working for Dr. Smith", "member since 2019", "my account has 3 visits", "account balance $1,250 due"],
+)
+def test_v8_lookalikes(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type.value in ("AGE", "EMPLOYER", "ACCOUNT", "HEALTH_CARD", "ID")]
+
+
+# Found by an adversarial review of the v8 rules (each reproduced before it was fixed).
+@pytest.mark.parametrize(
+    "text,types",
+    [
+        ("My mother lives at 95 Elm Street", {"AGE"}),
+        ("my mom thinks my TSH is 100", {"AGE"}),
+        ("Her mother's fertility was low; AMH is 99", {"AGE"}),
+        ("school is Monday to Friday", {"EMPLOYER"}),
+        ("I work at Monday morning", {"EMPLOYER"}),
+        ("Trabajo en Casa", {"EMPLOYER"}),
+        ("pracuję w Warszawie", {"EMPLOYER"}),
+        ("Je travaille au Canada", {"EMPLOYER"}),
+        ("עובדת בבית חולים", {"EMPLOYER"}),
+        ("עובדת בשבת", {"EMPLOYER"}),
+        ("The licence fee is 100 200 300", {"ID"}),
+        ("license 2024 2025 2026 renewal", {"ID"}),
+        ("work permit expires in 2027", {"ID"}),
+        ("passport in 3 days I travel 12 June", {"ID"}),
+        ("tracking 12 packages 5 and 3", {"ID"}),
+        ("Viajamos a Cabo Verde", {"NAME"}),
+        ("סעיפים א ב ג ד של החוזה", {"NAME"}),
+    ],
+)
+def test_review_false_positives(text, types):
+    assert not [e for e in RegexDetector().detect(text) if e.type.value in types]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("I work at Costco I need time off", "Costco"),
+        ("I work at TD Bank So I can't", "TD Bank"),
+        ("passport number: AB 123456 expires", "AB 123456"),
+        ("grandpa died June 2 2019 at 91, grandma still alive at 96.", "91"),
+        ("je travaille chez Desjardins", "Desjardins"),
+    ],
+)
+def test_review_spans(text, value):
+    assert value in {e.text for e in RegexDetector().detect(text)}

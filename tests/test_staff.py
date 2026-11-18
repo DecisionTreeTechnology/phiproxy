@@ -154,3 +154,24 @@ def test_staff_sender_with_clinic_address():
 )
 def test_staff_role_labels_clinic_and_full_names(text, name):
     assert name in mask(text, [name], allow=["Harborview"])
+
+
+def test_thank_you_after_assistant_label_is_not_a_staff_list():
+    # "Assistant:" is a role word; "Thank you," before the name is not an earlier staff name.
+    text = "Visitor: 786-555-0121 im Beatriz\nAssistant: Thank you, Beatriz. Joy is on call."
+    out = mask(text, ["Beatriz", "Joy"], staff=["Ana Beatriz Carvalho", "Joy Pierre"])
+    assert "Beatriz" not in out
+    assert "Joy" in out
+
+
+@pytest.mark.parametrize(
+    "text,name,passes",
+    [
+        ("AGENT: Harborview, Grace speaking.", "Grace", True),
+        ("Harborview, Grace speaking, how can I help?", "Grace", True),
+        ("Hi, this is Carla speaking, I'm pregnant", "Carla", False),
+        ("Hi, Carla speaking. My DOB is 1985-02-02", "Carla", False),
+    ],
+)
+def test_speaking_cue_only_for_staff_greetings(text, name, passes):
+    assert (name in mask(text, [name])) is passes

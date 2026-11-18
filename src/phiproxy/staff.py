@@ -89,7 +89,6 @@ _AFTER = [
         r"hospital|h[ôo]pital|medical|m[ée]dical|health|sant[ée]|salud|pharmacy|pharmacie|farmacia|apteka)\b",
         _FLAGS,
     ),
-    re.compile(r"^\s*,?\s*(?:speaking|ici|al\s+habla|przy\s+telefonie|מדברת|מדבר)\b", _FLAGS),
     # Covering a colleague's work: "Will is covering my retrievals", "Lior cubre la vitrificación".
     re.compile(
         r"^\s*(?:is\s+|will\s+be\s+)?(?:covering|covers|cubre|remplace|zast[ęe]puje|on\s+call|"
@@ -130,6 +129,14 @@ _BEFORE = [
         _FLAGS,
     ),
 ]
+_SPEAKING = re.compile(r"^\s*,?\s*(?:speaking|ici|al\s+habla|przy\s+telefonie|מדברת|מדבר)\b", _FLAGS)
+# What may come before "<Name> speaking" on a staff line: a staff speaker label and/or the
+# place answering the phone ("Harborview, "), never a greeting or "this is".
+_ANSWERING = re.compile(
+    r"\s*(?:(?:agent|agente|staff|reception\w*|r[ée]ception\w*|recepcja|front\s+desk|nurse|billing|נציג\w*)\s*:\s*)?"
+    r"(?:(?!(?:hi|hello|hey|hola|bonjour|salut|cze[śs][ćc]|dzie[ńn]\s+dobry|good\s+\w+)\b)[A-Z][\w&'’.\- ]{1,40},\s*)?",
+    _FLAGS,
+)
 # A message that is staff talking to staff: "Staff chat. Priya: did you call...".
 _INTERNAL = re.compile(
     r"^\W*(?:(?:staff|team|internal|nurs(?:e|es|ing)|clinical)\s+(?:chat|thread|channel|messages?|huddle)|"
@@ -257,22 +264,28 @@ class StaffList:
                     return True
         return False
 
-    @staticmethod
-    def _has_cue(text: str, start: int, end: int) -> bool:
+    def _has_cue(self, text: str, start: int, end: int) -> bool:
         after = text[end : end + 60]
         line_start = text.rfind("\n", 0, start) + 1
         before = text[max(line_start, start - 120) : start]
         if any(p.search(after) for p in _AFTER) or any(p.search(before) for p in _BEFORE):
             return True
+        # "AGENT: Harborview, Grace speaking", but not a caller's "Hi, this is Carla speaking".
+        if _SPEAKING.search(after) and _ANSWERING.fullmatch(before):
+            return True
         # A speaker in staff-only chat: "Staff chat. Priya: did you call...".
         if after.startswith(":") and re.fullmatch(r"\W*|.*[.!?]\s*", before) and _INTERNAL.search(text[:80]):
             return True
-        # Later names in a list after the cue: "Sig: T. Kowalski, M. Reyes".
+        # Later names in a list after the cue: "Sig: T. Kowalski, M. Reyes". Each earlier
+        # item must be a staff name too, so "Assistant: Thank you, Beatriz" is not a list.
         for _ in range(8):
-            shorter = _LIST_TAIL.sub("", before)
-            if shorter == before:
+            m = _LIST_TAIL.search(before)
+            if not m:
                 return False
-            before = shorter
+            words, _ = _name_words(m.group(0))
+            if not words or not all(w in self._words for w in words):
+                return False
+            before = before[: m.start()]
             if any(p.search(before) for p in _BEFORE):
                 return True
         return False
