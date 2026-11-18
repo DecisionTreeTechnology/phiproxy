@@ -263,3 +263,21 @@ def test_allowed_street_and_city_pass_together():
 
     m = Masker(detectors=[RegexDetector()], policy=Policy(allow=["1450 West Georgia Street", "Vancouver"]))
     assert not m.detect("Visit us at 1450 West Georgia Street, Vancouver.")
+
+
+def test_more_date_forms():
+    d = RegexDetector()
+
+    def dates(t):
+        return [e.text for e in d.detect(t) if e.type is T.DATE]
+
+    assert "18" in dates("confirmando mis citas del 18 y 20 de noviembre")
+    assert "18" in dates("o wizytach 18 i 20 listopada")
+    assert "1985 / 06 / 22" in dates("Partner DOB: 1985 / 06 / 22")
+    assert any("21 décembre 85" in x for x in dates("Je suis née le 21 décembre 85. Merci"))
+    assert [x.replace("le ", "") for x in dates("rendez-vous le 2 décembre 10 h")] == ["2 décembre"]
+    assert "3rd day of September, 2025" in dates("Executed this 3rd day of September, 2025.")
+    assert "March" in dates("We moved to Burnaby in March.")
+    assert "janvier" in dates("Je déménage à Victoria en janvier")
+    assert "the twelfth" in dates("we signed in September... the twelfth I think")
+    assert not dates("The March for Babies walk is on Sunday, in the park")

@@ -426,21 +426,19 @@ def _build_rules() -> list[_Rule]:
     )
     # A spoken day of the month on its own: "can we do the twentieth instead?", "no,
     # the eighteenth". Only when no noun follows ("the third embryo", "the second time").
-    add(
-        EntityType.DATE,
-        rf"(?:\bthe\s+|(?:^|\n|:)[^\S\n]*)"
-        rf"((?:{_ORDINAL_WORDS.replace(')|first|', ')|', 1)}))(?=\s*(?:[.,?!;)/\n]|$|instead|right|then|works|"
-        rf"so|at\s+(?:\d|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon)|or|okay|ok|please|"
-        rf"correct|is|was|with\s+(?:dr|doctor|the)|of\s+(?:this|next|the)\s+month))",
-        I,
-        group=1,
+    _day_alone = (
+        rf"(?:{_ORDINAL_WORDS.replace(')|first|', ')|', 1)})(?=\s*(?:[.,?!;)/\n]|$|instead|right|then|works|and|"
+        rf"i\s+think|so|at\s+(?:\d|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon)|or|okay|"
+        rf"ok|please|correct|is|was|with\s+(?:dr|doctor|the)|of\s+(?:this|next|the)\s+month))"
     )
+    add(EntityType.DATE, rf"\bthe\s+{_day_alone}", I)
+    add(EntityType.DATE, rf"(?:^|\n|:)[^\S\n]*({_day_alone})", I | re.M, group=1)
     # French, Spanish, Polish, Hebrew: "le 12 mai 1990", "1er décembre", "jueves 6 de noviembre".
     add(
         EntityType.DATE,
         rf"(?<![0-9A-Za-zÀ-ž])(?:(?:le|el|du|au)\s+)?(?:(?:{_WEEKDAY_ML}),?\s+)?\d{{1,2}}(?:er|re|º|\.)?\s+"
         rf"(?:de\s+|ב)?(?:{_MONTHS_ML})"
-        rf"(?:,?\s+(?:de\s+)?\d{{4}})?(?!\w)",
+        rf"(?:,?\s+(?:de\s+)?(?:\d{{4}}|\d{{2}}(?![\d:hH]|\s*(?:h\b|heures?|horas?|godz))))?(?!\w)",
         I,
     )
     add(EntityType.DATE, rf"\b(?:{_WEEKDAY_ML})\s+\d{{1,2}}\b(?![:.,]?\d)", I)
@@ -471,6 +469,37 @@ def _build_rules() -> list[_Rule]:
         r"(?<![\d])\b\d{1,2}(?:er)?\s+(?:janv|f[ée]vr|avr|juil|sept|d[ée]c|ene|abr|ago|dic|sty|lut|kwi|cze|lip|sie|wrz|pa[źz]|lis|gru)\b\.?",
         I,
     )
+    # The first day in a list before a month: "18 y 20 de noviembre", "18 i 20 listopada",
+    # "ב-18 וב-20 בנובמבר", "the 18th and 20th of May".
+    add(
+        EntityType.DATE,
+        rf"(?<![\d/.])(?:ב-?)?(\d{{1,2}})(?:st|nd|rd|th|er)?\s*(?:,|&|and|et|y|e|i|oraz|ו|וב-?|ול-?)\s*(?:ב-?)?"
+        rf"\d{{1,2}}(?:st|nd|rd|th|er)?\s+(?:of\s+|de\s+|ב)?(?:{_MONTHS}|{_MONTHS_ML})\b",
+        I,
+        group=1,
+    )
+    # Spaced dates from scanned forms: "1985 / 06 / 22". "the 3rd day of September, 2025".
+    add(EntityType.DATE, r"\b(?:19|20)\d{2}\s*/\s*(?:0?[1-9]|1[0-2])\s*/\s*(?:0?[1-9]|[12]\d|3[01])\b")
+    add(EntityType.DATE, rf"\b\d{{1,2}}(?:st|nd|rd|th)\s+day\s+of\s+(?:{_MONTHS})\b(?:,?\s+\d{{4}})?", I)
+    # A month on its own after "in", "since", "until": "moved to Burnaby in March",
+    # "en janvier", "desde marzo", "w lipcu", "באוגוסט". Capitalized in English.
+    add(
+        EntityType.DATE,
+        r"\b(?i:in|since|until|till|back\s+in|by|from|before|after|during|early|late|mid)[\s\-]+"
+        r"(January|February|March|April|June|July|August|September|October|November|December|Sept?|Oct|Nov|Dec|Jan|Feb)\b"
+        r"(?!\s+\d)",
+        group=1,
+    )
+    add(
+        EntityType.DATE,
+        r"\b(?:en|depuis|jusqu['’]en|d['’]ici|desde|hasta|para|w|od|do)\s+"
+        r"(janvier|f[ée]vrier|avril|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|enero|febrero|marzo|"
+        r"abril|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|styczniu|lutym|marcu|kwietniu|maju|czerwcu|"
+        r"lipcu|sierpniu|wrze[śs]niu|pa[źz]dzierniku|listopadzie|grudniu)\b(?!\s+\d)",
+        I,
+        group=1,
+    )
+    add(EntityType.DATE, r"(?<![א-ת])[בלמ]-?(ינואר|פברואר|מרץ|אפריל|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)(?![א-ת])(?!\s+\d)", group=1)
     # Hebrew calendar dates: "כ״ג בחשוון תשנ״א", "ט״ו באב", "א׳ באדר ב׳".
     add(
         EntityType.DATE,
