@@ -159,3 +159,35 @@ def test_answers_to_a_question_in_pieces():
     texts = " ".join(x for _, x in found)
     assert "seven fifteen" not in texts and "six forty five" not in texts
     assert "second" not in texts and "third" not in texts
+
+
+def test_v5_formats():
+    d = RegexDetector()
+
+    def found(t):
+        return {(e.type, e.text) for e in d.detect(t)}
+
+    assert any("A as in apple" in x for _, x in found("claim number A as in apple, seven seven two zero, nine one five"))
+    assert (T.HEALTH_CARD, "BSH9017734412") in found("Member ID: BSH9017734412")
+    assert (T.URL, "gofundme.example.com/f/baby-moreau-ivf") in found("see gofundme.example.com/f/baby-moreau-ivf")
+    assert (T.ACCOUNT, "PL61 1090 1014 0000 0712 1981 2874") in found("IBAN PL61 1090 1014 0000 0712 1981 2874")
+    assert any(t is T.ID for t, _ in found("envelope 7c1e44a0-9b2f-4d1c-8e77-20f5d3a1b6c9"))
+    assert any("23 de abril del 90" in x for _, x in found("nací el 23 de abril del 90"))
+    assert (T.DATE, "abril cuatro del ochenta y seis") in found("es abril cuatro del ochenta y seis")
+    assert (T.DATE, "jedenasty listopada osiemdziesiąt dziewięć") in found("jedenasty listopada osiemdziesiąt dziewięć")
+    assert not found("CPT 58970 and NDC 0052-0316-10, call ext 2210, as in the past")
+
+
+def test_amounts_and_times_are_not_identifiers():
+    d = RegexDetector()
+    call = (
+        "Agent: Date of birth?\nCaller: Six, nineteen, eighty-five.\n"
+        "Agent: openings Tuesday at eight thirty or nine fifteen.\nCaller: Tuesday eight thirty.\n"
+        "Agent: A frozen cycle starts at nineteen thousand five hundred, fresh around thirty-two thousand.\n"
+        "Agent: The balance is six hundred twelve dollars."
+    )
+    texts = [e.text for e in d.detect(call)]
+    assert any("Six, nineteen, eighty-five" in x for x in texts)
+    for bad in ("eight thirty", "nine fifteen", "nineteen thousand", "two thousand", "six hundred twelve"):
+        assert not any(bad in x for x in texts), bad
+    assert any("D twenty thousand" in e.text for e in d.detect("donor number D twenty thousand seven seventy-one"))

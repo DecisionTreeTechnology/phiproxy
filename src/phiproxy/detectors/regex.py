@@ -83,9 +83,9 @@ _TENS = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
 _UNITS = "one|two|three|four|five|six|seven|eight|nine"
 # "eighty five", "nineteen ninety two", "two thousand one", "oh three".
 _SPOKEN_YEAR = (
-    rf"(?:(?:nineteen|twenty)[\s\-]+)?(?:(?:{_TENS})(?:[\s\-]+(?:{_UNITS}))?|ten|eleven|twelve|thirteen|"
+    rf"(?:(?:(?:nineteen|twenty)[\s\-]+)?(?:(?:{_TENS})(?:[\s\-]+(?:{_UNITS}))?|ten|eleven|twelve|thirteen|"
     rf"fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|oh[\s\-]+(?:{_UNITS}))|"
-    rf"two\s+thousand(?:\s+and)?(?:\s+(?:{_UNITS}|ten|eleven|twelve|thirteen|fourteen|fifteen))?"
+    rf"two\s+thousand(?:\s+and)?(?:\s+(?:{_UNITS}|ten|eleven|twelve|thirteen|fourteen|fifteen))?)"
 )
 _SPOKEN_NUMBER = (
     rf"zero|oh|{_UNITS}|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
@@ -168,7 +168,7 @@ _YEAR_WORDS = (
     r"novecientos|ochocientos|dos|uno|una|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|"
     r"veinte|veinti\w+|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|y|et|"
     r"un|deux|trois|quatre|cinq|six|sept|huit|neuf|onze|douze|treize|quatorze|quinze|seize|"
-    r"tysi[ąa]c\w*|dwa|dziewi[ęe][ćc]set|osiemset|\w+dziesi[ąa]t\w*|\w+na[śs]cie|"
+    r"tysi[ąa]c\w*|dwa|jeden|trzy|cztery|pi[ęe][ćc]|sze[śs][ćc]|siedem|osiem|dziewi[ęe][ćc]|dziewi[ęe][ćc]set|osiemset|\w+dziesi[ąa]t\w*|\w+na[śs]cie|"
     r"(?:pierwsz|drug|trzec|czwart|pi[ąa]t|sz[óo]st|si[óo]dm|[óo]sm|dziewi[ąa]t)\w*|roku|"
     r"אלף|מאות|תשע|שמונה|תשעים|שמונים|ו?אחת|ו?אחד|ו?שתיים|ו?שלוש|ו?ארבע|ו?חמש|ו?שש|ו?שבע|ו?שמונה|ו?תשע"
 )
@@ -242,7 +242,7 @@ def _build_rules() -> list[_Rule]:
 
     add(EntityType.EMAIL, r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
     add(EntityType.URL, r"\bhttps?://[^\s<>\"')\]]+|\bwww\.[^\s<>\"')\]]+", I)
-    add(EntityType.URL, r"\b[a-z0-9\-]+\.(?:com|org|net|ca|io|me)/[^\s<>\"')\]]+", I)
+    add(EntityType.URL, r"\b(?:[a-z0-9\-]+\.)+(?:com|org|net|ca|io|me|pl|fr|es|il|mx|co)/[^\s<>\"')\]]+", I)
     add(EntityType.IP_ADDRESS, r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")
 
     # Keyword-anchored identifiers. The keyword stays; only the value is masked.
@@ -288,6 +288,12 @@ def _build_rules() -> list[_Rule]:
     # "W123456789", "D4429-60718-55231". Upper-case prefix plus at least three digits.
     add(EntityType.ID, r"\b(?=[A-Z0-9\-]*\d{3})[A-Z]{1,5}\d*(?:-[A-Z]{1,6})*-\d[A-Z0-9]*(?:-[A-Z0-9]+)*\b")
     add(EntityType.ID, r"\b[A-Z]{1,2}\d{6,12}\b")
+    # US insurance member IDs with a three-letter prefix: "BSH9017734412", "BSH 440 118 2207".
+    add(EntityType.HEALTH_CARD, r"\b[A-Z]{3}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{3,6}\b|\b[A-Z]{3}\d{8,13}\b")
+    # IBAN: "PL61 1090 1014 0000 0712 1981 2874".
+    add(EntityType.ACCOUNT, r"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b")
+    # UUIDs (e-signature envelopes, portal record ids).
+    add(EntityType.ID, r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", I)
     # Any long bare number (chart numbers, national IDs). Phones and other shapes
     # overlap and win on merge; amounts with separators are excluded.
     add(EntityType.ID, r"(?<![\d.,$€£])\b\d{7,}\b(?![.,]\d)")
@@ -438,7 +444,7 @@ def _build_rules() -> list[_Rule]:
         EntityType.DATE,
         rf"(?<![0-9A-Za-zÀ-ž])(?:(?:le|el|du|au)\s+)?(?:(?:{_WEEKDAY_ML}),?\s+)?\d{{1,2}}(?:er|re|º|\.)?\s+"
         rf"(?:de\s+|ב)?(?:{_MONTHS_ML})"
-        rf"(?:,?\s+(?:de\s+)?(?:\d{{4}}|\d{{2}}(?![\d:hH]|\s*(?:h\b|heures?|horas?|godz))))?(?!\w)",
+        rf"(?:,?\s+(?:del?\s+)?(?:\d{{4}}|\d{{2}}(?![\d:hH]|\s*(?:h\b|heures?|horas?|godz))))?(?!\w)",
         I,
     )
     add(EntityType.DATE, rf"\b(?:{_WEEKDAY_ML})\s+\d{{1,2}}\b(?![:.,]?\d)", I)
@@ -500,6 +506,14 @@ def _build_rules() -> list[_Rule]:
         group=1,
     )
     add(EntityType.DATE, r"(?<![א-ת])[בלמ]-?(ינואר|פברואר|מרץ|אפריל|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)(?![א-ת])(?!\s+\d)", group=1)
+    # Spanish abbreviated months after "de": "23 de nov", "el 3 de sept.".
+    add(EntityType.DATE, r"(?<!\d)\d{1,2}\s+de\s+(?:ene|feb|mar|abr|may|jun|jul|ago|sept?|oct|nov|dic)\b\.?", I)
+    # Spanish month first, spoken: "abril cuatro del ochenta y seis".
+    add(
+        EntityType.DATE,
+        rf"(?<!\w)(?:{_MONTHS_ML})\s+(?:{_DAY_WORDS_FR_ES})(?!\w)(?:(?:\s+del?)?(?:[\s\-]+(?:{_YEAR_WORDS})(?!\w)){{1,8}})?",
+        I,
+    )
     # Hebrew calendar dates: "כ״ג בחשוון תשנ״א", "ט״ו באב", "א׳ באדר ב׳".
     add(
         EntityType.DATE,

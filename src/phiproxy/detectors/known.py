@@ -27,6 +27,8 @@ COMMON_WORD_NAMES = {
     "iris", "lily", "daisy", "ivy", "ruby", "amber", "crystal", "angel", "major", "young",
     "white", "black", "brown", "green", "long", "short", "little", "king", "price", "cash",
     "love", "christian", "miles", "frank", "jean", "gay", "deb", "dick", "guy", "an", "bo",
+    "winter", "spring", "storm", "rain", "sage", "wren", "robin", "jade", "pearl", "hazel", "olive",
+    "precious", "blessing", "destiny", "harmony", "patience", "charity", "mercy", "noble", "royal",
 }
 
 _MONTH_NAMES = [
