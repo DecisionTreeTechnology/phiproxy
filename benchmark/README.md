@@ -11,27 +11,41 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 | `patient_comms_blind_v2.jsonl` | 400 (122 with no identifiers) | 778 + 106 clinician names | en, fr, es, pl, he, mixed | blind AI author (Claude Sonnet), different brief: more fax, intake, voicemail and email text |
 | `patient_comms_blind_v3.jsonl` | 360 (110 with no identifiers) | 956 + 109 clinician names | en, fr, es, pl, he, mixed | blind AI author (Claude Fable), different brief: US insurance and billing text, forwarded threads, people mentioned without cue words |
 | `patient_comms_blind_v4.jsonl` | 400 (152 with no identifiers) | 1,114 + 332 staff and clinician names | en, fr, es, pl, he, mixed | blind AI author (Claude Opus), different brief: a British Columbia clinic with international patients, spoken and corrected numbers in calls, faxed and scanned documents, internal staff notes, patients who share a staff member's name |
+| `patient_comms_blind_v5.jsonl` | 400 (128 with no identifiers) | 1,503 + 218 staff and clinician names | en, fr, es, pl, he, mixed | blind AI author (Claude Fable), different brief: a New Jersey clinic with an Ottawa office, conversations with the clinic's AI assistant, names from many backgrounds, modern family structures, US insurance paperwork, personal fundraiser and social pages |
 
-**How the blind sets were made.** Each was written by a separate AI agent that had only a brief: the label rules, channels, languages, realistic mess, and a list of things that look like identifiers but are not. It was told not to read the detector code, the tests or the other sets, and it wrote every message from scratch. The v4 author also wrote the clinic's own details (`blind/clinic_v4.json`) and a 26-person staff roster (`blind/staff_v4.json`) before writing any message, as a clinic would configure them. The sets are independent of the detector code, but they are AI-written, not written by clinic staff.
+**How the blind sets were made.** Each was written by a separate AI agent that had only a brief: the label rules, channels, languages, realistic mess, and a list of things that look like identifiers but are not. It was told not to read the detector code, the tests or the other sets, and it wrote every message from scratch. The v4 and v5 authors also wrote the clinic's own details (`blind/clinic_v4.json`, `blind/clinic_v5.json`) and a 26-person staff roster (`blind/staff_v4.json`, `blind/staff_v5.json`) before writing any message, as a clinic would configure them. The sets are independent of the detector code, but they are AI-written, not written by clinic staff.
 
-**Second annotator.** A third agent, also without access to code or detector output, reviewed each blind set against the written label rules and listed missing and wrong labels (`blind/audit_v1.jsonl` to `blind/audit_v4.jsonl`; 45, 149, 2 and 50 corrections, mostly unlabelled repeat mentions of names, staff names, spoken dates and numbers read back by the agent). `blind/convert.py` applies them. All scores below use the corrected labels.
+**Second annotator.** A third agent, also without access to code or detector output, reviewed each blind set against the written label rules and listed missing and wrong labels (`blind/audit_v1.jsonl` to `blind/audit_v5.jsonl`; 45, 149, 2, 50 and 6 corrections, mostly unlabelled repeat mentions of names, staff names, spoken dates and numbers read back by the agent). `blind/convert.py` applies them. All scores below use the corrected labels.
 
-**Frozen scoring.** Before each blind set was scored, the detectors were committed and not changed: v1 against commit 082c2e1, v2 against ab99dc9, v3 against 1dd13f2, v4 against 1f548b0. Those first scores are the fair ones (`results_blind_*_frozen.json`). After a set was scored it was used to find and fix gaps, so its later scores are optimistic. Each set is the re-test of the fixes made on the sets before it. v4 was also scored against 5762fb9, a spoken-date change committed before v4 was seen: it caught one more identifier (88.5% instead of 88.4%) and masked two more non-identifiers, so the spoken-date forms fixed from v1 to v3 were not the ones v4 used.
+**Frozen scoring.** Before each blind set was scored, the detectors were committed and not changed: v1 against commit 082c2e1, v2 against ab99dc9, v3 against 1dd13f2, v4 against 1f548b0, v5 against b1e794b. Those first scores are the fair ones (`results_blind_*_frozen.json`). After a set was scored it was used to find and fix gaps, so its later scores are optimistic. Each set is the re-test of the fixes made on the sets before it. v4 was also scored against 5762fb9, a spoken-date change committed before v4 was seen: it caught one more identifier (88.5% instead of 88.4%) and masked two more non-identifiers, so the spoken-date forms fixed from v1 to v3 were not the ones v4 used.
 
 ## Results (recall)
 
-| configuration | v0 | v1 first | v2 first | v3 first | v4 first | v1 now | v2 now | v3 now | v4 now |
-|---|---|---|---|---|---|---|---|---|---|
-| regex | 87.1% | 36.0% | 57.3% | 58.4% | 66.1% | 84.8% | 83.7% | 68.0% | 75.0% |
-| regex + known entities | 97.1% | 54.1% | 80.2% | 68.3% | 73.8% | 89.3% | 94.1% | 78.5% | 84.0% |
-| regex + local model | 98.6% | 77.3% | 87.9% | 84.2% | **86.5%** | 95.2% | 95.8% | 92.5% | 93.5% |
-| regex + known + local model | 99.1% | 79.2% | 92.3% | 88.1% | **88.4%** | 96.5% | 98.1% | 96.4% | 95.6% |
+First score of the frozen code on each set it had never seen:
+
+| configuration | v1 | v2 | v3 | v4 | v5 |
+|---|---|---|---|---|---|
+| regex | 36.0% | 57.3% | 58.4% | 66.1% | 73.7% |
+| regex + known entities | 54.1% | 80.2% | 68.3% | 73.8% | 80.9% |
+| regex + local model | 77.3% | 87.9% | 84.2% | 86.5% | **91.2%** |
+| regex + known + local model | 79.2% | 92.3% | 88.1% | 88.4% | **93.1%** |
+
+The current code ("now", optimistic: every set below was used to find gaps):
+
+| configuration | v0 | v1 | v2 | v3 | v4 | v5 |
+|---|---|---|---|---|---|---|
+| regex | 87.1% | 84.8% | 83.7% | 68.5% | 75.1% | 75.2% |
+| regex + known entities | 97.1% | 89.3% | 94.1% | 78.5% | 84.1% | 82.3% |
+| regex + local model | 98.6% | 95.2% | 95.8% | 93.0% | 93.6% | 92.7% |
+| regex + known + local model | 99.1% | 96.5% | 98.1% | 96.4% | 95.7% | 94.5% |
 
 - "First" is the score of the frozen code on a set it had never seen. "Now" is the current code, after fixes informed by that set, so it is optimistic.
 - v3 tested the name rules added after v2 (finding names from self-introductions, relatives, chart labels, sign-offs and signature blocks, without a model). On v3, before those rules, the pattern detector found 8% of names and 43.1% of all identifiers; with them, 43% of names and 58.4% overall, at the same precision. With the local model the gain is smaller (82.1% to 84.2%), because the model already finds most names.
 - v0 overstates recall, because it was written by the people who wrote the detectors.
 - On v2 the "known entities" rows are optimistic: for some messages the v2 author filled the patient record from the message itself.
 - Spoken identifiers: after the v3 first score, numbers read out loud are rebuilt before matching (grouped and compound number words in five languages, spelled letters, the phonetic alphabet). "Now" recall on call transcripts with the local model rose from 91% to 94% (v1), 88% to 94% (v2) and 94% to 96% (v3); without the model, from 82% to 86%, 79% to 86% and 77% to 80%. False positives did not rise on any set.
+- v5 is the fair test of everything fixed through v4 (Hebrew, calls, dates; frozen at b1e794b, the detection code of 0.1.0a7): 93.1% with the local model, 80.9% without it. v5's brief was different again (a New Jersey clinic, conversations with the clinic's AI assistant, names from many backgrounds, US insurance paperwork), so part of the change from v4's 88.4% may be the text, not the code. By channel: SMS 95%, chat 93%, email 93%, notes 93%, calls 92%. By language: en 94%, fr 96%, es 90%, pl 93%, he 86%, mixed 94%. Weakest types: personal URLs written without "https://" (43%), member IDs with a three-letter prefix (73%), single first names with no cue word.
+- After the v5 first score: member IDs with a three-letter prefix ("BSH9017734412"), personal pages without "https://", IBANs, envelope IDs (UUIDs), "A as in apple" inside spoken codes, "23 de abril del 90", "23 de nov", "abril cuatro del ochenta y seis", Polish years ending in a unit ("osiemdziesiąt dziewięć"). Fewer false positives: amounts read out ("nineteen thousand five hundred", "six hundred twelve dollars") and clock times after a weekday or in a list ("Tuesday eight thirty", "at eight thirty or nine fifteen") are not identifiers; a spoken-year pattern that matched "two thousand" anywhere was fixed; role words ("All Staff", "Lab Director", "madame") are not names.
 - v4 is the fair test of everything fixed on v1 to v3: 88.4% with the local model, the same as v3's first score (88.1%), while v1 to v3 "now" scored 95% to 97% at that commit. Fixing gaps found on a set lifts that set much more than unseen text, so expect about 88% on new text of this kind, not 95%.
 - v4 first score with the local model, by channel: chat 92%, SMS 92%, email 91%, notes 87%, calls 83%. By language: en 89%, fr 83%, es 91%, pl 89%, he 80%, mixed 98%. Weakest types: dates (74%, mostly bare days and months like "the twelfth", "until January"), health card and member numbers (67%, many scanned with O for 0 and l for 1), SSNs (40%, French and spoken).
 - After the v4 first score: scanned numbers are read again with look-alike letters as digits ("6O4-555-Ol74", "O9/Ol/199O"); spelled names with "as in" ("K as in kilo O W..."); spoken emails with numbers; Mexican CURP and RFC, Spanish DNI and NIE, French social security numbers, French phone numbers, IPv6; Polish and French postal codes; streets named first ("88 rue des Érables", "ul. Kościuszki 12/4", "רחוב הרצל 14") and the city after a street; Hebrew calendar dates ("כ״ג בחשוון"); follicle sizes read out are no longer IDs; fertility drug names and role words are no longer names. These are "now" numbers.
@@ -55,7 +69,11 @@ Labelled sets of the kind of text clinics send to LLMs: patient SMS, web chat, p
 | v4 first score, default policy | 71.9% | 61% |
 | v4 first score, clinic details allowed | 74.6% | 54% |
 | v4 first score, clinic details and staff list | 78.8% | 48% |
-| v4 now, clinic details and staff list | 83.0% | 39% |
+| v4 now, clinic details and staff list | 83.4% | 39% |
+| v5 first score, default policy | 79.4% | 48% |
+| v5 first score, clinic details allowed | 85.8% | 27% |
+| v5 first score, clinic details and staff list | 87.6% | 27% |
+| v5 now, clinic details and staff list | 88.5% | 24% |
 
 v2 and v3 contain many email footers and letterheads with the fictional clinic's own name, phone, fax, address and email. Those are not patient data, so they are not labelled, and phiproxy masks them unless the deployment lists them in `Policy(allow=[...])`. The "clinic details allowed" rows pass `blind/clinic_v2.json` or `blind/clinic_v3.json` with `--allow`. Most of the rest is holiday and clinic-closure dates (masked on purpose: a date is never exempted, because it could be a birthday), staff first names that are also words ("Will", "Grace", "Hope"), staff names without a title, and card last-four digits the label rules did not ask for.
 
@@ -70,7 +88,7 @@ After the v4 first score, the staff list also passes a staff member's initial an
 ## Files
 
 - `generate.py`: deterministic generator (fixed seed) for `data/patient_comms_v0.jsonl`.
-- `blind/blind_v*.source.jsonl`: the blind sets as written, with inline labels (`[[NAME|jess]]`). `blind/audit_v*.jsonl`: second-annotator corrections. `blind/clinic_v*.json` and `blind/staff_v*.json`: clinic details and staff rosters for `--allow` and `--staff`. `blind/convert.py v1|v2|v3|v4` builds `data/patient_comms_blind_v*.jsonl`.
+- `blind/blind_v*.source.jsonl`: the blind sets as written, with inline labels (`[[NAME|jess]]`). `blind/audit_v*.jsonl`: second-annotator corrections. `blind/clinic_v*.json` and `blind/staff_v*.json`: clinic details and staff rosters for `--allow` and `--staff`. `blind/convert.py v1|v2|v3|v4|v5` builds `data/patient_comms_blind_v*.jsonl`.
 - `score.py`: scores every available configuration and prints recall by type, channel and language, precision, and clean-message masking. `--show-misses N`, `--show-false-positives N`, `--allow clinic.json` and `--staff staff.json` help with error analysis. The local-model configurations appear when `phiproxy[gliner]` is installed.
 - `results_*.json`: scores for the built-in configurations (v2 to v4 with the clinic details allowed; the frozen first scores with the default policy).
 

@@ -201,6 +201,7 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
 
     tokens = list(_TOKEN.finditer(text))
     prev_end = 0
+    skip_to = -1
     for i, m in enumerate(tokens):
         raw = m.group(0)
         w = raw.lower()
@@ -223,6 +224,12 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
                 run.spoken += kind != "digits" and w not in ("o", "oh")
             joins = 0
             continue
+        # "A as in apple": the letter was already taken; skip "as in <word>".
+        if w == "as" and run.chars and run.chars[-1][0].isalpha() and i + 2 < len(tokens) and tokens[i + 1].group(0).lower() == "in":
+            skip_to = i + 2
+            continue
+        if i <= skip_to:
+            continue
         if w in _NATO:
             run.letter(_NATO[w], s, e)
             run.spoken += 1
@@ -230,7 +237,10 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
             continue
         if len(w) == 1 and w.isalpha() and w.isascii() and text[s - 1 : s] not in ("'", "’"):
             # A single letter belongs to a run only beside a number or another letter.
-            nxt = next((t.group(0).lower() for t in tokens[i + 1 :] if t.group(0) not in _PAUSES), "")
+            rest = [t.group(0).lower() for t in tokens[i + 1 :] if t.group(0) not in _PAUSES]
+            if rest[:2] == ["as", "in"]:
+                rest = rest[3:]  # "A as in apple, seven ..."
+            nxt = rest[0] if rest else ""
             ahead = bool(_number_word(nxt)) or (len(nxt) == 1 and nxt.isalpha()) or nxt in _NATO
             # Lowercase "i" and "a" are also words: "... oh one four two i think".
             # "a nineteen, eighteen and two": the article, not a letter.
@@ -321,7 +331,17 @@ _ASKED = [
         r"num[ée]ro\s+de\s+dossier|n[úu]mero\s+de\s+(?:expediente|tarjeta|socio)|numer\s+(?:karty|polisy)", re.IGNORECASE)),
 ]
 _TIME_AFTER = re.compile(r"^\s*(?:a\.?m\b|p\.?m\b|o['’]?clock|h\b|heures?|horas?|godzin)", re.IGNORECASE)
-_TIME_BEFORE = re.compile(r"(?:\bat|\bà|\ba\s+las|\bo|\bבשעה)\s*$", re.IGNORECASE)
+_TIME_BEFORE = re.compile(
+    r"(?:\bat|\bà|\ba\s+las|\bo|\bבשעה|\b(?:mon|tues|wednes|thurs|fri|satur|sun)day|\btomorrow|\btonight|"
+    r"\bmorning|\bafternoon|\bevening|\blundi|\bmardi|\bmercredi|\bjeudi|\bvendredi|\blunes|\bmartes|"
+    r"\bmi[ée]rcoles|\bjueves|\bviernes)\s*$",
+    re.IGNORECASE,
+)
+# A second time in a list: "at eight thirty or nine fifteen".
+_TIME_LINK = re.compile(r"^\s*(?:or|and|to|until|till|-|–|ou|et|y|o|a|albo|lub|do|או|עד)\s*$", re.IGNORECASE)
+# Amounts read out: "nineteen thousand five hundred", "six hundred twelve dollars".
+_MONEY_AFTER = re.compile(r"^\s*(?:dollars?|bucks|cents|d[óo]lares|pesos|euros?|z[łl](?:otych)?|shekels?|שקל|ש\"ח)", re.IGNORECASE)
+_THOUSAND = re.compile(r"\b(?:thousand|mille|mil|tysi[ąa]c\w*|אלף|אלפים)\b", re.IGNORECASE)
 # A month or day word just before a spoken date run: "July one four", "Czternasty, zero siedem".
 _DATE_LEAD = re.compile(
     r"(?:\b(?:jan(?:uary)?|feb(?:ruary)?|march|april|may|june|july|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|"
@@ -352,16 +372,26 @@ def _asked(text: str, pos: int) -> Optional[EntityType]:
 
 def detect(text: str) -> list[Entity]:
     out: list[Entity] = []
+    time_end = -1
     for chars in _runs(text):
         line_start = text.rfind("\n", 0, chars[0][1]) + 1
         if _MEASURES.search(text[max(line_start, chars[0][1] - 120) : chars[0][1]]):
             continue
         s = "".join(c for c, _, _ in chars)
         start, end = _span(chars)
+        if s.isdigit() and (_MONEY_AFTER.match(text[end:]) or _THOUSAND.search(text[start:end])):
+            continue  # an amount, not an identifier ("D twenty thousand ..." is a code)
         t = _classify(s)
         if t is None:
             digits = sum(c.isdigit() for c in s)
-            if not digits or _TIME_AFTER.match(text[end:]) or _TIME_BEFORE.search(text[:start]):
+            if not digits:
+                continue
+            if (
+                _TIME_AFTER.match(text[end:])
+                or _TIME_BEFORE.search(text[:start])
+                or (time_end >= 0 and _TIME_LINK.match(text[time_end:start]))
+            ):
+                time_end = end
                 continue
             t = _asked(text, start)
             # A postal code comes in pieces too ("V five K one... wait").

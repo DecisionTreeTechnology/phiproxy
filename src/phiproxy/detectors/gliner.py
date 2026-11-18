@@ -67,6 +67,8 @@ _NOT_NAME_WORDS = frozenset(
     pacientes pacjenci pacjentki מטופלים מטופלות יקרים יקרות
     nvm vm hsg hr it reply bueno name s
     kid kiddo toddler infant ex single female male kin next of lady gentleman
+    all director physician physicians lab manager compliance sir madam madame monsieur mr mrs ms
+    señor señora senor senora pan pani mx dr
     asistente asistenta assistante asystent asystentka מבקר מבקרת
     żony żonie żonę żoną męża mężowi mężem partnera partnerki partnerką
     """.split()
