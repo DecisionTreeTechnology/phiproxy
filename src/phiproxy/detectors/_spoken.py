@@ -409,6 +409,11 @@ def detect(text: str) -> list[Entity]:
     return out
 
 
+def digits(text: str) -> str:
+    """The digits of a number read out loud: "seven one three, five five five..." -> "713555..."."""
+    return "".join(c for chars in _runs(text) for c, _, _ in chars if c.isdigit())
+
+
 def street_numbers(text: str, street: Callable[[str], list[tuple[int, int]]]) -> list[Entity]:
     """Street addresses whose house number is spoken: "eighteen forty two west cermak road"."""
     out: list[Entity] = []

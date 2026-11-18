@@ -68,6 +68,8 @@ STOP_WORDS = frozenset(
     billing records insurance coordinator reminder
     dept department departamento departement service services interpreter interprète intérprete
     tłumacz tłumaczka abogado abogada lawyer attorney avocat avocate prawnik ça cela number
+    moving valued patients drs plan maman mamá papa papá trabajadora trabajador social
+    travailleuse travailleur facturación facturation equipo équipe zespół
     """.split()
 )
 _HE_STOP = frozenset(

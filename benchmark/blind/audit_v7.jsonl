@@ -1,0 +1,62 @@
+{"id": "v7-en-sms-018", "action": "add", "type": "NAME", "surface": "Rowan", "occurrence": 2, "reason": "preferred name repeat"}
+{"id": "v7-en-sms-018", "action": "add", "type": "NAME", "surface": "Rosemary", "occurrence": 2, "reason": "legal name repeat"}
+{"id": "v7-en-email-032", "action": "add", "type": "NAME", "surface": "Morgan", "occurrence": 2, "reason": "patient first name in quoted text"}
+{"id": "v7-en-email-033", "action": "add", "type": "NAME", "surface": "Whitney", "occurrence": 2, "reason": "signature"}
+{"id": "v7-en-email-035", "action": "add", "type": "NAME", "surface": "Marcus", "occurrence": 2, "reason": "intended parent"}
+{"id": "v7-en-email-035", "action": "add", "type": "NAME", "surface": "Imogen", "occurrence": 2, "reason": "intended parent"}
+{"id": "v7-en-email-035", "action": "add", "type": "NAME", "surface": "Ted", "occurrence": 1, "reason": "signature"}
+{"id": "v7-en-note-039", "action": "add", "type": "DATE", "surface": "11/14", "occurrence": 1, "reason": "exam date"}
+{"id": "v7-en-chat-042", "action": "add", "type": "NAME", "surface": "Carl", "occurrence": 2, "reason": "patient husband repeat"}
+{"id": "v7-en-note-055", "action": "add", "type": "NAME", "surface": "Contreras", "occurrence": 2, "reason": "patient surname"}
+{"id": "v7-en-email-059", "action": "add", "type": "NAME", "surface": "Anita", "occurrence": 2, "reason": "signature"}
+{"id": "v7-en-email-060", "action": "add", "type": "NAME", "surface": "Greta", "occurrence": 2, "reason": "salutation"}
+{"id": "v7-en-email-060", "action": "add", "type": "NAME", "surface": "Sunita", "occurrence": 2, "reason": "salutation"}
+{"id": "v7-en-email-068", "action": "add", "type": "NAME", "surface": "Farrow", "occurrence": 2, "reason": "surname repeat"}
+{"id": "v7-en-call-070", "action": "add", "type": "NAME", "surface": "Raquel", "occurrence": 2, "reason": "patient first name repeat"}
+{"id": "v7-en-call-073", "action": "add", "type": "NAME", "surface": "Kayla", "occurrence": 3, "reason": "patient first name"}
+{"id": "v7-en-call-073", "action": "add", "type": "NAME", "surface": "Kayla", "occurrence": 5, "reason": "patient first name"}
+{"id": "v7-en-call-076", "action": "add", "type": "NAME", "surface": "P R A D H A N", "occurrence": 1, "reason": "spelled name"}
+{"id": "v7-en-chat-079", "action": "add", "type": "NAME", "surface": "Paula", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-en-email-101", "action": "add", "type": "NAME", "surface": "Lacey", "occurrence": 2, "reason": "patient first name repeat"}
+{"id": "v7-en-email-102", "action": "add", "type": "NAME", "surface": "Cecilia", "occurrence": 2, "reason": "patient first name in quote"}
+{"id": "v7-en-email-104", "action": "add", "type": "NAME", "surface": "Luz", "occurrence": 2, "reason": "name repeat"}
+{"id": "v7-en-email-104", "action": "add", "type": "NAME", "surface": "Ivy", "occurrence": 3, "reason": "signature"}
+{"id": "v7-en-email-111", "action": "add", "type": "NAME", "surface": "Neil", "occurrence": 2, "reason": "partner repeat"}
+{"id": "v7-en-email-111", "action": "add", "type": "NAME", "surface": "Corinne", "occurrence": 2, "reason": "patient name in quote"}
+{"id": "v7-en-call-134", "action": "add", "type": "NAME", "surface": "T H U Y", "occurrence": 1, "reason": "spelled name"}
+{"id": "v7-en-call-134", "action": "add", "type": "NAME", "surface": "Thuy", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-en-call-140", "action": "add", "type": "NAME", "surface": "Imelda", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-en-email-150", "action": "add", "type": "NAME", "surface": "Monica", "occurrence": 3, "reason": "patient first name in quote"}
+{"id": "v7-en-email-152", "action": "add", "type": "NAME", "surface": "Ed", "occurrence": 3, "reason": "signature"}
+{"id": "v7-en-email-153", "action": "add", "type": "ADDRESS", "surface": "#1405", "occurrence": 1, "reason": "unit number"}
+{"id": "v7-en-email-155", "action": "add", "type": "NAME", "surface": "Amara", "occurrence": 2, "reason": "signature"}
+{"id": "v7-fr-chat-022", "action": "add", "type": "NAME", "surface": "Évelyne", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-fr-chat-025", "action": "add", "type": "NAME", "surface": "Léo", "occurrence": 2, "reason": "chosen name repeat"}
+{"id": "v7-fr-email-032", "action": "add", "type": "NAME", "surface": "Catherine", "occurrence": 2, "reason": "patient first name in quote"}
+{"id": "v7-fr-email-033", "action": "add", "type": "NAME", "surface": "Stéphanie", "occurrence": 2, "reason": "signature"}
+{"id": "v7-fr-email-033", "action": "add", "type": "ADDRESS", "surface": "app. 3", "occurrence": 1, "reason": "unit number"}
+{"id": "v7-fr-email-035", "action": "add", "type": "NAME", "surface": "Véronique", "occurrence": 2, "reason": "parent"}
+{"id": "v7-fr-email-035", "action": "add", "type": "NAME", "surface": "Marie-Pier", "occurrence": 2, "reason": "signature"}
+{"id": "v7-fr-email-069", "action": "add", "type": "NAME", "surface": "Zoé", "occurrence": 2, "reason": "signature"}
+{"id": "v7-es-call-018", "action": "add", "type": "NAME", "surface": "Imelda", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-es-chat-020", "action": "add", "type": "NAME", "surface": "Marlene", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-es-chat-023", "action": "add", "type": "NAME", "surface": "Mateo", "occurrence": 2, "reason": "chosen name repeat"}
+{"id": "v7-es-email-030", "action": "add", "type": "NAME", "surface": "Nayeli", "occurrence": 2, "reason": "patient first name in quote"}
+{"id": "v7-es-email-031", "action": "add", "type": "NAME", "surface": "Jimena", "occurrence": 2, "reason": "signature"}
+{"id": "v7-es-email-033", "action": "add", "type": "NAME", "surface": "Verónica", "occurrence": 2, "reason": "parent"}
+{"id": "v7-es-email-033", "action": "add", "type": "NAME", "surface": "Ana Karen", "occurrence": 2, "reason": "signature"}
+{"id": "v7-es-email-058", "action": "add", "type": "NAME", "surface": "Zulema", "occurrence": 2, "reason": "signature"}
+{"id": "v7-pl-chat-012", "action": "add", "type": "NAME", "surface": "Doroto", "occurrence": 1, "reason": "inflected patient name"}
+{"id": "v7-pl-email-018", "action": "add", "type": "NAME", "surface": "Izabela", "occurrence": 2, "reason": "signature"}
+{"id": "v7-he-chat-009", "action": "add", "type": "NAME", "surface": "שירה", "occurrence": 2, "reason": "patient first name"}
+{"id": "v7-he-email-013", "action": "add", "type": "NAME", "surface": "ענת", "occurrence": 2, "reason": "patient first name in quote"}
+{"id": "v7-he-email-014", "action": "add", "type": "NAME", "surface": "גלית", "occurrence": 2, "reason": "signature"}
+{"id": "v7-mixed-call-012", "action": "add", "type": "NAME", "surface": "D U F O U R", "occurrence": 1, "reason": "spelled name"}
+{"id": "v7-mixed-email-022", "action": "add", "type": "NAME", "surface": "Kasia", "occurrence": 1, "reason": "patient name"}
+{"id": "v7-mixed-email-022", "action": "add", "type": "NAME", "surface": "Mike", "occurrence": 1, "reason": "patient husband"}
+{"id": "v7-mixed-email-022", "action": "add", "type": "NAME", "surface": "Mike", "occurrence": 2, "reason": "patient husband"}
+{"id": "v7-mixed-email-024", "action": "add", "type": "NAME", "surface": "Samira", "occurrence": 2, "reason": "signature"}
+{"id": "v7-fr-email-040", "action": "add", "type": "PROVIDER", "surface": "JP", "occurrence": 1, "reason": "staff signature"}
+{"id": "v7-es-email-041", "action": "add", "type": "DATE", "surface": "15 de diciembre", "occurrence": 1, "reason": "fee due date (en-176 labels same)"}
+{"id": "v7-en-note-163", "action": "remove", "type": "DATE", "surface": "Monday", "occurrence": 1, "reason": "bare weekday"}
+{"id": "v7-fr-email-041", "action": "remove", "type": "DATE", "surface": "25 décembre", "occurrence": 1, "reason": "holiday closure"}

@@ -52,7 +52,8 @@ _PERSON_ROLE = (
     r"secretary|secr[ée]taire|secretaria|sekretarka|manager|gestionnaire|"
     r"administrator|administratrice|assistant[e]?|asistente|asystentka|educator|"
     r"[ée]ducatrice|phlebotomist|pharmacist|pharmacien(?:ne)?|farmac[ée]utic[ao]|"
-    r"case\s+manager|team\s+member|staff|"
+    r"case\s+manager|team\s+member|staff|surgeon|chirurg|cirujan[ao]|chirurgien(?:ne)?|anesth\w*|"
+    r"physician|provider|nurse|infirmi[eè]re?|enfermer[ao]|piel[ęe]gniarka|technicienne|t[ée]cnic[ao]|technik|"
     r"מזכירה|מזכיר|רכזת|רכז|יועצת|יועץ|אחות"
 )
 # Departments and places inside the clinic.
@@ -104,6 +105,8 @@ _BEFORE = [
     re.compile(
         r"\b(?:sig|signed|sign[ée]e?|firma|firmado|podpis|witness|t[ée]moin|testigo|[śs]wiadek|"
         r"minutes|counsell?ed\s+by|filed\s+by|entered\s+by|ordering|requesting|attending|cc|"
+        r"(?:verified|reviewed|approved|performed|done|checked|witnessed|called|seen)\s+by|"
+        r"v[ée]rifi[ée]e?\s+par|revisado\s+por|sprawdzi[łl]a?|"
         # Staff lists: "Attendees: Okafor, Wrobel, Odette", "On call: Priya".
         r"attendees|present|pr[ée]sents?|presentes|obecni|speakers|panel(?:ists)?|participants|"
         r"participantes|asistentes|uczestnicy|on[\s\-]?call|de\s+garde|de\s+guardia|dy[żz]ur\w*)"
@@ -195,6 +198,8 @@ class StaffList:
                 return False
         if len(words) >= 2 and any(set(words) <= p for p, _ in self._people):
             return True  # a full name: "Carla Benitez", "Benitez, Carla"
+        if len(words) == 1 and self._in_full_name(text, e.start, e.end, words[0]):
+            return True  # "Hamid" in "From: Hamid Rahimi"
         if len(words) == 1 and initials and any(
             words[0] in p and set(initials) <= {w[0] for w in p if w != words[0]} for p, _ in self._people
         ):
@@ -240,6 +245,17 @@ class StaffList:
                         changed = True
                         break
         return out
+
+    def _in_full_name(self, text: str, start: int, end: int, word: str) -> bool:
+        """The word is part of a staff member's full name written out around it."""
+        after = _WORD.match(text[end:].lstrip(" ")) if text[end : end + 1] == " " else None
+        before = re.search(r"([^\W\d_]+)[ ]$", text[max(0, start - 40) : start])
+        for other in (after.group(0) if after else None, before.group(1) if before else None):
+            if other:
+                o = _name_words(other)[0]
+                if o and any({word, o[0]} <= p for p, _ in self._people):
+                    return True
+        return False
 
     @staticmethod
     def _has_cue(text: str, start: int, end: int) -> bool:

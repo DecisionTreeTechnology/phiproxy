@@ -299,6 +299,22 @@ def _build_rules() -> list[_Rule]:
     # Any long bare number (chart numbers, national IDs). Phones and other shapes
     # overlap and win on merge; amounts with separators are excluded.
     add(EntityType.ID, r"(?<![\d.,$€£])\b\d{7,}\b(?![.,]\d)")
+    # A short letter prefix, a space, then the number: "RX 7714402", "TX 41982776",
+    # "AUTH 66-120-883", "RX 3340-882". Not product and billing codes.
+    add(
+        EntityType.ID,
+        r"\b(?!(?:NDC|CPT|ICD|LOT|HCPCS|DRG|REF|EXT|TEL|FAX|PH)\b)[A-Z]{2,4}[ #:]{1,2}\d[\d\-]{5,}\d\b",
+    )
+    # Court and agency file numbers: "2026-FAM-00418", "500-17-123456-261".
+    add(EntityType.ID, r"\b(?:19|20)\d{2}-[A-Z]{2,5}-\d{3,}\b")
+    add(EntityType.ID, r"\b\d{3}-\d{2}-\d{6}-\d{3}\b")
+    # Member IDs read off a card in groups after a member keyword: "miembro GCM 70 4418 21".
+    add(
+        EntityType.HEALTH_CARD,
+        r"\b(?:member|miembro|membre|cz[łl]onk\w*|identificaci[oó]n|id)\b[^\n\d]{0,25}?\b([A-Z]{2,4}(?:[ \-]\d{2,5}){3,4})\b",
+        I,
+        group=1,
+    )
     # Payment card numbers in 4-4-4-4 groups, Luhn-checked.
     add(
         EntityType.ACCOUNT,
@@ -330,6 +346,8 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.HEALTH_CARD, r"\b\d{4}[\s\-]\d{3}[\s\-]\d{3}(?:[\s\-]?[A-Z]{2})?\b")
 
     add(EntityType.SSN, r"\b(\d{3})-(\d{2})-(\d{4})\b", check=_ssn_check)
+    # Masked SSN with the last four: "xxx-xx-6291", "***-**-6291".
+    add(EntityType.SSN, r"(?<![\w*])[xX*]{3}-[xX*]{2}-\d{4}\b")
     # Named as a social security number, any first group: "my social is 972-22-8271".
     add(EntityType.SSN, r"\b(?:social|ssn|seguro\s+social)\b[^\n\d]{0,20}(\d{3}-\d{2}-\d{4})\b", I, group=1)
     # Polish nine-digit phones after a phone word: "Mój nowy numer to 555 418 988".
@@ -494,6 +512,14 @@ def _build_rules() -> list[_Rule]:
         rf"\d{{1,2}}(?:st|nd|rd|th|er)?\s+(?:of\s+|de\s+|ב)?(?:{_MONTHS}|{_MONTHS_ML})\b",
         I,
         group=1,
+    )
+    # A range of days before a month, as one date: "9 al 12 de diciembre", "od 9 do 12 grudnia",
+    # "מ-9 עד 12 בדצמבר", "du 24 au 28 décembre", "December 9 to 12" is handled by the month rules.
+    add(
+        EntityType.DATE,
+        rf"(?<![\d/.])\d{{1,2}}(?:st|nd|rd|th|er)?\s*(?:al|a|au|à|do|to|through|thru|till|until|-|–|עד)\s*"
+        rf"\d{{1,2}}(?:st|nd|rd|th|er)?\s+(?:of\s+|de\s+|ב)?(?:{_MONTHS}|{_MONTHS_ML})\b",
+        I,
     )
     # Spaced dates from scanned forms: "1985 / 06 / 22". "the 3rd day of September, 2025".
     add(EntityType.DATE, r"\b(?:19|20)\d{2}\s*/\s*(?:0?[1-9]|1[0-2])\s*/\s*(?:0?[1-9]|[12]\d|3[01])\b")

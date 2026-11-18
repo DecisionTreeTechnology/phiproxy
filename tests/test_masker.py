@@ -191,3 +191,13 @@ def test_allowed_city_alone_does_not_cover_a_state():
     assert text[7:16] == "Vancouver" and text[42:66] == "1450 West Georgia Street" and text[68:77] == "Vancouver"
     assert not _covered(city, allowed)
     assert _covered(clinic, allowed)
+
+
+def test_clinic_name_forms_and_spoken_clinic_number():
+    m = Masker(policy=Policy(allow=["Bluebonnet", "Montréal", "(713) 555-0820"]))
+    for text in ["Agent: Clinique Bluebonnet, bonjour.", "Équipe Bluebonnet Montréal"]:
+        assert m.mask(text, "s").text == text
+    out = m.mask("Please call us back at seven one three, five five five, zero eight two zero.", "s2").text
+    assert "seven one three" in out
+    out = m.mask("My number is seven one three, five five five, zero one two six.", "s3").text
+    assert "seven one three" not in out

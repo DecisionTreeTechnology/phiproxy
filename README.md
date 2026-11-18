@@ -154,31 +154,31 @@ Presidio is also supported: `pip install phiproxy[presidio]` and add `PresidioDe
 
 ## Benchmark
 
-`benchmark/` holds seven synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters, insurance letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
+`benchmark/` holds eight synthetic **patient communications** sets: SMS, web chat, call transcripts and voicemails, emails, referral letters, insurance letters and intake text, the kind of text clinics actually send to LLMs. Most existing de-identification work targets clinical notes instead. All people and numbers are invented.
 
 - **v0** (288 messages, English): template-based, written by the detector authors.
-- **blind v1 to v6** (420, 400, 360, 400, 400 and 400 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by an AI model (Opus, Sonnet, Fable, then Opus, Fable and Opus again with new briefs) that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). v3 is US-heavy and mentions people without cue words ("Can Omar come in with me?"). v4 comes from a British Columbia clinic with international patients, and has spoken and corrected numbers, scanned faxes, internal staff notes, the clinic's own staff roster, and patients who share a staff member's name. v5 comes from a New Jersey clinic, with conversations with the clinic's AI assistant, names from many backgrounds and US insurance paperwork. v6 comes from an Arizona clinic with a Winnipeg office: a quarter calls, first names with no cue word, staff handoffs and internal chat, cross-border surrogacy; its author generated messages from templates, so it is less varied than the others. A second annotator, also blind to the code, corrected the labels.
+- **blind v1 to v7** (420, 400, 360, 400, 400, 400 and 400 messages): English, French, Spanish, Polish, Hebrew and mixed, each written by an AI model (Opus, Sonnet, Fable, then Opus, Fable, Opus and Opus again with new briefs) that never saw the detector code, each with about 30% of messages containing no identifiers but full of lookalikes (drug doses, embryo grades, billing codes). v3 is US-heavy and mentions people without cue words ("Can Omar come in with me?"). v4 comes from a British Columbia clinic with international patients, and has spoken and corrected numbers, scanned faxes, internal staff notes, the clinic's own staff roster, and patients who share a staff member's name. v5 comes from a New Jersey clinic, with conversations with the clinic's AI assistant, names from many backgrounds and US insurance paperwork. v6 comes from an Arizona clinic with a Winnipeg office: a quarter calls, first names with no cue word, staff handoffs and internal chat, cross-border surrogacy; its author generated messages from templates, so it is less varied than the others. v7, written by hand, comes from a Houston clinic with a Montreal office: email threads, intake forms, male factor and LGBTQ+ families, specialty-pharmacy calls. A second annotator, also blind to the code, corrected the labels.
 
 Each blind set was scored once with the detectors frozen, then used to find gaps. So each set's first score is a test of the fixes made on the sets before it:
 
-| recall, first score on unseen text | v1 | v2 | v3 | v4 | v5 | v6 |
-|---|---|---|---|---|---|---|
-| regex | 36.0% | 57.3% | 58.4% | 66.1% | 73.7% | 80.2% |
-| regex + known entities | 54.1% | 80.2% | 68.3% | 73.8% | 80.9% | 88.8% |
-| regex + local model | 77.3% | 87.9% | 84.2% | 86.5% | 91.2% | 96.8% |
-| regex + known + local model | 79.2% | 92.3% | 88.1% | 88.4% | **93.1%** | **97.5%** |
+| recall, first score on unseen text | v1 | v2 | v3 | v4 | v5 | v6 | v7 |
+|---|---|---|---|---|---|---|---|
+| regex | 36.0% | 57.3% | 58.4% | 66.1% | 73.7% | 80.2% | 75.7% |
+| regex + known entities | 54.1% | 80.2% | 68.3% | 73.8% | 80.9% | 88.8% | 84.9% |
+| regex + local model | 77.3% | 87.9% | 84.2% | 86.5% | 91.2% | 96.8% | 93.1% |
+| regex + known + local model | 79.2% | 92.3% | 88.1% | 88.4% | 93.1% | 97.5% | **94.7%** |
 
-| first score, regex + known + local model | v5 | v6 |
-|---|---|---|
-| by channel | SMS 95%, chat 93%, email 93%, notes 93%, calls 92% | SMS 97%, chat 99%, email 97%, notes 99%, calls 97% |
-| by language | en 94%, fr 96%, es 90%, pl 93%, he 86%, mixed 94% | en 98%, fr 97%, es 97%, pl 96%, he 99%, mixed 99% |
-| precision (default / clinic details allowed / plus staff list) | 79.4% / 85.8% / 87.6% | 64.4% / 74.4% / 77.4% |
-| messages without identifiers where something was masked | 48% / 27% / 27% | 68% / 56% / 55% |
+| first score, regex + known + local model | v5 | v6 (template-built) | v7 |
+|---|---|---|---|
+| by channel | SMS 95%, chat 93%, email 93%, notes 93%, calls 92% | SMS 97%, chat 99%, email 97%, notes 99%, calls 97% | SMS 100%, chat 95%, email 93%, notes 96%, calls 95% |
+| by language | en 94%, fr 96%, es 90%, pl 93%, he 86%, mixed 94% | en 98%, fr 97%, es 97%, pl 96%, he 99%, mixed 99% | en 95%, fr 95%, es 94%, pl 95%, he 87%, mixed 100% |
+| precision (default / clinic details allowed / plus staff list) | 79.4% / 85.8% / 87.6% | 64.4% / 74.4% / 77.4% | 66.6% / 72.5% / 78.4% |
+| messages without identifiers where something was masked | 48% / 27% / 27% | 68% / 56% / 55% | 40% / 34% / 32% |
 
 **How to read this honestly:**
 - Expect real traffic to score lower: these sets are AI-written, not written by clinic staff. v0 overstated recall by about 30 points.
 - Without the local model, names not in your records are the main gap. On v3, where names often come with no cue, the pattern rules alone found 43% of names.
-- After the gaps found on each set were fixed, the current code scores 91% to 98% with the local model on the four blind sets. Those numbers are optimistic, which is why the table above shows first scores. v4 showed how much: the code that scored 95% to 97% on v1 to v3 scored 88% on v4. After the Hebrew, call and date work, the next unseen set (v5) scored 93%, and v6 then scored 97.5%, but v6 was built from templates and is probably easier. Each set's brief differs, so expect roughly 88% to 95% on new text of this kind, and less on real traffic.
+- After the gaps found on each set were fixed, the current code scores 95% to 99% with the local model on the seven blind sets. Those numbers are optimistic, which is why the table above shows first scores. v4 showed how much: the code that scored 95% to 97% on v1 to v3 scored 88% on v4. After the Hebrew, call and date work, the next unseen set (v5) scored 93%, v6 then scored 97.5%, but it was built from templates and is probably easier; v7, written by hand, scored 94.7%. Each set's brief differs, so expect roughly 90% to 95% on new text of this kind, and less on real traffic.
 - Over-masking is real: v6, full of staff talking about staff, had 55% of its clean messages masked with the clinic and staff lists at first; the staff-list cues added after it bring that to 34%. Most of it is the clinic's own contact details (pass them in `Policy(allow=...)`), staff names (pass them in `Policy(staff=...)`), and holiday dates, which stay masked on purpose.
 - Details, label rules, the corrections and full tables are in [`benchmark/README.md`](https://github.com/DecisionTreeTechnology/phiproxy/blob/main/benchmark/README.md).
 

@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable, Literal, Optional, Sequence
 
 from .dates import shift_date_text
 from .detectors.base import Detector, fill_text, merge_entities
+from .detectors import _spoken
 from .detectors.known import KnownEntities, KnownEntityDetector
 from .detectors.regex import RegexDetector
 from .entities import Entity, EntityType
@@ -86,8 +87,23 @@ _COVER_GAP = re.compile(
     r"\b(?:ext|extension|x|poste|wewn)\.?\s*\d{1,5}\b",
     re.IGNORECASE,
 )
+# Generic words around the clinic's allowed name: "Clinique Bluebonnet", "kliniki
+# Bluebonnet", "Bluebonnet coordination", "Équipe Bluebonnet Montréal", "Montreal office".
+_ORG_GAP = re.compile(
+    r"\b(?:the|our|la|le|les|el|los|las|de|du|des|del|para|pour|for|of|and|et|y|"
+    r"clinic|clinics|clinique|cl[ií]nica|klinik[aiąę]?|centre|center|centro|centrum|office|offices|bureau|"
+    r"oficina|biuro|team|[ée]quipe|equipo|zesp[oó][łl]|coordination|coordinaci[oó]n|nursing|billing|"
+    r"facturation|facturaci[oó]n|lab|labo|laboratory|laboratoire|laboratorio|fertility|fertilit[ée]|"
+    r"fertilidad|reproductive|reproductiva|reproduction|reproductive\s+health|salud|sant[ée]|health)\b",
+    re.IGNORECASE,
+)
 
 
+_AT_CLINIC = re.compile(
+    r"[^\S\n]*,?[^\S\n]*(?:here[^\S\n]+)?(?:at|from|with|de|du|del|z|ze|w|מ|ב)[^\S\n]*"
+    r"(?:(?:the|la|le|el|l['’])[^\S\n]+)?(?:(?:clinic|clinique|cl[ií]nica|klinik\w*|centre|center|centro|office|bureau)[^\S\n]+)?",
+    re.IGNORECASE,
+)
 _ADDRESS_AFTER = re.compile(r"(?:[^\S\n]+[^\W\d_][\w'’.\-]*){0,3}?[^\S\n]*<([^<>\s@]+@[^<>\s]+)>")
 
 
@@ -102,13 +118,13 @@ def _covered(e: Entity, allowed: list[tuple[int, int]]) -> bool:
     if not inside:
         return False
     rest = "".join(ch if i not in inside else " " for i, ch in enumerate(e.text, e.start))
-    if not any(ch.isalnum() for ch in rest):
+    if not any(ch.isalnum() for ch in _ORG_GAP.sub(" ", rest)):
         return True
     # Gaps are skipped only inside a full clinic address or phone (the allowed part
     # has a number): an allowed city alone does not cover "Vancouver WA".
     if not any(e.text[i - e.start].isdigit() for i in inside):
         return False
-    return not any(ch.isalnum() for ch in _COVER_GAP.sub(" ", rest))
+    return not any(ch.isalnum() for ch in _COVER_GAP.sub(" ", _ORG_GAP.sub(" ", rest)))
 
 
 @dataclass
@@ -161,6 +177,9 @@ class Masker:
         self.policy = policy or Policy()
         self._date_detector = RegexDetector(enabled={EntityType.DATE})
         self._allow = [p for p in (_allow_pattern(v) for v in self.policy.allow) if p is not None]
+        self._allow_phones = {
+            d[-10:] for d in (re.sub(r"\D", "", v) for v in self.policy.allow) if len(d) >= 7
+        }
         self._staff = StaffList(self.policy.staff, need_context=self.policy.staff_need_context)
 
     # ------------------------------------------------------------------ detect
@@ -185,16 +204,35 @@ class Masker:
         allowed: list[tuple[int, int]] = []
         if self._allow:
             allowed = [m.span() for p in self._allow for m in p.finditer(text)]
-            found = [e for e in found if e.source == "known" or not _covered(e, allowed)]
+            found = [
+                e for e in found
+                if e.source == "known" or not (_covered(e, allowed) or self._allowed_spoken_phone(e))
+            ]
         if self._staff:
             names = [e for e in found if e.type is EntityType.NAME and e.source != "known"]
             cued = self._staff.cued_words(text, names, anchors=disabled)
             found = [
                 e for e in found
                 if e not in names
-                or not (self._staff.passes(text, e, cued) or self._staff_sender(text, e, allowed))
+                or not (
+                    self._staff.passes(text, e, cued)
+                    or self._staff_sender(text, e, allowed)
+                    or self._staff_at_clinic(text, e, allowed)
+                )
             ]
         return fill_text(text, merge_entities(found))
+
+    def _allowed_spoken_phone(self, e: Entity) -> bool:
+        """The clinic's own number read out loud: "seven one three, five five five, zero eight two zero"."""
+        if e.type is not EntityType.PHONE or not self._allow_phones or sum(c.isdigit() for c in e.text) >= 7:
+            return False
+        d = _spoken.digits(e.text)
+        return len(d) >= 7 and d[-10:] in self._allow_phones
+
+    def _staff_at_clinic(self, text: str, e: Entity, allowed: list[tuple[int, int]]) -> bool:
+        """A staff name followed by the clinic's own name: "Aaliyah here from Bluebonnet"."""
+        m = _AT_CLINIC.match(text, e.end)
+        return bool(m) and self._staff.on_roster(e) and any(a == m.end() for a, _ in allowed)
 
     def _staff_sender(self, text: str, e: Entity, allowed: list[tuple[int, int]]) -> bool:
         """A staff name shown with an allowed clinic address: "From: Gordon Tran <gordon.tran@clinic...>"."""
