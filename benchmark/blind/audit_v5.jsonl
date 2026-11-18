@@ -1,0 +1,6 @@
+{"id": "v5-en-call-004", "action": "add", "type": "ADDRESS", "surface": "Lagos", "occurrence": 1, "reason": "city the patient's mother comes from (flying in from Lagos)"}
+{"id": "v5-en-email-006", "action": "add", "type": "ADDRESS", "surface": "Boston", "occurrence": 1, "reason": "city the patient is relocating to for work (subject line)"}
+{"id": "v5-en-email-018", "action": "add", "type": "ADDRESS", "surface": "Kumasi", "occurrence": 1, "reason": "city where the patient's aunt lives"}
+{"id": "v5-en-email-021", "action": "add", "type": "ADDRESS", "surface": "Cornwall", "occurrence": 1, "reason": "town where the outside family doctor works; same treatment as Summit/Edison/Kanata/Hull elsewhere"}
+{"id": "v5-en-email-031", "action": "add", "type": "ADDRESS", "surface": "Kolkata", "occurrence": 1, "reason": "city the patient's in-laws come from"}
+{"id": "v5-en-note-031", "action": "add", "type": "ADDRESS", "surface": "Cornwall", "occurrence": 1, "reason": "town where the outside family doctor works (fax To: line)"}
