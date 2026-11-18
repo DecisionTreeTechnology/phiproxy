@@ -78,16 +78,37 @@ def _allow_pattern(value: str) -> Optional[re.Pattern[str]]:
     return re.compile(r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)", re.IGNORECASE)
 
 
+# What may sit between allowed pieces of the clinic's own details without being
+# allowed itself: a state or province code ("Phoenix AZ 85018"), the country, an
+# extension after the clinic's phone ("(602) 555-0700 ext 224").
+_COVER_GAP = re.compile(
+    r"\b(?-i:[A-Z]{2})\b|\b(?:usa|u\.s\.a?\.?|canada)\b|"
+    r"\b(?:ext|extension|x|poste|wewn)\.?\s*\d{1,5}\b",
+    re.IGNORECASE,
+)
+
+
+_ADDRESS_AFTER = re.compile(r"(?:[^\S\n]+[^\W\d_][\w'’.\-]*){0,3}?[^\S\n]*<([^<>\s@]+@[^<>\s]+)>")
+
+
 def _covered(e: Entity, allowed: list[tuple[int, int]]) -> bool:
     """Every letter and digit of ``e`` is inside allowed spans ("1450 West Georgia Street,
-    Vancouver" when the street and the city are each allowed)."""
+    Vancouver" when the street and the city are each allowed), apart from a state or
+    province code, the country or a phone extension between them."""
     inside = set()
     for a, b in allowed:
         if a < e.end and e.start < b:
             inside.update(range(max(a, e.start), min(b, e.end)))
-    return bool(inside) and all(
-        i in inside for i, ch in enumerate(e.text, e.start) if ch.isalnum()
-    )
+    if not inside:
+        return False
+    rest = "".join(ch if i not in inside else " " for i, ch in enumerate(e.text, e.start))
+    if not any(ch.isalnum() for ch in rest):
+        return True
+    # Gaps are skipped only inside a full clinic address or phone (the allowed part
+    # has a number): an allowed city alone does not cover "Vancouver WA".
+    if not any(e.text[i - e.start].isdigit() for i in inside):
+        return False
+    return not any(ch.isalnum() for ch in _COVER_GAP.sub(" ", rest))
 
 
 @dataclass
@@ -161,14 +182,27 @@ class Masker:
             if e.type not in self.policy.disabled_types
             and not (e.source in MODEL_SOURCES and any(e.overlaps(d) for d in disabled))
         ]
+        allowed: list[tuple[int, int]] = []
         if self._allow:
             allowed = [m.span() for p in self._allow for m in p.finditer(text)]
             found = [e for e in found if e.source == "known" or not _covered(e, allowed)]
         if self._staff:
             names = [e for e in found if e.type is EntityType.NAME and e.source != "known"]
-            cued = self._staff.cued_words(text, names)
-            found = [e for e in found if e not in names or not self._staff.passes(text, e, cued)]
+            cued = self._staff.cued_words(text, names, anchors=disabled)
+            found = [
+                e for e in found
+                if e not in names
+                or not (self._staff.passes(text, e, cued) or self._staff_sender(text, e, allowed))
+            ]
         return fill_text(text, merge_entities(found))
+
+    def _staff_sender(self, text: str, e: Entity, allowed: list[tuple[int, int]]) -> bool:
+        """A staff name shown with an allowed clinic address: "From: Gordon Tran <gordon.tran@clinic...>"."""
+        m = _ADDRESS_AFTER.match(text, e.end)
+        if not m or not self._staff.on_roster(e):
+            return False
+        a, b = m.span(1)
+        return any(x <= a and b <= y for x, y in allowed)
 
     # -------------------------------------------------------------------- mask
     def mask(self, text: str, session_id: str, known: Optional[KnownEntities] = None) -> MaskResult:

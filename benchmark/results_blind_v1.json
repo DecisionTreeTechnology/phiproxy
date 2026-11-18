@@ -91,7 +91,7 @@
   },
   "regex+gliner": {
     "recall": 0.9517543859649122,
-    "precision": 0.9141630901287554,
+    "precision": 0.9154727793696275,
     "spans": 684,
     "missed": 33,
     "leaked_char_rate": 0.04318401546890106,
@@ -132,11 +132,11 @@
     },
     "clean_messages": 128,
     "clean_masked_rate": 0.15625,
-    "false_positives": 60
+    "false_positives": 59
   },
   "regex+known+gliner": {
     "recall": 0.9649122807017544,
-    "precision": 0.9125528913963329,
+    "precision": 0.9138418079096046,
     "spans": 684,
     "missed": 24,
     "leaked_char_rate": 0.03620152540552154,
@@ -177,6 +177,6 @@
     },
     "clean_messages": 128,
     "clean_masked_rate": 0.15625,
-    "false_positives": 62
+    "false_positives": 61
   }
 }

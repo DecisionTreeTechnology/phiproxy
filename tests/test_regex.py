@@ -281,3 +281,38 @@ def test_more_date_forms():
     assert "janvier" in dates("Je déménage à Victoria en janvier")
     assert "the twelfth" in dates("we signed in September... the twelfth I think")
     assert not dates("The March for Babies walk is on Sunday, in the park")
+
+
+@pytest.mark.parametrize(
+    "text,typ,value",
+    [
+        ("mon numéro de compte c'est 77-24709, merci", "ACCOUNT", "77-24709"),
+        ("mi número de cuenta es 95-72451 y el monto", "ACCOUNT", "95-72451"),
+        ("application reference 29-59296. Thanks", "ACCOUNT", "29-59296"),
+        ("Caller: My social is 972-22-8271. Is that ok", "SSN", "972-22-8271"),
+        ("Mój nowy numer to 555 418 988. Proszę", "PHONE", "555 418 988"),
+        ("Samantha B.\n2908 E Desert Willow Drive\nYuma, AZ 85360", "ADDRESS", "Yuma"),
+        ("Calle Sonora 86, San Luis Río Colorado, CP 83868.", "POSTAL_CODE", "83868"),
+        ("aleja Pokoju 35/45, Łódź, 64-664.", "POSTAL_CODE", "64-664"),
+        ("My mother is 91 and lives with us", "AGE", "91"),
+    ],
+)
+def test_v6_forms(text, typ, value):
+    assert (typ, value) in {(e.type.value, e.text) for e in RegexDetector().detect(text)}
+
+
+def test_appointment_confirmation_stays_masked():
+    assert "BK-882013" in {e.text for e in RegexDetector().detect("I want to cancel. confirmation number BK-882013")}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "printer on 3 is jammed again, ticket T-66136",
+        "Product: hCG trigger kit, LOT T479913, NDC 89067-6591-82",
+        "This is the Vietnamese interpreter, ID 20931. Patient: hi",
+        "she is 95% sure",
+    ],
+)
+def test_clinic_numbers_not_identifiers(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type.value in ("ID", "ACCOUNT", "ZIP", "AGE", "SIN")]

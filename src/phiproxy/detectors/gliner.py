@@ -71,6 +71,11 @@ _NOT_NAME_WORDS = frozenset(
     señor señora senor senora pan pani mx dr
     asistente asistenta assistante asystent asystentka מבקר מבקרת
     żony żonie żonę żoną męża mężowi mężem partnera partnerki partnerką
+    client clients cliente clienta clientes usuario usuaria utilisateur utilisatrice użytkownik
+    użytkowniczka עוזר עוזרת משתמש משתמשת person interpreter interprète intérprete tłumacz
+    tłumaczka מתורגמן מתורגמנית courier dispatcher shipper guardian parent parents votre notre
+    nuestro nuestra vuestro is shalom billing dept department embryologiste embriólogo
+    embrióloga embriolog האמבריולוג האמבריולוגית
     """.split()
 )
 # Fertility and common drugs the model reads as names ("Ovitrelle", "אוביטרל").

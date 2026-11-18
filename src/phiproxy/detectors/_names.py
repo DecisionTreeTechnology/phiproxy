@@ -66,6 +66,8 @@ STOP_WORDS = frozenset(
     changed change different wrong correct missing misspelled field same below above
     i'd i'll i’d i’ll we'll we've you're you'll dental pharmacy lab hospital reception front desk
     billing records insurance coordinator reminder
+    dept department departamento departement service services interpreter interprète intérprete
+    tłumacz tłumaczka abogado abogada lawyer attorney avocat avocate prawnik ça cela number
     """.split()
 )
 _HE_STOP = frozenset(

@@ -1,7 +1,7 @@
 {
   "regex": {
     "recall": 0.8367609254498715,
-    "precision": 0.8681022880215343,
+    "precision": 0.8728010825439784,
     "spans": 778,
     "missed": 127,
     "leaked_char_rate": 0.14068171757414785,
@@ -39,12 +39,12 @@
       "pl": 0.8356164383561644
     },
     "clean_messages": 122,
-    "clean_masked_rate": 0.2459016393442623,
-    "false_positives": 98
+    "clean_masked_rate": 0.22950819672131148,
+    "false_positives": 94
   },
   "regex+known": {
     "recall": 0.9408740359897172,
-    "precision": 0.8810096153846154,
+    "precision": 0.8852657004830918,
     "spans": 778,
     "missed": 46,
     "leaked_char_rate": 0.05976095617529881,
@@ -82,12 +82,12 @@
       "pl": 0.9315068493150684
     },
     "clean_messages": 122,
-    "clean_masked_rate": 0.2459016393442623,
-    "false_positives": 99
+    "clean_masked_rate": 0.22950819672131148,
+    "false_positives": 95
   },
   "regex+gliner": {
     "recall": 0.9575835475578406,
-    "precision": 0.8302961275626424,
+    "precision": 0.834096109839817,
     "spans": 778,
     "missed": 33,
     "leaked_char_rate": 0.03444001770694998,
@@ -125,12 +125,12 @@
       "pl": 0.9726027397260274
     },
     "clean_messages": 122,
-    "clean_masked_rate": 0.28688524590163933,
-    "false_positives": 149
+    "clean_masked_rate": 0.27049180327868855,
+    "false_positives": 145
   },
   "regex+known+gliner": {
     "recall": 0.980719794344473,
-    "precision": 0.8344519015659956,
+    "precision": 0.8382022471910112,
     "spans": 778,
     "missed": 15,
     "leaked_char_rate": 0.01983178397521027,
@@ -168,7 +168,7 @@
       "pl": 0.9863013698630136
     },
     "clean_messages": 122,
-    "clean_masked_rate": 0.28688524590163933,
-    "false_positives": 148
+    "clean_masked_rate": 0.27049180327868855,
+    "false_positives": 144
   }
 }
