@@ -149,3 +149,23 @@ def test_allow_email_domain():
     m = Masker(policy=Policy(allow=["@clinic.example.org"]))
     out = m.mask("write to nurses@clinic.example.org or me at jo@example.com", "s").text
     assert "nurses@clinic.example.org" in out and "jo@example.com" not in out
+
+
+def test_cross_script_name_unmasks_in_the_text_script():
+    from phiproxy import KnownEntities, Masker
+
+    m = Masker()
+    t = "אני נועה, ואני מתקשרת לגבי התור"
+    r = m.mask(t, session_id="s-he", known=KnownEntities(names=["Noa Ben-Ami"]))
+    assert "נועה" not in r.text
+    assert m.unmask(r.text, session_id="s-he") == t
+
+
+def test_cross_script_name_unmasks_latin_text_from_hebrew_record():
+    from phiproxy import KnownEntities, Masker
+
+    m = Masker()
+    t = "Hi, Noa here, calling about my appointment"
+    r = m.mask(t, session_id="s-lat", known=KnownEntities(names=["נועה רוזנברג"]))
+    assert "Noa" not in r.text
+    assert m.unmask(r.text, session_id="s-lat") == t

@@ -214,7 +214,7 @@ class KnownEntityDetector:
                     tokens.setdefault(p.lower(), p)
                     # The same name in the other script: "Noa" <-> "נועה".
                     for other in _hebrew.LATIN_TO_HEBREW.get(p.lower(), set()) | _hebrew.HEBREW_TO_LATIN.get(p, set()):
-                        tokens.setdefault(other.lower(), p)
+                        tokens.setdefault(other.lower(), "")  # "": unmask as written in the text
         if not tokens:
             return out
         words = []
@@ -250,5 +250,5 @@ class KnownEntityDetector:
             if lw in COMMON_WORD_NAMES and not word[0].isupper():
                 continue
             start = wstart + lead
-            out.append(Entity(EntityType.NAME, start, start + len(word), word, self.name, canonical=match))
+            out.append(Entity(EntityType.NAME, start, start + len(word), word, self.name, canonical=match or None))
         return out
