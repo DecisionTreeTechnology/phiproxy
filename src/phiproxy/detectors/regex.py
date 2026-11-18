@@ -428,9 +428,10 @@ def _build_rules() -> list[_Rule]:
     # the eighteenth". Only when no noun follows ("the third embryo", "the second time").
     add(
         EntityType.DATE,
-        rf"\b(?:on|for|to|from|until|till|by|before|after|do|is|no|not|it'?s)\s+the\s+"
+        rf"(?:\bthe\s+|(?:^|\n|:)[^\S\n]*)"
         rf"((?:{_ORDINAL_WORDS.replace(')|first|', ')|', 1)}))(?=\s*(?:[.,?!;)/\n]|$|instead|right|then|works|"
-        rf"so|at|or|okay|ok|please|correct|is|was|of\s+(?:this|next|the)\s+month))",
+        rf"so|at\s+(?:\d|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon)|or|okay|ok|please|"
+        rf"correct|is|was|with\s+(?:dr|doctor|the)|of\s+(?:this|next|the)\s+month))",
         I,
         group=1,
     )

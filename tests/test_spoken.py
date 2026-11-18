@@ -130,3 +130,32 @@ def test_spoken_more():
     assert any(t is T.EMAIL for t, _ in found("my email is ha dot nguyen dot eighty eight at example dot net"))
     assert (T.PHONE, "604... 555... 0164") in found("call me back at 604... 555... 0164")
     assert not found("the right side has a nineteen, eighteen and two sixteens, the left has a seventeen")
+
+
+def test_answers_to_a_question_in_pieces():
+    d = RegexDetector()
+    call = (
+        "Agent: Can I get your date of birth?\n"
+        "Caller: fourteen oh seven eighty nine\n"
+        "Agent: Sorry, July fourteenth?\n"
+        "Caller: Yeah July one four, eighty nine\n"
+        "Agent: Got it. You're at seven fifteen, check in at six forty five.\n"
+        "Agent: What's a good callback number?\n"
+        "Caller: five oh three... five oh three, five five five, zero... sorry, zero one four zero.\n"
+        "Agent: Can I get your postal code to verify?\n"
+        "Caller: Uh it's V five K one... wait\n"
+        "Caller: Hi, I have an appointment on the eighteenth with Doctor Bhatt.\n"
+        "Agent: the only openings are the twenty-fourth at two or the twenty-sixth at nine.\n"
+        "Caller: Twenty-sixth please.\n"
+        "Agent: The second embryo looks good, and the third one too."
+    )
+    found = {(e.type, e.text) for e in d.detect(call)}
+    assert (T.DATE, "fourteen oh seven eighty nine") in found
+    assert (T.DATE, "July one four, eighty nine") in found
+    assert (T.PHONE, "zero one four zero") in found
+    assert any(t is T.POSTAL_CODE and "V five K one" in x for t, x in found)
+    for day in ("eighteenth", "twenty-fourth", "twenty-sixth", "Twenty-sixth"):
+        assert (T.DATE, day) in found
+    texts = " ".join(x for _, x in found)
+    assert "seven fifteen" not in texts and "six forty five" not in texts
+    assert "second" not in texts and "third" not in texts
