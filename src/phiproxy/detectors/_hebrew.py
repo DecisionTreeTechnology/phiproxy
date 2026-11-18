@@ -37,6 +37,10 @@ reut:רעות shani:שני tali:טלי hagit:חגית orit:אורית irit:עי�
 cohen,kohen:כהן levi,levy:לוי mizrahi:מזרחי peretz,perez:פרץ biton:ביטון dahan:דהן
 friedman,fridman:פרידמן katz:כץ rosenberg:רוזנברג avraham:אברהם shapiro,shapira:שפירא
 goldberg:גולדברג azulay,azoulay:אזולאי ben-david:בן-דוד ben-ami:בן-עמי
+nadav:נדב omri:עמרי uri:אורי ofir:אופיר tomer:תומר guy:גיא ron:רון noga:נוגה sivan:סיון
+rotem:רותם ayala:איילה yuval:יובל itamar:איתמר eden:עדן liron:לירון gali:גלי moran:מורן
+boaz:בועז inbar:ענבר dafna:דפנה nitzan:ניצן hadar:הדר raz:רז shachar,shahar:שחר oren:אורן
+erez:ארז matan:מתן ilan:אילן ehud:אהוד yigal:יגאל tzipi,tsipi:ציפי batya:בתיה ofra:עפרה
 """
 LATIN_TO_HEBREW: dict[str, set[str]] = {}
 HEBREW_TO_LATIN: dict[str, set[str]] = {}

@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from typing import Callable, Optional
 
+from . import _hebrew
+
 # Letters. Latin-1 and Latin Extended-A cover French, Spanish and Polish.
 _UP = "A-ZÀ-ÖØ-ÞĀĂĄĆĈĊČĎĐĒĔĖĘĚĜĞĠĢĤĦĨĪĬĮİĴĶĹĻĽĿŁŃŅŇŌŎŐŒŔŖŘŚŜŞŠŢŤŦŨŪŬŮŰŲŴŶŸŹŻŽ"
 _LO = "a-zß-öø-ÿāăąćĉċčďđēĕėęěĝğġģĥħĩīĭįıĵķĺļľŀłńņňŋōŏőœŕŗřśŝşšţťŧũūŭůűųŵŷźżž"
@@ -78,6 +80,7 @@ _HE_STOP = frozenset(
     בעלי אשתי מתקשר מתקשרת רוצה רציתי יש אין גם רק מה מי איך למה כי אבל או אם עוד כבר
     היום מחר אתמול בבקשה ילידת יליד תאריך לידה טלפון מספר מבקשת מבקש מדבר מדברת רבה
     בוקר טוב ערב מהמרפאה מטופלת מטופל שם משפחה פרטי ד״ר ד"ר לד״ר לד"ר דר גב׳ גב' לך לכם
+    שלי שלה שלו שלנו שלכם שלהם
     """.split()
 )
 
@@ -92,7 +95,7 @@ _LWORD = rf"{_NOT_STOP}[{_LO}][{_LO}'’]*(?:-[{_LO}]+)*{_END}"
 LOWER_NAME = rf"{_LWORD}(?:{_SP}{_LWORD}){{0,2}}"
 _HWORD = rf"(?!(?:{_alt(_HE_STOP)})(?![{_HE}]))[{_HE}][{_HE}'׳״\"]*"
 # Hebrew name, one or two words, optionally "last, first" or "X and Y" ("רונית ואלון").
-HE_NAME = rf"{_HWORD}(?:[ \t]{_HWORD})?(?:[ \t]ו{_HWORD})?"
+HE_NAME = rf"{_HWORD}(?:[ \t](?:(?:בן|בת|בר|אבו)[ \t\-])?{_HWORD})?(?:[ \t]ו{_HWORD})?"
 HE_LAST_FIRST = rf"{_HWORD},[ \t]?{_HWORD}"
 
 ANY_NAME = rf"(?:{LAST_FIRST}|{NAMES}|{LOWER_NAME}|{HE_NAME})"
@@ -188,6 +191,7 @@ _SUBJECT_NEXT = (
     r"elle|il|est|a|ella|él|es|ona|on|jest|i|y|et"
 )
 _HE_RELATIONS = (
+    r"בן\s+הזוג\s+שלי|בת\s+הזוג\s+שלי|בן\s+זוגי|בת\s+זוגי|אבא\s+שלי|עורכת\s+הדין|עורך\s+הדין|"
     r"בעלה\s+של|אשתו\s+של|בעלי|אשתי|בעלה|אשתו|אחותי|אחי|אחותה|אמא\s+שלי|אמא\s+שלה|"
     r"הבת\s+שלי|הבן\s+שלי|גב['׳]|גברת|מר|לגב['׳]"
 )
@@ -370,7 +374,10 @@ def rules(
             0,
             check,
         ),
-        (rf"(?<!\w)(?:{_HE_RELATIONS})[ \t]+(?P<name>{HE_NAME})", 0, check),
+        # "בעלי גיל", also with a one-letter prefix: "לבעלי גיל", "ואחותי מיכל".
+        (rf"(?<!\w)[ולבשמ]?(?:{_HE_RELATIONS})[ \t]+(?P<name>{HE_NAME})", 0, check),
+        # A lawyer is a private person: "עו״ד אורית בן חיים".
+        (rf"(?<!\w)[ולבשמ]?עו[\"״']ד[ \t]+(?P<name>{HE_NAME})", 0, check),
         # Chart labels: "Patient: Kimberly D.", "PATIENT: PARK, Soo-jin", "Pacjent: Wiśniewski, Aleksander".
         (rf"(?i:\b(?:{_LABELS}))[ \t]*:[ \t]*(?P<name>{LAST_FIRST}|{NAMES})", 0, check_caps),
         # Speaker-like labels ("Patient:", "PACJENT:") start transcript lines too, so a
@@ -428,3 +435,49 @@ SPELLED = (
     rf"(?:(?:\s+|-|,\s*)(?:hyphen\s+|dash\s+)?[A-Za-z{_UP}{_LO}](?:\s+as\s+in\s+[a-z]+)?){{3,}}(?![\w\-])|"
     rf"(?<![\w\-])[{_HE}](?:-[{_HE}]){{3,}}(?![\w\-])"
 )
+
+
+# Hebrew first names from the cross-script table, plus short ones that are also
+# words ("טל" dew, "גל" wave, "אור" light, "אלון" oak, "שי" gift): a bare Hebrew
+# word is too ambiguous, so these count only where the context says "person".
+_HE_FIRST_NAMES = sorted(
+    {h for h in _hebrew.HEBREW_TO_LATIN if " " not in h and "-" not in h} | {"טל", "גל", "אור", "אלון", "שי", "ליה", "מור"},
+    key=len,
+    reverse=True,
+)
+_HF = "(?:" + "|".join(_HE_FIRST_NAMES) + ")"
+# An optional surname after a first name, only when the name group ends there.
+_HSUR = rf"(?:[ \t](?!ו){_HWORD}(?=[ \t]*(?:[,.;:!?()\n]|$|[ \t]ו)))?"
+_HE_PAIR = re.compile(
+    rf"(?<![{_HE}])(?P<a>{_HF}{_HSUR})[ \t]+ו(?P<b>{_HF}{_HSUR})(?![{_HE}])", re.MULTILINE
+)
+_HE_ME_AND = re.compile(rf"(?<![{_HE}])אני[ \t]+ו(?P<b>{_HF}{_HSUR})(?![{_HE}])", re.MULTILINE)
+_HE_SIGNOFF = re.compile(
+    rf"\n[ \t]*\n[ \t]*(?P<a>{_HF}{_HSUR})(?:[ \t]+ו(?P<b>{_HF}{_HSUR}))?[ \t]*\Z"
+)
+
+
+_HE_WORDLIKE = {"טל", "גל", "אור", "אלון", "שי", "מור", "שירה", "תמר", "גיל", "עדי", "רינה", "קרן", "דוד", "אבי"}
+_HE_DOCTOR_BEFORE = re.compile(r"(?:ד[״\"'׳]ר|פרופ['׳]?|דוקטור)[ \t]*$")
+_HE_WE = re.compile(r"(?:אנחנו|אני|עם|של|מאת|בברכה|תודה|בשם)[ \t,]*$")
+
+
+def hebrew_names(text: str) -> list[tuple[int, int]]:
+    """Hebrew first names where the context says they are people: "שירה ואיתי",
+    "אני ועומר", "רוני וגיל קורן", a name alone on the last line."""
+    if not re.search(rf"[{_HE}]", text):
+        return []
+    out = []
+    for pat in (_HE_PAIR, _HE_ME_AND, _HE_SIGNOFF):
+        for m in pat.finditer(text):
+            if pat is _HE_PAIR:
+                if _HE_DOCTOR_BEFORE.search(text[max(0, m.start() - 8) : m.start()]):
+                    continue  # "ד״ר נועה פרידמן ויעל מזרחי": clinicians
+                firsts = [m.group(g).split()[0] for g in ("a", "b")]
+                # "קיבלתי טל ואור" is dew and light; "אנחנו טל ואלון" are people.
+                if all(f in _HE_WORDLIKE for f in firsts) and not _HE_WE.search(text[max(0, m.start() - 12) : m.start()]):
+                    continue
+            for g in ("a", "b"):
+                if g in pat.groupindex and m.group(g):
+                    out.append(m.span(g))
+    return out

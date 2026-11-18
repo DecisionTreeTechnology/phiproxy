@@ -747,6 +747,8 @@ class RegexDetector:
                 out.append(Entity(rule.type, start, end, text[start:end], self.name))
         # Identifiers read out loud: "four one six... five five five...", "T three A".
         spoken = [*_spoken.detect(text), *_spoken.street_numbers(text, _street_spans)]
+        if self.enabled is None or EntityType.NAME in self.enabled:
+            out.extend(Entity(EntityType.NAME, a, b, text[a:b], self.name) for a, b in _names.hebrew_names(text))
         out.extend(e for e in spoken if self.enabled is None or e.type in self.enabled)
         # Numbers that belong to the clinic, a product or an interpreter, not a patient:
         # "ticket T-40266", "LOT W486069", "interpreter, ID 20931". Appointment

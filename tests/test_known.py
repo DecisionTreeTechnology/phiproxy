@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from phiproxy import EntityType as T
 from phiproxy import KnownEntities, KnownEntityDetector
 
@@ -85,3 +87,35 @@ def test_short_hebrew_name_parts_are_words():
 
     found = [e.text for e in KnownEntityDetector(KnownEntities(names=["מיכל בן-דוד"])).detect("הבן שלי בא")]
     assert found == []
+
+
+@pytest.mark.parametrize(
+    "text,names",
+    [
+        ("תודה ענקית לד\"ר נוואסו.\n\nשירה ואיתי\nרחוב באת'רסט 3200", {"שירה", "איתי"}),
+        ("ואם אני לא עונה אז לבעלי גיל, 973-555-0189", {"גיל"}),
+        ("עורכת הדין שלי היא עו\"ד אורית בן חיים, טלפון", {"אורית בן חיים"}),
+        ("הורים מיועדים איתי שגב ונדב רוזן (אזרחי ישראל)", {"איתי שגב", "נדב רוזן"}),
+        ("אנחנו טל ואלון לוי, מנתניה.", {"טל", "אלון לוי"}),
+        ("תודה! אני ועומר נוסעים בדצמבר", {"עומר"}),
+        ("הפגישה בקונסוליה בתאריך 25.12.2026.\n\nטל", {"טל"}),
+    ],
+)
+def test_hebrew_names_in_context(text, names):
+    from phiproxy import RegexDetector
+
+    found = {e.text for e in RegexDetector().detect(text) if e.type.value == "NAME"}
+    assert names <= found
+
+
+@pytest.mark.parametrize("text", ["קיבלתי טל ואור בבוקר", "גיל 35, AMH נמוך", "בדיקות דם ושתן בבוקר"])
+def test_hebrew_words_that_are_names_stay_words(text):
+    from phiproxy import RegexDetector
+
+    assert not [e for e in RegexDetector().detect(text) if e.type.value == "NAME"]
+
+
+def test_hebrew_pair_after_doctor_title_is_not_patients():
+    from phiproxy.detectors import _names
+
+    assert _names.hebrew_names("עוזר: כן! ד״ר נועה פרידמן ויעל מזרחי מדברות עברית.") == []
