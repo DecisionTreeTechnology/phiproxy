@@ -300,6 +300,56 @@ def _classify(s: str) -> Optional[EntityType]:
 _MEASURES = re.compile(r"follic|ovar|p[ęe]cherzyk|זקיק|\bmm\b|millim|right\s+side|left\s+side", re.IGNORECASE)
 
 
+# What the other side just asked for. In a call the answer comes in pieces, with
+# fillers and corrections ("six oh four five five five sorry five five five ...",
+# "oh seven... oh seven fourteen?"), so a piece is too short to have an
+# identifier's shape. The question a line or two before says what it is.
+_ASKED = [
+    (EntityType.DATE, re.compile(
+        r"date\s+of\s+birth|birth\s*date|\bd\.?o\.?b\b|\bborn\b|birthday|last\s+period|"
+        r"date\s+de\s+naissance|\bn[ée]e?\s+le\b|fecha\s+de\s+nacimiento|naci[óo]|"
+        r"data\s+urodzenia|urodzi|datę\s+urodzenia|תאריך\s+(?:ה)?לידה|נולד", re.IGNORECASE)),
+    (EntityType.POSTAL_CODE, re.compile(
+        r"postal\s+code|\bzip\b|code\s+postal|c[óo]digo\s+postal|kod\s+pocztowy|מיקוד", re.IGNORECASE)),
+    (EntityType.PHONE, re.compile(
+        r"phone|call\s*back|\bcell\b|reach\s+you|my\s+number|t[ée]l[ée]phone|mon\s+num[ée]ro|"
+        r"tel[ée]fono|celular|mi\s+n[úu]mero|telefon|kom[óo]rk|טלפון|נייד", re.IGNORECASE)),
+    (EntityType.ID, re.compile(
+        r"health\s+(?:card\s+)?number|member\s+(?:id|number)|rx\s+number|prescription\s+number|"
+        r"social\s+(?:security|insurance)|\bsin\b|\bssn\b|s[ée]curit[ée]\s+sociale|seguro\s+social|"
+        r"\bpesel\b|תעודת\s+זהות|ת\.ז|מספר\s+חבר|account|policy|claim|chart\s+number|\bmrn\b|"
+        r"num[ée]ro\s+de\s+dossier|n[úu]mero\s+de\s+(?:expediente|tarjeta|socio)|numer\s+(?:karty|polisy)", re.IGNORECASE)),
+]
+_TIME_AFTER = re.compile(r"^\s*(?:a\.?m\b|p\.?m\b|o['’]?clock|h\b|heures?|horas?|godzin)", re.IGNORECASE)
+_TIME_BEFORE = re.compile(r"(?:\bat|\bà|\ba\s+las|\bo|\bבשעה)\s*$", re.IGNORECASE)
+# A month or day word just before a spoken date run: "July one four", "Czternasty, zero siedem".
+_DATE_LEAD = re.compile(
+    r"(?:\b(?:jan(?:uary)?|feb(?:ruary)?|march|april|may|june|july|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|"
+    r"nov(?:ember)?|dec(?:ember)?|janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|"
+    r"novembre|d[ée]cembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|"
+    r"diciembre)|\b\w+(?:asty|asta|astego|ierwszy|rugi|rzeci|zwarty|i[ąa]ty)|\b\w+(?:teenth|tieth|th|st|nd|rd))"
+    r"[\s,]*$",
+    re.IGNORECASE,
+)
+
+
+def _asked(text: str, pos: int) -> Optional[EntityType]:
+    """The identifier asked for in the last three lines before ``pos``, if any."""
+    start = pos
+    for _ in range(4):
+        start = text.rfind("\n", 0, max(start - 1, 0))
+        if start < 0:
+            start = 0
+            break
+    window = text[start:pos]
+    best: Optional[tuple[int, EntityType]] = None
+    for t, pat in _ASKED:
+        for m in pat.finditer(window):
+            if best is None or m.end() > best[0]:
+                best = (m.end(), t)
+    return best[1] if best else None
+
+
 def detect(text: str) -> list[Entity]:
     out: list[Entity] = []
     for chars in _runs(text):
@@ -307,10 +357,24 @@ def detect(text: str) -> list[Entity]:
         if _MEASURES.search(text[max(line_start, chars[0][1] - 120) : chars[0][1]]):
             continue
         s = "".join(c for c, _, _ in chars)
+        start, end = _span(chars)
         t = _classify(s)
         if t is None:
-            continue
-        start, end = _span(chars)
+            digits = sum(c.isdigit() for c in s)
+            if not digits or _TIME_AFTER.match(text[end:]) or _TIME_BEFORE.search(text[:start]):
+                continue
+            t = _asked(text, start)
+            # A postal code comes in pieces too ("V five K one... wait").
+            if t is None or digits < (2 if t is EntityType.POSTAL_CODE and len(s) >= 3 else 3):
+                continue
+            if t is EntityType.DATE and (
+                re.fullmatch(r"(?:19|20)\d\d", s) or re.search(r"(?:mil|mille|thousand|tysi[ąa]c)\s*$", text[:start], re.I)
+            ):
+                continue  # a year alone ("mil novecientos ochenta y siete") is not a date element
+            if t is EntityType.DATE:
+                lead = _DATE_LEAD.search(text[max(line_start, start - 20) : start])
+                if lead:
+                    start = max(line_start, start - 20) + lead.start()
         out.append(Entity(t, start, end, text[start:end], "regex"))
     return out
 
