@@ -135,6 +135,119 @@ def _ssn_check(m: re.Match[str]) -> bool:
     return a not in ("000", "666") and not a.startswith("9") and b != "00" and c != "0000"
 
 
+_AGE_OLD = (
+    r"9\d|1[01]\d|ninety(?:[\s\-](?:one|two|three|four|five|six|seven|eight|nine))?|"
+    r"(?:one|a)\s+hundred(?:\s+(?:and\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten))?|"
+    r"noventa(?:\s+y\s+(?:uno|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve))?|cien(?:to\s+\w+)?|"
+    r"quatre[\s\-]vingt[\s\-](?:dix(?:[\s\-](?:sept|huit|neuf))?|onze|douze|treize|quatorze|quinze|seize)|"
+    r"dziewi[ęe][ćc]dziesi[ąa]t(?:\s+(?:jeden|dwa|trzy|cztery|pi[ęe][ćc]|sze[śs][ćc]|siedem|osiem|dziewi[ęe][ćc]))?|sto"
+)
+_AGE_NOT_UNIT = (
+    r"(?!\s*(?:%|percent|por\s+ciento|pour\s+cent|mg|mcg|ml|kg|lbs?|cm|mm|pm|am|min|minutes|\$|dollars|"
+    r"d[óo]lares|dollars|pmol|iu|bpm|/|[.,]\d))"
+)
+_RELATIVE = re.compile(
+    r"\b(?:grand(?:mother|ma|mom|father|pa|dad|parents?)|great[\s\-]grand\w*|granny|nana|mother|mom|mum|father|dad|"
+    r"aunt|uncle|abuel[ao]s?|bisabuel[ao]|madre|padre|t[ií][ao]|grand[\s\-]m[èe]re|grand[\s\-]p[èe]re|"
+    r"arri[èe]re[\s\-]grand[\s\-]\w+|m[èe]re|p[èe]re|tante|oncle|babci[aąęe]|dziad(?:ek|ka|kiem)|pradziad\w*|"
+    r"prababci\w*|matk[aię]|ojc(?:iec|a)|ciotk[aię]|wuj(?:ek|ka))\b|סבתא|סבא|אמא|אבא|דודה|סבתי|סבי",
+    re.IGNORECASE,
+)
+
+
+_AGE_SUBJECT_NOT = re.compile(
+    r"\b(?:amh|fsh|tsh|lh|hcg|beta|e2|estradiol|progesterone|prolactin|level|levels|count|cost|costs|total|price|"
+    r"bill|balance|fee|weight|score|result|results|day|cycle|follicles?|lining|sperm|motility|number|room|suite|"
+    r"apt|unit|ext|extension|page|line|address|street|valor|nivel|niveau|prix|cena|poziom|wynik)\b",
+    re.IGNORECASE,
+)
+
+
+_AGE_LIFE = re.compile(r"\b(?:died|passed|alive|lived|death|deceased|muri[óo]|d[ée]c[ée]d[ée]e?|zmar[łl]a?)\b|נפטר", re.IGNORECASE)
+
+
+def _relative_before(m: re.Match[str]) -> bool:
+    """A relative is named earlier on the same line ("her mother Abena is 91"), and the number
+    is not a lab value, price or street number ("my mom thinks my TSH is 100", "lives at 95 Elm St")."""
+    text = m.string
+    line_start = text.rfind("\n", 0, m.start()) + 1
+    window = text[max(line_start, m.start() - 100) : m.start()]
+    rel = None
+    for rel in _RELATIVE.finditer(window):
+        pass
+    if rel is None:
+        return False
+    if _AGE_SUBJECT_NOT.search(window[rel.end() :]):
+        return False
+    # A bare "at" only in a death or life sentence: "died June 2 2019 at 91".
+    if "v" in m.re.groupindex and m.group("v").lower() == "at" and not _AGE_LIFE.search(window):
+        return False
+    return not _STREET_SUFFIX_AFTER.match(text, m.end())
+
+
+_ORG_NOT = re.compile(
+    r"^(?:the|a|an|home|night|nights|days?|weekends?|work|the\s+moment|least|bit|all|same|first|last|this|that|my|our|"
+    r"bit|clinic|hospital|office|school|university|college|ב?בית|הבית|בבית|שם|כאן|עכשיו|היום|מחר)$",
+    re.IGNORECASE,
+)
+
+
+_ORG_STOP = (
+    r"I|So|In|Is|It|If|On|At|And|But|Then|Next|Also|We|My|Our|He|She|They|You|Can|Please|Thanks|Thank|"
+    r"Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Tues|Wed|Thu|Thurs|Fri|Sat|Sun|"
+    r"January|February|March|April|May|June|July|August|September|October|November|December|"
+    r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|"
+    r"lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|"
+    r"agosto|septiembre|octubre|noviembre|diciembre|casa|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|"
+    r"janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|maison|"
+    r"poniedzia[łl]ek|wtorek|[śs]roda|czwartek|pi[ąa]tek|sobota|niedziela|domu|home"
+)
+_ORG_WORD = re.compile(
+    r"\b(?:colegio|escuela|universidad|instituto|hospital|cl[íi]nica|banco|empresa|compa[ñn][íi]a|grupo|"
+    r"universit[ée]|[ée]cole|coll[èe]ge|lyc[ée]e|h[ôo]pital|clinique|banque|soci[ée]t[ée]|centre|"
+    r"szpital|uniwersytet|politechnika|szko[łl]a|firma|bank|sp[óo][łl]ka|inc|llc|ltd|corp|group)\b",
+    re.IGNORECASE,
+)
+
+
+def _org_check_foreign(m: re.Match[str]) -> bool:
+    """After "trabajo en", "pracuję w": an organisation, not a city or "casa". One word passes
+    only after "chez", "para", "dla" ("je travaille chez Desjardins")."""
+    if not _org_check(m):
+        return False
+    org = m.group("org")
+    return bool(_ORG_WORD.search(org)) or len(org.split()) >= 2 or m.group("prep").lower() in ("chez", "para", "dla")
+
+
+def _doc_number_check(m: re.Match[str]) -> bool:
+    """A document or tracking number, not "3 days", "2027", "2025-10-04" or "100 200 300"."""
+    v = m.group("v")
+    if sum(c.isdigit() for c in v) < 5 or re.fullmatch(r"(?:19|20)\d\d(?:[\-/.]\d{1,2}){0,2}", v):
+        return False
+    groups = re.split(r"[ \-]", v)
+    if all(re.fullmatch(r"(?:19|20)\d\d", g) for g in groups):
+        return False  # "license 2024 2025 2026 renewal"
+    return len(groups[0]) >= 4 or any(c.isalpha() for c in groups[0])
+
+
+_HE_ALEPHBET = "אבגדהוזחטיכלמנסעפצקרשת"
+
+
+def _not_alphabet_run(m: re.Match[str]) -> bool:
+    """Spelled letters, not a list of clause letters ("א ב ג ד", "a b c d")."""
+    letters = "".join(c for c in m.group(0).lower() if c.isalpha() and len(c) == 1)
+    for abc in ("abcdefghijklmnopqrstuvwxyz", _HE_ALEPHBET):
+        if len(letters) >= 3 and letters in abc:
+            return False
+    return True
+
+
+def _org_check(m: re.Match[str]) -> bool:
+    """A real name, not "at home", "at the moment", a generic place or a doctor."""
+    org = m.group("org").strip(" .,'’")
+    return len(org) >= 3 and not _ORG_NOT.match(org) and not re.match(r"(?i)(?:dr|dre|doctor|mr|mrs|ms)\b", org)
+
+
 def _month_check(m: re.Match[str]) -> bool:
     month = m.group("month")
     return not (month.lower() in _AMBIGUOUS_MONTHS and month[0].islower())
@@ -305,6 +418,42 @@ def _build_rules() -> list[_Rule]:
         EntityType.ID,
         r"\b(?!(?:NDC|CPT|ICD|LOT|HCPCS|DRG|REF|EXT|TEL|FAX|PH)\b)[A-Z]{2,4}[ #:]{1,2}\d[\d\-]{5,}\d\b",
     )
+    # Group numbers: "GRP 40218", "Group: GRP 77020". A referral number: "referral number ... REF 4410-0289".
+    add(EntityType.ACCOUNT, r"\bGRP[ #:\-]*\d{4,}(?:-\d+)?\b", I)
+    add(
+        EntityType.ACCOUNT,
+        r"\breferral\s+(?:number|no\.?|#)?[^\n\d]{0,25}?\b(REF[ #:\-]*\d[\d\-]{3,}\d)\b",
+        I,
+        group=1,
+    )
+    # An account number with words before the value: "Número de cuenta para el reembolso: 0043-77120-9",
+    # "חשבון 88-4471".
+    add(
+        EntityType.ACCOUNT,
+        r"(?:\b(?:account|acct|cuenta|compte|konto|konta)\b|(?<![א-ת])חשבון(?![א-ת]))[^\n\d$€£]{0,30}?(\d[\d\-]{3,}\d)\b(?![.,]\d)",
+        I,
+        group=1,
+    )
+    # Member and certificate numbers in groups: "Certificat : 0071 5583 02", "מס' חבר: 7003 5521 88",
+    # "numer ubezpieczenia to 9921-4470-18".
+    add(
+        EntityType.HEALTH_CARD,
+        r"(?:\b(?:certificat|certificate|certificado|member|membre|miembro|ubezpieczeni[ae]|ubezpieczonego)\b|(?<![א-ת])חבר(?![א-ת]))"
+        r"[^\n\d]{0,25}?(?<!\d)(\d{2,6}(?:[ \-]\d{2,6}){2,4})\b",
+        I,
+        group=1,
+    )
+    # Identity documents and tracking numbers after their name: "pasaporte es el AAB204117",
+    # "permis de travail c'est 1234-5678-90", "Sponsor ID (DBN): 4471 8820 3391", "Tracking 1Z 999 AA1 01 2345 6784".
+    add(
+        EntityType.ID,
+        r"(?:\b(?:passport|pasaporte|passeport|paszport|permis(?:\s+de\s+(?:travail|conduire|s[ée]jour))?|"
+        r"work\s+permit|licen[cs]e|licencia|dbn|sponsor\s+id|tracking)\b|(?<![א-ת])דרכון(?![א-ת]))[^\n\d]{0,25}?"
+        r"(?<![\w\-])(?P<v>(?:(?-i:[A-Z]{1,3})[ \-])?[A-Z0-9]{0,12}\d[A-Z0-9]{0,20}(?:[ \-][A-Z0-9]{0,12}\d[A-Z0-9]{0,12}){0,5})\b",
+        I,
+        group="v",
+        check=_doc_number_check,
+    )
     # Court and agency file numbers: "2026-FAM-00418", "500-17-123456-261".
     add(EntityType.ID, r"\b(?:19|20)\d{2}-[A-Z]{2,5}-\d{3,}\b")
     add(EntityType.ID, r"\b\d{3}-\d{2}-\d{6}-\d{3}\b")
@@ -418,7 +567,7 @@ def _build_rules() -> list[_Rule]:
         I,
     )
     # Spelled-out words ("k o w a l c z y k", "W-O-J-C-I-K") are almost always names.
-    add(EntityType.NAME, _names.SPELLED)
+    add(EntityType.NAME, _names.SPELLED, check=_not_alphabet_run)
     # Postal codes read aloud: "n one h four k seven".
     add(
         EntityType.POSTAL_CODE,
@@ -431,7 +580,7 @@ def _build_rules() -> list[_Rule]:
     # Year and month only is still a date element under Safe Harbor.
     add(EntityType.DATE, r"\b(?:19|20)\d{2}-(?:0[1-9]|1[0-2])\b(?!-\d)")
     add(EntityType.DATE, rf"\b\d{{1,2}}[\s\-/.](?:{_MONTHS})[\s\-/.]\d{{2,4}}\b", I)
-    add(EntityType.DATE, r"\b\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})\b")
+    add(EntityType.DATE, r"(?:\b|(?<=[בלמהו]))\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})\b")
     add(
         EntityType.DATE,
         rf"\b(?:(?:{_WEEKDAY}|{_WEEKDAY_ML}),?\s+)?(?P<month>{_MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?\b",
@@ -625,6 +774,24 @@ def _build_rules() -> list[_Rule]:
         group=1,
     )
 
+    # Ages over 89 of a relative, written or spoken, anywhere on the line after the relative:
+    # "her mother Abena is 91", "my dad ... he was ninety-one", "grandma still alive at 96",
+    # "tiene noventa y cuatro años", "a quatre-vingt-onze ans", "lat 93", "בת 94", "בגיל 92".
+    add(
+        EntityType.AGE,
+        rf"\b(?P<v>is|was|turned|turns|turning|will\s+be|lived\s+to|died\s+at|passed(?:\s+away)?\s+at|alive\s+at|at|aged?|"
+        rf"tiene|ten[ií]a|cumpli[óo]|a\s+los|a|avait|lat|ma|mia[łl]a?|w\s+wieku)\s+(?P<n>{_AGE_OLD})(?![\w\-]){_AGE_NOT_UNIT}",
+        I,
+        group="n",
+        check=_relative_before,
+    )
+    add(
+        EntityType.AGE,
+        r"(?<![א-ת])(?:בת|בן|בגיל|גיל)\s+(?P<n>9\d|1[01]\d|תשעים(?:\s+ו[א-ת]+)?)(?!\d)",
+        group="n",
+        check=_relative_before,
+    )
+
     add(EntityType.ADDRESS, _STREET, I, check=_street_check)
     add(EntityType.ADDRESS, r"\b(?:p\.?\s?o\.?\s*box|postal\s*box)\s*\d+\b", I)
     # Streets named first, in French, Spanish, Polish and Hebrew: "88 rue des Érables",
@@ -636,7 +803,12 @@ def _build_rules() -> list[_Rule]:
         r"(?:[^\S\n]+[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+){0,2}(?:[^\S\n]*,?[^\S\n]*(?:\d{1,5}(?:/\d{1,4})?[A-Za-z]?|#\s*\d+-\d+)\b)?"
         r"(?:,[^\S\n]*(?i:apt|apto|apartment|unit|suite|ste|piso|m\.|lok\.)\.?\s*[\w\-]+)?(?:,[^\S\n]*(?!(?i:apt|apto|unit|suite|ste)\b)[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+(?:[^\S\n][A-ZÀ-Ý][\w'\-]+)?)?",
     )
-    add(EntityType.ADDRESS, r"(?<![א-ת])(?:רחוב|רח[׳'])\s+[א-ת][א-ת\-\"״]+(?:\s+[א-ת][א-ת\-]+)?(?:\s+\d{1,4})?(?:,\s*[א-ת][א-ת\-]+(?:\s+[א-ת][א-ת\-]+)?)?")
+    add(
+        EntityType.ADDRESS,
+        r"(?<![א-ת])[בלמו]?(?P<a>(?:רחוב|רח[׳'])[^\S\n]+[א-ת][א-ת\-\"״]+(?:[^\S\n]+[א-ת][א-ת\-]+)?(?:[^\S\n]+\d{1,4})?"
+        r"(?:,[^\S\n]*[א-ת][א-ת\-]+(?:[^\S\n]+[א-ת][א-ת\-]+)?)?)",
+        group="a",
+    )
     # Cities and towns where a person lives or comes from ("I live in Sudbury").
     R.append(_Rule(EntityType.ADDRESS, _places()[1], group=0, check=_place_check))
     # Cities written in Hebrew ("גרה בפתח תקווה", "עוברים לטורונטו"); the prefix stays outside.
@@ -662,6 +834,8 @@ def _build_rules() -> list[_Rule]:
     )
     # Mexican postal codes: "CP 83868", "C.P. 06700", "código postal 64000".
     add(EntityType.POSTAL_CODE, r"\b(?:C\.?[^\S\n]?P\.?|c[óo]digo\s+postal)[^\S\n]*:?[^\S\n]*(\d{5})\b", I, group=1)
+    # Polish postal code after "kod": "Kraków kod 31-147".
+    add(EntityType.POSTAL_CODE, r"\bkod(?:\s+pocztowy)?\s*:?\s*(\d{2}-\d{3})\b", I, group=1)
     # Polish postal code after the town: "Łódź, 64-664".
     add(EntityType.POSTAL_CODE, r"[A-ZŁŚŻŹĆ][\wąćęłńóśźż\-]+,[^\S\n]+(\d{2}-\d{3})\b(?!-)", group=1)
     add(EntityType.ZIP, r"\bzip(?:\s*code)?\s*(?:is|:)?\s*(\d{5}(?:-\d{4})?)\b", I, group=1)
@@ -685,6 +859,45 @@ def _build_rules() -> list[_Rule]:
         rf"\bzip(?:\s*code)?\b[^\n]{{0,30}}?(?:\n[^:\n]{{1,20}}:[ \t]*)?((?:{_ANY_DIGIT_WORD})(?:\s+(?:{_ANY_DIGIT_WORD})){{4}})\b",
         I,
         group=1,
+    )
+
+    # A named workplace or school after a cue: "I'm a grad student at Gulfstream State University",
+    # "My contract at Lakeview Memorial", "employer is Hamilton Steel Workers Local 1005",
+    # "Trabajo en Colegio Santa Clara", "je travaille chez Desjardins", "עובדת בחברת נטע טק".
+    # A word, with inner dots ("U.S") and a short abbreviation's dot before the next word ("St. Mary's").
+    _tok = r"[\w&'’\-]{0,30}(?:\.(?=\w)[\w&'’\-]{1,10}){0,3}(?:(?:(?<=\b[A-Z])|(?<=\b[A-Z][a-z]))\.(?=[ \t]+[A-Z]))?"
+    _nt = rf"(?!(?i:{_ORG_STOP})(?![\w'’]))"  # not a sentence word, weekday or month
+    _org = rf"(?-i:{_nt}[A-Z]{_tok}(?:[ \t]+(?:(?:of|de|del|la|the|and|&|des|du)[ \t]+)?{_nt}[A-Z0-9]{_tok}){{0,6}})"
+    add(
+        EntityType.EMPLOYER,
+        rf"\b(?:student|nurse|teacher|professor|engineer|work(?:s|ing)?|employed|contract|job|intern(?:ship)?)\s+(?:at|for)\s+"
+        rf"(?:the\s+)?(?P<org>{_org})",
+        I,
+        group="org",
+        check=_org_check,
+    )
+    add(
+        EntityType.EMPLOYER,
+        rf"\b(?:employer|employeur|empleador|pracodawca|school|[ée]cole|escuela|uczelnia)\s*(?:is|:|es|est|to)?\s*(?P<org>{_org})",
+        I,
+        group="org",
+        check=_org_check,
+    )
+    add(
+        EntityType.EMPLOYER,
+        rf"\b(?:trabajo|trabaja|trabajamos|estudio|estudia|je\s+travaille|il\s+travaille|elle\s+travaille|"
+        rf"j['’][ée]tudie|pracuj[eę]|pracuje|studiuj[eę])\s+(?P<prep>en|para|chez|à|au|w|we|dla)\s+(?:la\s+|el\s+|l['’])?(?P<org>{_org})",
+        I,
+        group="org",
+        check=_org_check_foreign,
+    )
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:עובדת|עובד|עובדים|לומדת|לומד|מועסקת|מועסק)\s+ב(?P<org>(?:חברת|מכללת|אוניברסיטת|ישיבת|"
+        r"בית\s+החולים|בית\s+הספר|בנק|קיבוץ|מפעל|רשת|עיריית|מכון|משרד\s+עורכי\s+הדין|סטודיו|מסעדת)"
+        r"(?:[^\S\n]+(?!ו)[א-ת][א-ת\"״'׳\-]*){1,2})",
+        group="org",
+        check=_org_check,
     )
 
     # Names introduced by context (see _names.py). The local model or the
@@ -769,6 +982,7 @@ _CLINIC_NUMBER_CUE = re.compile(
 )
 
 _STREET_RE = re.compile(_STREET, re.IGNORECASE)
+_STREET_SUFFIX_AFTER = re.compile(rf"(?:[ \t]+[A-Za-z'’\-]+){{1,3}}[ \t]+(?:{_STREET_SUFFIX})\b", re.IGNORECASE)
 
 
 def _street_spans(text: str) -> list[tuple[int, int]]:

@@ -420,7 +420,13 @@ def courtesy_rules(
 ) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
     """Courtesy titles name patients and relatives, not clinicians."""
     check, _, _ = make_checks(not_names)
-    titles = r"Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Me|Sr|Sra|Srta|Pan|Pani|Panią|Panu"
+    # Courtesy titles and military ranks (a service member is a private person).
+    titles = (
+        r"Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Me|Sr|Sra|Srta|Pan|Pani|Panią|Panu|"
+        # "Col." is a Mexican neighbourhood (colonia) and "Cabo" a place, so they are left out;
+        # "Cap." and "Maj." need their dot.
+        r"Capt|Cap(?=\.)|Sgt|SSgt|SFC|Lt|LTC|Cpl|CPL|Maj(?=\.)|Pvt|PFC|Spc|SPC|Sgto|Teniente|Sargento|Capit[aá]n"
+    )
     return [
         (rf"\b(?:{titles})\.?\s+(?P<name>{NAME})", 0, check),
         # Transcripts: "a mrs ostrowski".
@@ -433,7 +439,8 @@ SPELLED = (
     # "K as in kilo O W A L C H U K", "H A, N G U Y E N"
     rf"(?<![\w\-'’])[A-Za-z{_UP}{_LO}](?:\s+as\s+in\s+[a-z]+)?"
     rf"(?:(?:\s+|-|,\s*)(?:hyphen\s+|dash\s+)?[A-Za-z{_UP}{_LO}](?:\s+as\s+in\s+[a-z]+)?){{3,}}(?![\w\-])|"
-    rf"(?<![\w\-])[{_HE}](?:-[{_HE}]){{3,}}(?![\w\-])"
+    rf"(?<![\w\-])[{_HE}](?:-[{_HE}]){{3,}}(?![\w\-])|"
+    rf"(?<![\w\-])[{_HE}](?:[ ][{_HE}]){{3,}}(?![\w\-])"
 )
 
 
