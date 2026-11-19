@@ -13,7 +13,7 @@ from importlib import resources
 from typing import Callable, Optional
 
 from ..entities import Entity, EntityType
-from . import _hebrew, _names, _spoken
+from . import _hebrew, _names, _spoken, _structured
 
 _MONTHS = (
     "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
@@ -42,6 +42,7 @@ _NOT_NAMES = {
     "clinic", "office", "doctor", "nurse", "team", "everyone", "all", "regarding",
     "urgent", "important", "about", "re", "fwd", "ivf", "iui", "fet",
     "dr", "dre", "dra", "doctor", "mr", "mrs", "ms", "miss", "mx", "sent", "subject",
+    "unknown", "none", "pending", "same", "tbd", "optional", "required", "redacted",
     "dear", "i'm", "im", "je", "agent", "user", "bot", "intake", "file", "canada",
 }
 
@@ -144,13 +145,15 @@ _AGE_OLD = (
 )
 _AGE_NOT_UNIT = (
     r"(?!\s*(?:%|percent|por\s+ciento|pour\s+cent|mg|mcg|ml|kg|lbs?|cm|mm|pm|am|min|minutes|\$|dollars|"
-    r"d[óo]lares|dollars|pmol|iu|bpm|/|[.,]\d))"
+    r"d[óo]lares|dollars|pmol|iu|bpm|/|[.,]\d|days?|weeks?|months?|hours?|jours?|semaines?|mois|d[íi]as?|semanas?|"
+    r"meses|dni|tygodni\w*|miesi[ęe]c\w*|ans\s+de\s+suivi|años\s+de\s+seguimiento))"
 )
 _RELATIVE = re.compile(
     r"\b(?:grand(?:mother|ma|mom|father|pa|dad|parents?)|great[\s\-]grand\w*|granny|nana|mother|mom|mum|father|dad|"
     r"aunt|uncle|abuel[ao]s?|bisabuel[ao]|madre|padre|t[ií][ao]|grand[\s\-]m[èe]re|grand[\s\-]p[èe]re|"
     r"arri[èe]re[\s\-]grand[\s\-]\w+|m[èe]re|p[èe]re|tante|oncle|babci[aąęe]|dziad(?:ek|ka|kiem)|pradziad\w*|"
-    r"prababci\w*|matk[aię]|ojc(?:iec|a)|ciotk[aię]|wuj(?:ek|ka))\b|סבתא|סבא|אמא|אבא|דודה|סבתי|סבי",
+    r"prababci\w*|matk[aię]|ojc(?:iec|a)|ciotk[aię]|wuj(?:ek|ka)|patient|patiente|paciente|pacjent\w*)\b|"
+    r"סבתא|סבא|אמא|אבא|דודה|סבתי|סבי|מטופל|מטופלת",
     re.IGNORECASE,
 )
 
@@ -227,6 +230,8 @@ def _doc_number_check(m: re.Match[str]) -> bool:
     groups = re.split(r"[ \-]", v)
     if all(re.fullmatch(r"(?:19|20)\d\d", g) for g in groups):
         return False  # "license 2024 2025 2026 renewal"
+    if re.fullmatch(r"\d{2,3}(?:-\d{3,4}){2}", v):
+        return True  # "driver licence 99-123-4567"
     return len(groups[0]) >= 4 or any(c.isalpha() for c in groups[0])
 
 
@@ -306,7 +311,7 @@ def _places() -> tuple[dict[str, bool], re.Pattern[str]]:
     alternation = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
     cue = (
         r"(?:\b(?:in|from|near|to|into|outside(?:\s+of)?|around|towards?|"
-        r"[àa]|au|de|pr[èe]s\s+de|en|desde|cerca\s+de|w|we|z|ze|do|pod|ko[łl]o)\s+)"
+        r"[àa]|au|de|dans|pr[èe]s\s+de|en|desde|cerca\s+de|w|we|z|ze|do|pod|ko[łl]o)\s+)"
     )
     pattern = re.compile(rf"{cue}(?P<place>{alternation})(?![\w\-])", re.IGNORECASE)
     return names, pattern
@@ -346,6 +351,34 @@ def _place_check(m: re.Match[str]) -> bool:
     return not names.get(place.lower(), False) or place[0].isupper()
 
 
+# Two-letter words that are not a health card's version code ("1234 567 890 if you need it").
+_SHORT_WORDS = (
+    "if|is|in|it|or|on|at|to|of|so|my|me|we|no|ok|as|by|do|go|he|up|us|am|an|be|et|en|es|la|le|el|de|du|un|ou|"
+    "si|ya|lo|mi|tu|ze|na|po|za|od|ja|il|al|se|te|ce"
+)
+
+
+_NOT_USERNAMES = frozenset(
+    """
+    broken required invalid incorrect wrong missing correct case same not the my your below above different taken
+    available blank empty locked expired disabled reset changed working fine ok okay down failed pending unknown
+    and also still now here there this that what which it is was correcto incorrecto requerido obligatoire
+    """.split()
+)
+
+
+def _username_check(m: re.Match[str]) -> bool:
+    """A handle ("hunter.bale", "mgarcia88", or "jsmith" after "username"), not "login is broken"."""
+    v = m.group(1)
+    if re.search(r"[._\d]", v):
+        return True
+    cue = m.group(0)[: m.start(1) - m.start(0)].lower()
+    if v.lower() in _NOT_USERNAMES or len(v) < 4:
+        return False
+    # Not the Spanish chat speaker label "Usuario: hola".
+    return not (cue.lstrip().startswith("usuario") and ":" in cue)
+
+
 def _build_rules() -> list[_Rule]:
     I = re.IGNORECASE
     R: list[_Rule] = []
@@ -361,8 +394,12 @@ def _build_rules() -> list[_Rule]:
     # Keyword-anchored identifiers. The keyword stays; only the value is masked.
     add(
         EntityType.HEALTH_CARD,
-        r"\b(?:ohip|health\s*card|hcn|health\s*(?:insurance\s*)?(?:number|no\.?|#)|phn|ramq|carte\s*soleil)"
-        r"(?:\s*(?:number|no\.?|#))?\s*(?:is|:|#)?\s*([A-Z]{0,4}[\s\-]?\d[\d\s\-]{6,24}\d(?:[\s\-]?[A-Z]{2})?)\b",
+        r"\b(?:ohip|health\s*card|hcn|health\s*(?:care\s*|insurance\s*)?(?:card\s*)?(?:number|no\.?|#)|phn|ramq|carte\s*soleil|"
+        r"ahs\s*(?:number|no\.?|#)|ahcip|uli|carte\s*(?:de\s*)?sant[ée](?:\s*AB)?|carte\s*d['’]assurance[\s\-]maladie|"
+        r"insur(?:ance)?\.?\s*id|tarjeta\s+sanitaria|alberta\s+health(?:\s+care)?|medicare|msp|pesel)"
+        # "is", ":", or a few words then a colon ("carte santé comme demandé : 7634 19028").
+        r"(?:\s+insurance\s+plan)?(?:\s*(?:card|number|no\.?|#)){0,2}\s*(?:is|:|#|(?:[^\S\n]+[^\W\d_]+){1,3}[^\S\n]*:)?\s*"
+        rf"([A-Z]{{0,4}}[\s\-]?\d[\d\s\-]{{6,24}}\d(?:[\s\-]?(?!(?:{_SHORT_WORDS})\b)[A-Z]{{2}})?)\b",
         I,
         group=1,
     )
@@ -380,6 +417,15 @@ def _build_rules() -> list[_Rule]:
         I,
         group=1,
     )
+    # "the donor was number 7719-B", "donor profile no. 4410".
+    add(
+        EntityType.DONOR_ID,
+        r"(?:\b(?:donor|donante|donneur|donneuse|dawc\w*)\b[^\n\d.]{0,25}?(?:\b(?:number|no\.?|id|n[úu]mero|num[ée]ro|numer|nr\.?|"
+        r"reference|ref\.?|profile|perfil|profil)|#|\bn\.?\s?º)|\b(?:numer|nr\.?)\s+dawc\w*|\bdonor\s*:)\s*:?\s*"
+        r"((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{2,19})\b",
+        re.IGNORECASE,
+        group=1,
+    )
     # "donor D-4521", "donor #4521": no keyword, but the value has a digit.
     add(
         EntityType.DONOR_ID,
@@ -390,7 +436,7 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.ACCOUNT,
         r"\b(?:account|acct|policy|member|insurance\s*id|claim|group|certificate|certificat|contrat|"
-        r"contrato|reclamo|grupo|p[óo]liza|polisa|ledger|invoice|statement|compte|cuenta|konta|konto|"
+        r"contrato|reclamo|grupo|grupa|groupe|p[óo]liza|polisa|ledger|invoice|statement|compte|cuenta|konta|konto|"
         r"(?:application|authori[sz]ation|auth|autorisation|autorizaci[óo]n)\s+(?:reference|ref\.?|r[ée]f[ée]rence|referencia))"
         r"(?:\s*(?:number|no\.?|#|id|num[ée]ro|n[úu]mero|numer))?(?:\s+on\s+the\s+\w+)?\s*"
         r"(?:is|:|#|es|est|to|c['’]est|to\s+jest)?\s*"
@@ -416,7 +462,7 @@ def _build_rules() -> list[_Rule]:
     # "AUTH 66-120-883", "RX 3340-882". Not product and billing codes.
     add(
         EntityType.ID,
-        r"\b(?!(?:NDC|CPT|ICD|LOT|HCPCS|DRG|REF|EXT|TEL|FAX|PH)\b)[A-Z]{2,4}[ #:]{1,2}\d[\d\-]{5,}\d\b",
+        r"\b(?!(?:NDC|CPT|ICD|LOT|HCPCS|DRG|REF|EXT|TEL|FAX|PH|DOB|DDN|FDN|DATE)\b)[A-Z]{2,4}[ #:]{1,2}\d[\d\-]{5,}\d\b",
     )
     # Group numbers: "GRP 40218", "Group: GRP 77020". A referral number: "referral number ... REF 4410-0289".
     add(EntityType.ACCOUNT, r"\bGRP[ #:\-]*\d{4,}(?:-\d+)?\b", I)
@@ -448,19 +494,82 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.ID,
         r"(?:\b(?:passport|pasaporte|passeport|paszport|permis(?:\s+de\s+(?:travail|conduire|s[ée]jour))?|"
-        r"work\s+permit|licen[cs]e|licencia|dbn|sponsor\s+id|tracking)\b|(?<![א-ת])דרכון(?![א-ת]))[^\n\d]{0,25}?"
+        r"work\s+permit|licen[cs]e|licencia|dbn|sponsor\s+id|tracking|c[ée]dula|(?:employee|student)\s+(?:id|number|no\.?)|"
+        r"dow[óo]d(?:\s+osobist\w*)?)\b|"
+        r"(?<![א-ת])דרכון(?![א-ת]))[^\n\d]{0,40}?"
         r"(?<![\w\-])(?P<v>(?:(?-i:[A-Z]{1,3})[ \-])?[A-Z0-9]{0,12}\d[A-Z0-9]{0,20}(?:[ \-][A-Z0-9]{0,12}\d[A-Z0-9]{0,12}){0,5})\b",
         I,
         group="v",
         check=_doc_number_check,
     )
-    # Court and agency file numbers: "2026-FAM-00418", "500-17-123456-261".
+    # Court and agency file numbers: "2026-FAM-00418", "500-17-123456-261", Colorado "2026DR30418",
+    # "24-DR-1183", Polish "II C 1184/26" and "XVI RC 902/25", Israeli "12456-03-26".
     add(EntityType.ID, r"\b(?:19|20)\d{2}-[A-Z]{2,5}-\d{3,}\b")
+    _case_types = r"CV|CR|DR|PR|JV|JD|JN|JR|PB|DV|FA|FL|PA|CI|SC|PO|MH|EP|CW|TR|SA|DP"
+    add(EntityType.ID, rf"\b(?:19|20)\d{{2}}(?:{_case_types})\d{{3,7}}\b")
+    add(EntityType.ID, rf"\b\d{{2}}-(?:{_case_types})-\d{{3,7}}\b")
+    add(EntityType.ID, r"\b[IVXL]{1,5}[ \t]+[A-Z][A-Za-z]{0,3}(?:[ \t]+[A-Z][a-z]{0,2})?[ \t]+\d{1,6}/(?:\d{4}|\d{2})\b")
+    # A file number named as one: "Case no. 26-D-1183", "Index No. 12345/2026", "caso 0412-B".
+    add(
+        EntityType.ID,
+        r"\b(?:case|index|docket|caso|expediente|dossier|sprawa|sygn\.?(?:\s+akt)?)\s*(?:no\.?|number|#|n[úu]m(?:ero)?\.?|nr\.?)?\s*:?\s*"
+        r"(?<![\w\-])((?=[A-Z0-9\-/]*\d)[A-Z0-9][A-Z0-9\-/]{3,20}[A-Z0-9])\b",
+        re.IGNORECASE,
+        group=1,
+        check=lambda m: sum(c.isdigit() for c in m.group(1)) >= 4 and not re.fullmatch(r"(?:19|20)\d\d", m.group(1)),
+    )
+    add(EntityType.ID, r"(?<![\d\-/.])\d{4,6}-(?:0[1-9]|1[0-2])-\d{2}(?![\d\-/]|\.\d)", check=lambda m: not re.match(r"(?:19|20)\d\d-", m.group(0)))
+    # Prescription numbers: "Rx number 5520-1148", "Rx# 7710-4402", "receta n.º 4410-22".
+    add(
+        EntityType.ID,
+        r"(?:\b(?:rx|prescription|receta|ordonnance|recepta)\b|(?<![א-ת])מרשם(?![א-ת]))[ \t]*(?:#|no\.?|nr\.?|n\.?º|number|num[ée]ro|n[úu]mero|numer|מס['׳]?)?"
+        r"(?:[ \t]+is)?[ \t]*:?[ \t]*(?<![\w\-])(\d[\d\-]{4,14}\d)\b(?![.,/]\d)",
+        re.IGNORECASE,
+        group=1,
+        check=lambda m: sum(c.isdigit() for c in m.group(1)) >= 6,
+    )
+    # Venezuelan and Colombian cédulas: "V-18.442.907", "C.C. 1.020.345.678".
+    add(EntityType.ID, r"\b[VEJ]-?\d{1,2}\.\d{3}\.\d{3}\b|\bC\.?C\.?[ \t]*\d{1,3}(?:\.\d{3}){2,3}\b")
+    add(EntityType.ID, r"\bc[ée]dula\b[^\n\d]{0,20}?(\d{1,3}(?:\.\d{3}){2,3})\b", re.IGNORECASE, group=1)
+    # Portal usernames: "my username is hunter.bale", "login: mgarcia88".
+    add(
+        EntityType.ID,
+        r"\b(?:user\s*name|username|login|user\s*id|usuario|nombre\s+de\s+usuario|nom\s+d['’]utilisateur|identifiant|nazwa\s+u[żz]ytkownika)"
+        r"(?:[^\S\n]+(?:for|on|in|de|du|na|w)[^\S\n]+[^\W\d_]+(?:[^\S\n]+[^\W\d_]+)?|[^\S\n]*\([^)\n]{1,20}\)|[^\S\n]+I\s+use)?"
+        r"(?:[^\S\n]+(?:is|was|es|est|to)[^\S\n]*:?[^\S\n]*|[^\S\n]*[:=][^\S\n]*)[\"“'‘]?@?((?=[\w.\-]*[A-Za-z]|\d{4})[A-Za-z0-9][\w.\-]{1,40}[A-Za-z0-9])",
+        re.IGNORECASE,
+        group=1,
+        check=_username_check,
+    )
+    # Vehicle plates after their name: "my plate is QXE-J45", "placa ABC 1234".
+    add(
+        EntityType.ID,
+        r"(?i:\b(?:licen[cs]e\s+plate|plate\s+(?:number|no\.?|#)|(?:my|his|her|our|their|car|vehicle)\s+plate|plate\s+is|plate(?=\s*:)|"
+        r"placas?|plaque(?:\s+d['’]immatriculation)?|tablic\w*\s+rejestracyjn\w*|numer\s+rejestracyjny|matr[íi]cula|immatriculation)\b)"
+        r"[^\n\d]{0,12}?(?<![\w\-])((?=[A-Z0-9\- ]*\d)(?=[A-Z0-9\- ]*[A-Z])[A-Z0-9]{1,4}[\- ]?[A-Z0-9]{1,5}|"
+        r"(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{5,8})\b",
+        group=1,
+        check=lambda m: len(m.group(1).replace(" ", "").replace("-", "")) >= 5,
+    )
+    add(EntityType.ID, r"(?<![א-ת])(?:מספר\s+)?רישוי[^\n\d]{0,10}(\d{2,3}-\d{2,3}-\d{2,3})\b", group=1)
+    # Identifiers read out one digit at a time after a number word: "Hospital number 0 0 5 5 2 1 8",
+    # "Numer pacjenta 0 0 8 8 1 3 2", "מספר תיק 0 0 7 7 4 1 9".
+    add(
+        EntityType.ID,
+        r"(?:\b(?:hospital|patient|chart|record|file|member|policy|account|case|health\s+card|mrn|id)\s+(?:number|no\.?|#|id)|"
+        r"\b(?:numer\w*|nr\.?)\s+(?:pacjent\w*|karty|kartoteki|ubezpieczenia|polisy|konta)\b|"
+        r"\bn[úu]mero\s+de\s+(?:expediente|paciente|historia|p[óo]liza|cuenta|miembro)\b|"
+        r"\bnum[ée]ro\s+de\s+(?:dossier|patient|police|compte|membre)\b|"
+        r"(?<![א-ת])(?:מספר\s+)?(?:תיק|מטופל|חבר|פוליסה)(?![א-ת]))[^\n\d]{0,25}?"
+        r"(?<!\d)(?<!\d[ \t,\-])(\d(?P<sep>[ \t]{1,2}|,[ \t]?|-)\d(?:(?P=sep)\d){4,12})(?![ \t,\-]?\d)",
+        re.IGNORECASE,
+        group=1,
+    )
     add(EntityType.ID, r"\b\d{3}-\d{2}-\d{6}-\d{3}\b")
     # Member IDs read off a card in groups after a member keyword: "miembro GCM 70 4418 21".
     add(
         EntityType.HEALTH_CARD,
-        r"\b(?:member|miembro|membre|cz[łl]onk\w*|identificaci[oó]n|id)\b[^\n\d]{0,25}?\b([A-Z]{2,4}(?:[ \-]\d{2,5}){3,4})\b",
+        rf"\b(?:member|miembro|membre|cz[łl]onk\w*|identificaci[oó]n|id)\b[^\n\d]{{0,25}}?\b((?!(?-i:{_SHORT_WORDS})\b)[A-Z]{{2,4}}(?:[ \-]\d{{2,5}}){{3,4}})\b",
         I,
         group=1,
     )
@@ -482,12 +591,36 @@ def _build_rules() -> list[_Rule]:
     # "card ending 4417", "ends in four four one seven", "xxxx7719".
     add(
         EntityType.ACCOUNT,
-        rf"\b(?:ending(?:\s+in)?|ends\s+in|last\s+(?:4|four)(?:\s+digits)?(?:\s+(?:are|is))?|termin[ée]e?\s+par|"
-        rf"terminada\s+en|ko[ńn]c[zą]c[aąe]\s+si[ęe]\s+na)\s*:?\s*(\d{{4}}|{_ANY_DIGIT_WORD}(?:\s+{_ANY_DIGIT_WORD}){{3}})\b",
+        rf"\b(?:ending(?:\s+in)?|ends\s+in|last\s+(?:4|four)(?:\s+digits)?(?:\s+of\s+(?:my|the|your|her|his)\s+\w+)?(?:\s+(?:are|is))?|termin[ée]e?\s+par|"
+        rf"terminada\s+en)\s*:?\s*(\d{{4}}|{_ANY_DIGIT_WORD}(?:\s+{_ANY_DIGIT_WORD}){{3}})\b",
         I,
         group=1,
     )
-    add(EntityType.ACCOUNT, r"\b[xX*•]{2,}[\s\-]?\d{4}\b")
+    # Other ways to say it, only after a card or account word: "tarjeta que termina en 9027",
+    # "kartą kończącą się na 4471", "הכרטיס שלי נגמר ב-3308", "carte finissant par 4471".
+    add(
+        EntityType.ACCOUNT,
+        rf"(?:\b(?:card|carte|tarjeta|karta|kart[ąy]|account|compte|cuenta|konto|visa|mastercard|amex)\b|(?<![א-ת])ו?ה?כרטיס)"
+        rf"[^\n\d]{{0,60}}?(?:\b(?:ending\s+with|ends(?:\s+with)?|termina(?:da)?\s+(?:en|con)|acaba\s+en|terminaci[óo]n|z\s+ko[ńn]c[óo]wk[ąa]|"
+        rf"(?:se\s+)?termin(?:ant|e)\s+par|finit\s+par|(?:les\s+)?(?:4|quatre)\s+derniers\s+chiffres|"
+        rf"ko[ńn]cz[ąa]c[aąey]j?\s+si[ęe]\s+na|ko[ńn]czy\s+si[ęe]\s+na|ostatnie\s+(?:4|cztery)\s+cyfry(?:\s+karty)?|"
+        rf"[úu]ltimos\s+(?:4|cuatro)\s+d[íi]gitos|se\s+terminant\s+par|finissant\s+par|qui\s+finit\s+par)|"
+        rf"(?<![א-ת])ש?(?:נגמר|נגמרת|מסתיים|מסתיימת)\s+ב-?|(?<![א-ת])(?:4|ארבע)\s+ספרות\s+אחרונות)"
+        rf"\s*:?\s*(\d{{4}}|{_ANY_DIGIT_WORD}(?:\s+{_ANY_DIGIT_WORD}){{3}})(?!\w)",
+        I,
+        group=1,
+    )
+    add(EntityType.ACCOUNT, r"(?:(?<![\w*•])[xX*•]{2,}|(?<=[A-Za-z0-9])[*•]{2,})[\s\-]?\d{4}\b")
+    # First digits, a masked middle and the last four: "5500********0004", "411111******1111".
+    add(EntityType.ACCOUNT, r"\b\d{2,6}[xX*•]{2,12}\d{4}\b")
+    # The card named inside the phrase: "ostatnie 4 cyfry karty: 4471", "últimos cuatro dígitos de mi tarjeta 4471".
+    add(
+        EntityType.ACCOUNT,
+        r"\b(?:ostatnie\s+(?:4|cztery)\s+cyfry\s+karty|[úu]ltimos\s+(?:4|cuatro)\s+d[íi]gitos\s+de\s+(?:la|mi|su)\s+tarjeta|"
+        r"(?:4|quatre)\s+derniers\s+chiffres\s+de\s+(?:la|ma|sa)\s+carte)\s*:?\s*(\d{4})\b",
+        re.IGNORECASE,
+        group=1,
+    )
 
     # Quebec RAMQ: 4 letters + 8 digits.
     add(EntityType.HEALTH_CARD, r"\b[A-Z]{4}\s?\d{4}\s?\d{4}\b")
@@ -502,7 +635,7 @@ def _build_rules() -> list[_Rule]:
     # Polish nine-digit phones after a phone word: "Mój nowy numer to 555 418 988".
     add(
         EntityType.PHONE,
-        r"\b(?:numer\w*|nr|tel\.?|telefon\w*|kom[óo]rk\w*)\b[^\n\d]{0,20}(?<!\d)(\d{3}[\s\-]\d{3}[\s\-]\d{3})\b(?![\s\-]\d)",
+        r"\b(?:numer\w*|nr|tel\.?|telefon\w*|kom[óo]rk\w*)\b[^\n\d]{0,20}(?<!\d)(\d{3}[\s\-]\d{3}[\s\-]\d{3}|\d{2}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})\b(?![\s\-]\d)",
         I,
         group=1,
     )
@@ -547,14 +680,21 @@ def _build_rules() -> list[_Rule]:
     # North American phone numbers, any common formatting.
     add(
         EntityType.PHONE,
-        r"(?<![\w+])(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})(?:[\s.\-]?|\s*(?:\.\.\.|…)\s*)\d{3}"
+        r"(?:(?<![\w+])|(?<=(?<!\w)[ולבמהש])|(?<=(?<!\w)[ולבמהש]-))(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})(?:[\s.\-]?|\s*(?:\.\.\.|…)\s*)\d{3}"
         r"(?:[\s.\-]?|\s*(?:\.\.\.|…)\s*)\d{4}\b"
         r"(?:\s*(?:x|ext\.?)\s*\d{1,5})?",
         I,
     )
     # International numbers written with a leading +.
-    add(EntityType.PHONE, r"(?<!\w)\+(?:[2-9]\d{0,2})[\s.\-]?\d(?:[\s.\-]?\d){6,12}\b")
+    add(EntityType.PHONE, r"(?:(?<!\w)|(?<=(?<!\w)[ולבמהש]))\+(?:[2-9]\d{0,2})[\s.\-]?\d(?:[\s.\-]?\d){6,12}\b")
 
+    # International numbers with a trunk digit or an area code in brackets, or a 00 prefix:
+    # "+44 (0)20 7946 0958", "+7 (495) 123-45-67", "00 33 6 12 34 56 78".
+    add(
+        EntityType.PHONE,
+        r"(?:(?<![\w+])\+|(?<![\w\d])00[ ])[1-9]\d{0,2}[ .\-]?\(\d{1,4}\)[ .\-]?\d(?:[ .\-]?\d){5,11}\b"
+        r"|(?<![\w\d])00[ ][1-9]\d{0,2}[ .]\d(?:[ .]?\d){6,11}\b",
+    )
     # Numbers spoken digit by digit (call transcripts): "four one six five five five ..."
     add(EntityType.PHONE, rf"\b{_ANY_DIGIT_WORD}(?:[\s,\-]+{_ANY_DIGIT_WORD}){{6,11}}\b", I)
     # Spoken emails: "chen dot wei at example dot com", "julie point savard arobase ...".
@@ -576,7 +716,7 @@ def _build_rules() -> list[_Rule]:
     )
 
     # Dates. Year-only is not PHI under Safe Harbor, so it is not matched.
-    add(EntityType.DATE, r"\b\d{4}-\d{1,2}-\d{1,2}\b")
+    add(EntityType.DATE, r"\b\d{4}-\d{1,2}-\d{1,2}(?:\b|(?=T\d))")
     # Year and month only is still a date element under Safe Harbor.
     add(EntityType.DATE, r"\b(?:19|20)\d{2}-(?:0[1-9]|1[0-2])\b(?!-\d)")
     add(EntityType.DATE, rf"\b\d{{1,2}}[\s\-/.](?:{_MONTHS})[\s\-/.]\d{{2,4}}\b", I)
@@ -893,7 +1033,7 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.EMPLOYER,
-        r"(?<![א-ת])(?:עובדת|עובד|עובדים|לומדת|לומד|מועסקת|מועסק)\s+ב(?P<org>(?:חברת|מכללת|אוניברסיטת|ישיבת|"
+        r"(?<![א-ת])(?:עובדת|עובד|עובדים|לומדת|לומד|מועסקת|מועסק|בעבודה)\s+ב(?P<org>(?:חברת|מכללת|אוניברסיטת|ישיבת|"
         r"בית\s+החולים|בית\s+הספר|בנק|קיבוץ|מפעל|רשת|עיריית|מכון|משרד\s+עורכי\s+הדין|סטודיו|מסעדת)"
         r"(?:[^\S\n]+(?!ו)[א-ת][א-ת\"״'׳\-]*){1,2})",
         group="org",
@@ -929,6 +1069,10 @@ class RegexDetector:
     extra_rules: list[_Rule] = field(default_factory=list)
 
     def detect(self, text: str) -> list[Entity]:
+        original = text
+        if "\r" in text:
+            # Windows line ends: the rules see "\r\n" as " \n" (same offsets).
+            text = text.replace("\r", " ")
         out = self._detect(text)
         # Faxed and scanned text: "6O4-555-Ol74", "9l42 337 O58". Read the numbers
         # again with look-alike letters as digits; keep what touches a changed letter.
@@ -939,6 +1083,9 @@ class RegexDetector:
                 if e.type in _NAME_GROUP_TYPES or not any(e.start <= i < e.end for i in changed):
                     continue
                 out.append(Entity(e.type, e.start, e.end, text[e.start : e.end], self.name))
+        if original is not text:
+            out = [_trimmed(e, original) for e in out]
+            out = [e for e in out if e is not None]
         return out
 
     def _detect(self, text: str) -> list[Entity]:
@@ -960,6 +1107,13 @@ class RegexDetector:
                 out.append(Entity(rule.type, start, end, text[start:end], self.name))
         # Identifiers read out loud: "four one six... five five five...", "T three A".
         spoken = [*_spoken.detect(text), *_spoken.street_numbers(text, _street_spans)]
+        # A field value the rules above already found whole is left to them.
+        found = [(e.start, e.end) for e in out]
+        spoken.extend(
+            Entity(t, a, b, text[a:b], self.name)
+            for t, a, b in _structured.detect(text)
+            if not any(s <= a and b <= e for s, e in found)
+        )
         if self.enabled is None or EntityType.NAME in self.enabled:
             out.extend(Entity(EntityType.NAME, a, b, text[a:b], self.name) for a, b in _names.hebrew_names(text))
         out.extend(e for e in spoken if self.enabled is None or e.type in self.enabled)
@@ -972,11 +1126,23 @@ class RegexDetector:
         ]
 
 
+def _trimmed(e: Entity, text: str) -> Optional[Entity]:
+    """``e`` without spaces or carriage returns at its ends, its text taken from ``text``."""
+    start, end = e.start, e.end
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    if end <= start:
+        return None
+    return Entity(e.type, start, end, text[start:end], e.source)
+
+
 _CLINIC_NUMBER_TYPES = {
     EntityType.ID, EntityType.ACCOUNT, EntityType.ZIP, EntityType.SIN, EntityType.MRN, EntityType.POSTAL_CODE,
 }
 _CLINIC_NUMBER_CUE = re.compile(
-    r"(?:\b(?:ticket|tkt|lot|lote|batch|routing|badge|zg[łl]oszeni[ae])\b[^\n\d]{0,25}"
+    r"(?:\b(?:ticket|tkt|(?<!straw\s)lot|lote|batch|routing|badge|zg[łl]oszeni[ae])\b[^\n\d]{0,25}"
     r"|\binterpr[eè]t(?:er|e)\b[^\n\d]{0,25})$",
     re.IGNORECASE,
 )

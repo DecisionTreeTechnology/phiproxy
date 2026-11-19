@@ -1,0 +1,47 @@
+{"id": "v9-en-chat-047", "action": "add", "type": "NAME", "surface": "Camille", "occurrence": 2, "reason": "patient name in signature"}
+{"id": "v9-en-chat-057", "action": "add", "type": "NAME", "surface": "Trevor", "occurrence": 2, "reason": "repeat of donor name"}
+{"id": "v9-en-chat-059", "action": "add", "type": "NAME", "surface": "Alejandra", "occurrence": 2, "reason": "patient first name in reply"}
+{"id": "v9-en-chat-061", "action": "add", "type": "NAME", "surface": "Mimi", "occurrence": 1, "reason": "patient nickname"}
+{"id": "v9-en-chat-061", "action": "add", "type": "DATE", "surface": "Dec 8", "occurrence": 1, "reason": "consult date tied to patient"}
+{"id": "v9-en-chat-070", "action": "remove", "type": "EMPLOYER", "surface": "Cherry Creek Compounding", "occurrence": 1, "reason": "pharmacy, not workplace"}
+{"id": "v9-en-chat-074", "action": "add", "type": "NAME", "surface": "Papadakis", "occurrence": 1, "reason": "patient surname repeated"}
+{"id": "v9-en-chat-083", "action": "add", "type": "NAME", "surface": "Shauna", "occurrence": 2, "reason": "patient first name in bot reply"}
+{"id": "v9-en-chat-084", "action": "add", "type": "NAME", "surface": "kroll", "occurrence": 1, "reason": "surname in household sign-off"}
+{"id": "v9-en-chat-088", "action": "add", "type": "ADDRESS", "surface": "Addis", "occurrence": 1, "reason": "city person comes from"}
+{"id": "v9-en-chat-094", "action": "add", "type": "NAME", "surface": "Sofia", "occurrence": 2, "reason": "patient first name in reply"}
+{"id": "v9-en-chat-098", "action": "remove", "type": "DATE", "surface": "Monday", "occurrence": 1, "reason": "bare weekday"}
+{"id": "v9-en-chat-098", "action": "add", "type": "NAME", "surface": "Mia", "occurrence": 2, "reason": "patient first name in staff reply"}
+{"id": "v9-en-sms-017", "action": "add", "type": "ACCOUNT", "surface": "INV-2026-5530", "occurrence": 1, "reason": "invoice number tied to a person"}
+{"id": "v9-en-sms-024", "action": "remove", "type": "EMPLOYER", "surface": "Mercy Valley Health", "occurrence": 1, "reason": "records recipient, not workplace"}
+{"id": "v9-en-call-104", "action": "add", "type": "NAME", "surface": "Samira", "occurrence": 2, "reason": "partner first name"}
+{"id": "v9-en-call-109", "action": "add", "type": "NAME", "surface": "Dee-Ann", "occurrence": 1, "reason": "spoken corrected name"}
+{"id": "v9-en-call-109", "action": "add", "type": "NAME", "surface": "Diane", "occurrence": 2, "reason": "agent repeats caller name"}
+{"id": "v9-en-call-118", "action": "add", "type": "NAME", "surface": "Bill", "occurrence": 2, "reason": "caller nickname repeat"}
+{"id": "v9-en-email-149", "action": "add", "type": "ID", "surface": "2026CV31855", "occurrence": 1, "reason": "court file in subject"}
+{"id": "v9-en-email-150", "action": "add", "type": "NAME", "surface": "Lucille", "occurrence": 3, "reason": "greeting in forwarded message"}
+{"id": "v9-en-email-157", "action": "add", "type": "NAME", "surface": "Jared", "occurrence": 2, "reason": "donor name repeat"}
+{"id": "v9-en-email-172", "action": "add", "type": "NAME", "surface": "Hollis", "occurrence": 2, "reason": "lawyer greeting"}
+{"id": "v9-en-email-172", "action": "add", "type": "NAME", "surface": "Daisy", "occurrence": 2, "reason": "carrier name repeat"}
+{"id": "v9-en-email-172", "action": "add", "type": "NAME", "surface": "Daisy", "occurrence": 3, "reason": "carrier name repeat"}
+{"id": "v9-en-note-198", "action": "add", "type": "NAME", "surface": "Hannelore", "occurrence": 2, "reason": "widow name repeat"}
+{"id": "v9-en-note-198", "action": "add", "type": "NAME", "surface": "Stefan", "occurrence": 2, "reason": "patient name repeat"}
+{"id": "v9-es-call-028", "action": "add", "type": "NAME", "surface": "Yosselin", "occurrence": 1, "reason": "caller's own name"}
+{"id": "v9-es-email-040", "action": "add", "type": "NAME", "surface": "Claudia R.", "occurrence": 1, "reason": "patient signature"}
+{"id": "v9-es-email-046", "action": "remove", "type": "ADDRESS", "surface": "Denver", "occurrence": 1, "reason": "clinic city"}
+{"id": "v9-es-email-048", "action": "add", "type": "NAME", "surface": "Hernán Giraldo", "occurrence": 1, "reason": "name in signature"}
+{"id": "v9-es-email-050", "action": "add", "type": "NAME", "surface": "Gabi", "occurrence": 1, "reason": "nickname signature"}
+{"id": "v9-es-call-026", "action": "add", "type": "NAME", "surface": "Pineda", "occurrence": 2, "reason": "surname repeated before spelling"}
+{"id": "v9-fr-call-018", "action": "add", "type": "NAME", "surface": "Pelletier", "occurrence": 2, "reason": "surname repeated before spelling"}
+{"id": "v9-fr-call-018", "action": "add", "type": "NAME", "surface": "Pelletier", "occurrence": 3, "reason": "agent says madame Pelletier"}
+{"id": "v9-fr-call-021", "action": "add", "type": "NAME", "surface": "Bergeron", "occurrence": 1, "reason": "corrected surname"}
+{"id": "v9-fr-email-027", "action": "add", "type": "NAME", "surface": "Geneviève Paradis", "occurrence": 2, "reason": "signature"}
+{"id": "v9-fr-email-029", "action": "add", "type": "ID", "surface": "C-2026-4471", "occurrence": 1, "reason": "court file number in subject"}
+{"id": "v9-fr-email-031", "action": "add", "type": "NAME", "surface": "Sophie", "occurrence": 2, "reason": "first name in signature"}
+{"id": "v9-fr-note-038", "action": "remove", "type": "ADDRESS", "surface": "Calgary", "occurrence": 2, "reason": "clinic's own city (labelled mention is the second Calgary)"}
+{"id": "v9-pl-sms-001", "action": "add", "type": "NAME", "surface": "Wójcik", "occurrence": 1, "reason": "surname of labelled first name"}
+{"id": "v9-pl-call-016", "action": "add", "type": "NAME", "surface": "Pawlak", "occurrence": 1, "reason": "surname of labelled first name"}
+{"id": "v9-pl-email-021", "action": "add", "type": "NAME", "surface": "Karolina", "occurrence": 2, "reason": "patient name in signature"}
+{"id": "v9-he-sms-001", "action": "add", "type": "NAME", "surface": "לוי", "occurrence": 1, "reason": "surname of labelled first name"}
+{"id": "v9-he-email-021", "action": "add", "type": "NAME", "surface": "קרולינה", "occurrence": 2, "reason": "patient name in signature"}
+{"id": "v9-he-email-021", "action": "add", "type": "ADDRESS", "surface": "דירה 6", "occurrence": 1, "reason": "unit of patient address"}
+{"id": "v9-mixed-email-027", "action": "add", "type": "PROVIDER", "surface": "Beatriz", "occurrence": 2, "reason": "staff first name in greeting"}

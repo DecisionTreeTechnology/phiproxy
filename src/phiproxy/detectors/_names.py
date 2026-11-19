@@ -106,7 +106,7 @@ CAP_NAME = rf"(?:{LAST_FIRST}|{NAMES}|{HE_NAME})"
 _GREETING = (
     r"hi|hey|hello|yeah\s+hi|yes\s+hi|good\s+(?:morning|afternoon|evening)|salut|bonjour|"
     r"bonsoir|allô|allo|hola|buenos\s+d[ií]as|buenas(?:\s+tardes|\s+noches)?|cze[śs][ćc]|"
-    r"dzie[ńn]\s+dobry|dobry\s+wiecz[óo]r|היי|שלום|בוקר\s+טוב|ערב\s+טוב"
+    r"dzie[ńn]\s+dobry|dobry\s+wiecz[óo]r|witam|witaj|היי|שלום|בוקר\s+טוב|ערב\s+טוב"
 )
 _FILLER = r"um|uh|umm|erm|yeah|yes|ok|okay|so|oui|euh|s[íi]|bueno|tak|no\s+wi[ęe]c"
 _INTRO = r"it'?s|it’s|its|this\s+is|c'est|c’est|soy|es|tu|m[óo]wi|זאת|זה|זו|מדבר|מדברת|here'?s"
@@ -124,15 +124,17 @@ _STRONG = (
 # Capitalized names only: weaker cues where a lowercase word is rarely a name.
 _WEAK = (
     r"it'?s|it’s|its|this\s+is|i\s+am|i'm|i’m|im|signed|we'?re|we\s+are|nous\s+sommes|somos|"
-    r"jeste[śs]my|c'est|c’est|soy|tu|m[óo]wi|attention|attn|"
+    r"jeste[śs]my|jestem|c'est|c’est|soy|tu|m[óo]wi|attention|attn|"
     r"(?:name\s+)?(?:tag|label|labels|chart)\s+(?:says|reads?)"
 )
 _VALEDICTION = (
     r"thanks(?:\s+(?:so|very)\s+much|\s+again|\s+a\s+lot|\s+a\s+million)?|thank\s+you(?:\s+(?:so|very)\s+much)?|"
-    r"thx|ty|cheers|regards|best(?:\s+regards|\s+wishes)?|kind\s+regards|warm(?:est)?\s+regards|"
+    r"thx|ty|cheers|regards|best(?:\s+regards|\s+wishes)?|kind\s+regards|warm(?:est)?\s+regards|warmly|warm\s+wishes|bendiciones|respectfully|gratefully|cordially|take\s+care|"
     r"sincerely|yours(?:\s+truly)?|with\s+(?:love|gratitude|thanks)|love|lots\s+of\s+love|xo+|hugs|"
     r"merci(?:\s+beaucoup|\s+encore)?|cordialement|bisous|bises|amiti[ée]s|"
-    r"gracias|saludos|atentamente|un\s+abrazo|los\s+quiere|te\s+quiere|con\s+cari[ñn]o|"
+    r"gracias|saludos(?:\s+cordiales)?|un\s+(?:cordial\s+)?saludo|atentamente|atte|cordialmente|afectuosamente|"
+    r"quedo\s+atent[oa]|atenciosamente|amicalement|z\s+wyrazami\s+szacunku|pozdrawiam\s+serdecznie|"
+    r"un\s+abrazo|los\s+quiere|te\s+quiere|con\s+cari[ñn]o|"
     r"pozdrawiam|pozdrawiamy|dzi[eę]kuj[eę]|dzi[eę]kujemy|dzi[eę]ki|z\s+pozdrowieniami|"
     r"z\s+powa[żz]aniem|signed|bien\s+[àa]\s+vous|salutations"
 )
@@ -153,7 +155,7 @@ _RELATIONS = (
     r"lawyer|attorney|policy\s*holder|subscriber|insured|guarantor|"
     # French
     r"mari|[ée]poux|[ée]pouse|femme|conjoint|conjointe|chum|blonde|copain|copine|fils|fille|"
-    r"m[èe]re|p[èe]re|s(?:œ|oe)ur|fr[èe]re|tante|oncle|ni[èe]ce|neveu|cousine|"
+    r"m[èe]re|p[èe]re|s(?:œ|oe)ur|fr[èe]re|tante|oncle|ni[èe]ce|neveu|cousine|amie|ami|"
     r"belle-m[èe]re|beau-p[èe]re|m[èe]re\s+porteuse|petite|petit|b[ée]b[ée]|ma[îi]tre|"
     # Spanish
     r"esposo|esposa|marido|mujer|pareja|novio|novia|hijo|hija|madre|padre|mam[áa]|pap[áa]|"
@@ -163,7 +165,9 @@ _RELATIONS = (
     r"m[ąa][żz]|m[ęe][żz]a|m[ęe][żz]em|m[ęe][żz]owi|[żz]ona|[żz]ony|[żz]on[ąa]|partnerka|syn|"
     r"c[óo]rka|c[óo]rk[ąa]|matka|ojciec|tata|siostra|siostr[ąa]|brat|bratem|ciocia|wujek|"
     r"te[śs][ćc]|te[śs]ciowa|szwagier|szwagierka|kuzyn|kuzynka|przyjaci[óo][łl]ka|przyjaciel|"
-    r"nasza|nasz|c[óo]reczka|synek|pani|pan"
+    r"nasza|nasz|c[óo]reczka|synek|pani|pan|"
+    # Tagalog and Vietnamese
+    r"anak|asawa|nanay|tatay|kapatid|chồng|vợ|con\s+gái|con\s+trai|mẹ|bố"
 )
 # Relations after which a lowercase word may be a name ("my wife hope she...").
 _LOWER_RELATIONS = (
@@ -253,6 +257,32 @@ _NOT_NAME_EXTRA = frozenset(
     """.split()
 )
 # Function words that can still be first names when capitalized ("Thanks, Will").
+# Words that open an email or a sentence before "and I" but are not people.
+_NOT_ADDRESSEE = frozenset(
+    """
+    all everyone everybody team folks friends colleagues sir madam madame sirs gentlemen ladies doctor doctors
+    hello hi hey dear greetings morning afternoon evening good thanks thank update reminder note summary hello
+    you me him her them us we they he she it this that then so but yes no ok okay and or nurse nurses billing
+    records reception admin support staff coordinator coordinators parents mom dad family patient patients
+    bonjour hola buenos buenas cześć dzień witam monsieur señor señora estimado estimada estimados szanowni
+    szanowna szanowny drodzy kochani chers cher chère queridos queridas
+    """.split()
+)
+
+# Words that make a capitalized phrase a department, a place or a document, not a person.
+_ORG_NAME_WORDS = frozenset(
+    """
+    clinic clinics clinique clínica clinica hospital hôpital hopital pharmacy farmacia pharmacie laboratory
+    laboratorio equipo équipe oficina billing facturación facturacion recepción recepcion reception réception
+    recursos coordinación coordinacion coordination department departamento services servicios fertility
+    fertilidad fertilité results resultados retrieval ultrasound protocol transfer insemination egg ovarian
+    équipe equipe zespół zespol
+    recepcja rejestracja sekretariat pielęgniarki pielegniarki enfermería enfermeria admisiones admissions admission
+    administración administracion administration accueil secrétariat secretariat secretaría secretaria nurses
+    nursing scheduling intake קבלה מזכירות המזכירות הקבלה
+    """.split()
+)
+
 _NAME_LIKE_STOP = frozenset({"will", "may", "ty", "said", "pat", "ma"})
 
 
@@ -297,6 +327,8 @@ def make_checks(not_names: frozenset[str] | set[str]):
         if not first or first in blocked:
             return False
         text, start, end = m.string, m.start("name"), m.end("name")
+        if re.sub(r"^[ld]['’]", "", name.split()[0].lower()).strip(".,'’") in _ORG_NAME_WORDS:
+            return False  # "Clínica Fertilidad", "Recursos Humanos", "Ultrasound Results"
         if _TITLE_BEFORE.search(text[max(0, start - 12) : start]):
             return False
         if _CREDENTIAL_AFTER.match(text[end : end + 10]) or _CREDENTIAL_END.search(name):
@@ -317,14 +349,20 @@ def make_checks(not_names: frozenset[str] | set[str]):
         words = m.group("name").split()
         return words[-1].lower().strip(".") not in _NOT_SURNAMES and check(m)
 
-    return check, check_caps, check_initial
+    def check_greeting_line(m: re.Match[str]) -> bool:
+        first = m.group("name").split()[0].lower()
+        if first in _NOT_ADDRESSEE or re.fullmatch(rf"(?i:{_VALEDICTION})", m.group("name")):
+            return False
+        return check(m)
+
+    return check, check_caps, check_initial, check_greeting_line
 
 
 def rules(
     not_names: frozenset[str] | set[str],
 ) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
     """(pattern, flags, check) for NAME. Each pattern has a ``name`` group."""
-    check, check_caps, check_initial = make_checks(not_names)
+    check, check_caps, check_initial, check_greeting_line = make_checks(not_names)
     start = r"(?:^|(?<=[\s,.!?:;\"'(—–\-]))"
     return [
         # "my name is chen wei", "je m'appelle Catherine", "קוראים לי ענת שפירא".
@@ -357,6 +395,42 @@ def rules(
         (rf"(?i:\b(?:{_VALEDICTION}))(?:[ \t]*,[ \t]*\n?|[ \t]*[,!.]?[ \t]*\n)[ \t]*(?P<name>{NAMES}|{LAST_FIRST})", 0, check),
         (rf"(?i:\b(?:{_VALEDICTION_SPACE}))[ \t]+(?P<name>{NAMES})", 0, check),
         (rf"(?<!\w)(?:{_HE_VALEDICTION})[ \t]*,?[ \t]*\n?[ \t]*(?P<name>{HE_NAME})(?=[ \t]*(?:[.,!?\n]|$))", 0, check),
+        # Nicknames and preferred names: "I go by Kim", "prefers to be called Mimi", "se hace llamar Paty".
+        (
+            rf"(?i:\b(?:(?:i|she|he|they|we|who|also|usually|now|mostly|patient|partner)\s+(?:go(?:es)?|went)\s+by|"
+            rf"prefer(?:s|red)?\s+(?:to\s+be\s+|being\s+)?called|preferred\s+name(?:\s+is)?|(?:likes?|wants?)\s+to\s+be\s+called|"
+            rf"(?:i['’]?m|i\s+am|she['’]?s|he['’]?s|she\s+is|he\s+is)\s+(?:called|known\s+as)|a\.?k\.?a\.?|"
+            rf"(?:je\s+me|elle\s+se|il\s+se)\s+fai[ts]\s+appeler|m['’]appellent|m['’]appelle|ll[áa]mame|m[óo]w\s+do\s+mnie|"
+            rf"nazywaj[ąa]\s+mnie|"
+            rf"(?:you\s+can\s+|please\s+|just\s+|everyone\s+|they\s+)?call(?:s)?\s+me|nickname\s+is|se\s+hace\s+llamar|me\s+dicen|"
+            rf"me\s+llaman|mi\s+apodo\s+es|on\s+m['’]appelle|appelez[\s\-]moi|m[óo]w\s+mi|m[óo]wi[ąa]\s+na\s+(?:mnie|ni[ąa]|niego)|"
+            rf"wo[łl]aj[ąa]\s+na\s+(?:mnie|ni[ąa]|niego)))"
+            rf"[ \t]*:?[ \t]+[\"“'‘]?(?P<name>{NAMES})",
+            0,
+            check,
+        ),
+        # An email that opens with the addressee's name alone: "\n\nHollis,\n\nThank you".
+        (
+            rf"(?:(?im:^(?:subject|objet|asunto|temat|to|from|re|cc)[ \t]*:[^\n]*)\r?\n[ \t]*\r?\n(?P<h>)|\A)[ \t]*"
+            rf"(?P<name>{_CW}(?:{_SP}{_CW}){{0,2}})[ \t]*[,!][ \t]*\r?\n(?:(?(h)|(?!))(?:[ \t]*\r?\n)?|[ \t]*\r?\n)[ \t]*"
+            rf"(?=(?i:thank|thanks|i\s|i['’]|hope|please|just|following|as\s|we\s|we['’]|attached|quick|can\s|could\s|"
+            rf"here|regarding|re:|let\s|good|it\s+was|sorry|per\s|hi\b|hello|gracias|muchas|buen[oa]s|hola|espero|le\s+escribo|"
+            rf"te\s+escribo|adjunto|merci|bonjour|bonsoir|je\s|j['’]|nous\s|voici|dzi[ęe]kuj|bardzo|dzie[ńn]\s+dobry|"
+            rf"piszę|przesyłam|w\s+za[łl][ąa]czniku))",
+            0,
+            check_greeting_line,
+        ),
+        # "Lee and I are so grateful", "Marta y yo", "Ania i ja".
+        (
+            rf"(?:^|(?<=[.!?][ \t])|(?<=[.!?][ \t]{{2}}))(?:(?i:today|yesterday|tonight|so|then|when|now|maybe|and|but|"
+            rf"also|hopefully|finally|last\s+(?:night|week)|this\s+morning|hoy|ayer|aujourd['’]hui|hier|dzi[śs]|wczoraj)[ \t,]+)?"
+            rf"(?P<name>{NAMES})[ \t]+(?:(?:and|&)[ \t]+I|y[ \t]+yo|et[ \t]+moi|i[ \t]+ja){_END}"
+            rf"(?=[ \t]+(?i:are|were|have|had|will|went|would|both|just|also|did|do|can|could|got|met|live|lived|moved|"
+            rf"decided|want|wanted|need|needed|tried|plan|planned|hope|look|thank|appreciate|really|still|already|"
+            rf"estamos|fuimos|tenemos|queremos|sommes|avons|allons|voulons|jeste[śs]my|mamy|chcemy|byli[śs]my)\b|['’](?:re|ve|ll|d)\b)",
+            re.MULTILINE,
+            check_greeting_line,
+        ),
         # Dash sign-off at the end: "- Raj", "— N. Abdulkadir", "xo - Gabi".
         (rf"(?:^|\s)[-–—~]+\s*(?P<name>{NAMES})\s*[.!]?\s*\Z", 0, check),
         # A relative or contact: "Husband Imran", "Partner: Kevin Nguyen",
@@ -385,7 +459,7 @@ def rules(
         (rf"(?i:\b(?:{_PERSON_LABELS}))[ \t]*:[ \t]*(?P<name>{LAST_FIRST}|{_MULTI_NAME})", 0, check_caps),
         (rf"(?<!\w)(?:{_HE_LABELS})[ \t]*:[ \t]*(?P<name>{HE_LAST_FIRST}|{HE_NAME})", 0, check),
         # Greetings and patient cues: "Hi, Anna Kowalski", "Pt P. Raman", "Dear Ms Lee".
-        (rf"(?i:\b(?:pt|client|dear|hi|hello|hey|bonjour|hola|cze[śs][ćc]))[ \t]*,?[ \t]+(?P<name>{NAMES})", 0, check),
+        (rf"(?i:\b(?:pt|client|dear|hi|hello|hey|bonjour|hola|cze[śs][ćc]|witam|witaj))[ \t]*,?[ \t]+(?P<name>{NAMES})", 0, check),
         (rf"(?i:\b(?:patient|patiente|paciente|pacjent(?:ka)?))[ \t]+(?P<name>{LAST_FIRST}|{NAMES})", 0, check),
         # A full name right before an identifier: "Hannah Ostrowski, DOB", "Leona Strand chart MRN",
         # "Adriana Mejía, FDN", "Joanna Dąbrowska, ur.", "Ashley Pruitt (chart 0052004)".
@@ -401,7 +475,7 @@ def rules(
         # above contact details ("\n\nBen Okafor\n(905) 555-0114", "\n\nLauren").
         (
             rf"(?:\n[ \t]*\n|(?m:^)--[ \t]*\n)[ \t]*(?P<name>{NAMES})[ \t]*[.!]?[ \t]*"
-            rf"(?=\s*\Z|[ \t]+[-–—|][ \t]*\S|\n[ \t]*(?:\(?\+?\d[\d \t().\-]{{6,}}|\S+@\S+|Sent\s+from|Envoy[ée]|Enviado|>)|\n\s*\n[ \t]*(?:On|Le|El|W\s+dniu)\s.{{5,80}}(?:wrote|[ée]crit|escribi|napisa))",
+            rf"(?=\s*\Z|[ \t]+[-–—|][ \t]*\S|\n[ \t]*(?:(?i:tel|t[ée]l|phone|ph|cell|mobile|m[óo]vil|kom)\.?:?[ \t]*)?(?:\(?\+?\d[\d \t().\-]{{6,}}|\S+@\S+|Sent\s+from|Envoy[ée]|Enviado|>)|\n\s*\n[ \t]*(?:On|Le|El|W\s+dniu)\s.{{5,80}}(?:wrote|[ée]crit|escribi|napisa))",
             0,
             check,
         ),
@@ -419,7 +493,7 @@ def courtesy_rules(
     not_names: frozenset[str] | set[str],
 ) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
     """Courtesy titles name patients and relatives, not clinicians."""
-    check, _, _ = make_checks(not_names)
+    check, *_ = make_checks(not_names)
     # Courtesy titles and military ranks (a service member is a private person).
     titles = (
         r"Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Me|Sr|Sra|Srta|Pan|Pani|Panią|Panu|"
