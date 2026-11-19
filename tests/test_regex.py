@@ -420,3 +420,247 @@ def test_review_false_positives(text, types):
 )
 def test_review_spans(text, value):
     assert value in {e.text for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        # Court and agency file numbers.
+        ("court file 2026DR30418. I need", "2026DR30418"),
+        ("Case No. 2026PR000884 / In re", "2026PR000884"),
+        ("Case number 24-DR-1183, fax", "24-DR-1183"),
+        ("sygnatura II C 1184/26. Proszę", "II C 1184/26"),
+        ("pod sygn. XVI RC 902/25.", "XVI RC 902/25"),
+        ("תיק 12456-03-26. נא לשלוח", "12456-03-26"),
+        # Prescription, licence, cédula, plate, username.
+        ("Rx number 5520-1148, progesterone", "5520-1148"),
+        ("Rx# 7710-4402   Filled", "7710-4402"),
+        ("Colorado driver licence 99-123-4567. Address", "99-123-4567"),
+        ("licencia de conducir de Colorado número 93-441-2807.", "93-441-2807"),
+        ("Mi cédula es V-18.442.907 y", "V-18.442.907"),
+        ("My plate is QXE-J45. The notice", "QXE-J45"),
+        ("My username is hunter.bale and I can't", "hunter.bale"),
+        # Health numbers named in other ways.
+        ("my Alberta health care number is 53117 4429. I'm", "53117 4429"),
+        ("My AHS number is 48217 6639 if the lab needs it", "48217 6639"),
+        ("Voici ma carte santé comme demandé : 76341 9028.", "76341 9028"),
+        ("CARTE SANTÉ AB : 402 118 337", "402 118 337"),
+        ("Insur ID: HK 9920 5518 ...", "HK 9920 5518"),
+        # Identifiers read one digit at a time.
+        ("Hospital number 0 0 5 5 2 1 8.", "0 0 5 5 2 1 8"),
+        ("Numer pacjenta 0 0 8 8 1 3 2.", "0 0 8 8 1 3 2"),
+        ("מספר תיק 0 0 7 7 4 1 9.", "0 0 7 7 4 1 9"),
+        # Card endings in other languages.
+        ("opłacony kartą kończącą się na 4471, proszę", "4471"),
+        ("la tarjeta que termina en 9027, please", "9027"),
+        ("והכרטיס שלי נגמר ב-3308", "3308"),
+        ("cambiar la tarjeta del plan. La nueva termina en cuatro cuatro uno siete.", "cuatro cuatro uno siete"),
+        # Donors, groups, phones after a Hebrew prefix, ages, timestamps.
+        ("I was told the donor was number 7719-B at the sperm bank", "7719-B"),
+        ("(tank 2, canister B, straw lot ST-4402-19)", "ST-4402-19"),
+        ("PL-77-340192 i grupa G4410. To", "G4410"),
+        ("חזרו אליה ל303-555-0182.", "303-555-0182"),
+        ("נא לשלוח פקס ל+972-50-555-0177.", "+972-50-555-0177"),
+        ("מטופל: אילן סובול, בן 93\n", "93"),
+        ("Pacjent: Ilona Sobczak, lat 93\nRp.", "93"),
+        ('{"ts":"2026-11-16T22:41:07Z"}', "2026-11-16"),
+        # Names: nicknames, greeting lines, "X and I", signatures above a phone label.
+        ("Note: patient prefers to be called Mimi.", "Mimi"),
+        ("Isnt that covered? I go by Kim.", "Kim"),
+        ("Subject: Agreement\n\nHollis,\n\nThank you for the redline.", "Hollis"),
+        ("720-555-0169\nLee and I are so grateful.", "Lee"),
+        ("Quedo atenta.\n\nClaudia R.\nTel. (720) 555-0153", "Claudia R."),
+        ("Cordialmente,\nHernán Giraldo", "Hernán Giraldo"),
+        ("AI summary: Caller Liezel Santos (anak Aya) asked", "Aya"),
+        ("Tôi gọi về vợ Lan của tôi", "Lan"),
+    ],
+)
+def test_v9_spans(text, value):
+    assert value in {e.text for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize(
+    "text,types",
+    [
+        ("Usuario: hola, quiero una cita", {"ID"}),
+        ("I forgot my username and password", {"ID"}),
+        ("Confirmation number is 7 7 4 1 0 9.", {"ID"}),
+        ("sent me Ganirelix twice and no Menopur and I trigger in two days", {"NAME"}),
+        ("Warmly,\nthe team", {"NAME"}),
+        ("Cordialmente,\nHernán Giraldo", set()),
+        ("Kochani,\n\nspotkanie zespołu w piątek", {"NAME"}),
+        ("Hello,\n\nPlease find attached", {"NAME"}),
+        ("Plate 2 of 4 in the incubator", {"ID"}),
+        ("a 96-well plate, lot 4471", {"ID", "ACCOUNT"}),
+        ("Rx: 30 mL, refills 2", {"ID"}),
+        ("The licence fee is 100 200 300", {"ID"}),
+        ("We met on 2026-03-26 at noon", {"ID"}),
+    ],
+)
+def test_v9_lookalikes(text, types):
+    found = [e for e in RegexDetector().detect(text) if e.type.value in types]
+    if text.startswith("Cordialmente"):
+        found = [e for e in RegexDetector().detect(text) if e.text == "Cordialmente"]
+    assert not found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the plate 3B1 was contaminated",
+        "plate A4 well 12",
+        "termina en 2026 el contrato",
+        "Kończąca się na 2026 umowa",
+        "health card number: please bring it, appointment at 10 30 11 2026",
+        "Insur ID card scanned on 11 03 2026",
+        "login is broken since 11:30",
+        "login: failed attempt count 3",
+        "Menopur,\n\nTake daily",
+        "Egg Retrieval,\n\nis scheduled",
+        "the protocol known as Antagonist",
+        "a drug known as Clomid",
+        "went by Walgreens",
+        "le dicen Metformina",
+        "Cordialmente,\nRecepción",
+        "Atentamente,\nRecursos Humanos",
+        "Warmly,\nFertility Clinic",
+        "Last name: Unknown",
+        "Case 2026 was hard",
+    ],
+)
+def test_v9_review_false_positives(text):
+    assert not RegexDetector().detect(text)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("My OHIP is ab1234567890 thanks", "ab1234567890"),
+        ("Health card number:\nH 1234 5678", "H 1234 5678"),
+        ("My OHIP\nAB 1234 567 890", "AB 1234 567 890"),
+        ("My AHS number is 48217 6639 if needed", "48217 6639"),
+        ("Respectfully,\nClaudia Ramos", "Claudia Ramos"),
+        ("Z wyrazami szacunku,\nAnna Kowalska", "Anna Kowalska"),
+        ("You can call me Kim.", "Kim"),
+        ("Mi apodo es Paty", "Paty"),
+        ("Appelez-moi Kim", "Kim"),
+        ("Subject: x\r\n\r\nHollis,\r\n\r\nThank you", "Hollis"),
+        ("Lee & I are grateful.", "Lee"),
+        ("my card ending with 4471", "4471"),
+        ("karta kończy się na 4471", "4471"),
+        ("tarjeta, últimos cuatro dígitos 4471", "4471"),
+        ("Hospital number 0-0-5-5-2-1-8", "0-0-5-5-2-1-8"),
+        ("Hospital number 0, 0, 5, 5, 2, 1, 8", "0, 0, 5, 5, 2, 1, 8"),
+        ("my username for the portal is hunter.bale", "hunter.bale"),
+        ("usuario: mgarcia88", "mgarcia88"),
+        ("My plate is WE 12345", "WE 12345"),
+        ("tablica rejestracyjna KR 1234A", "KR 1234A"),
+        ("Rx number is 5520-1148", "5520-1148"),
+        ("sygn. akt II C 1184/2026", "II C 1184/2026"),
+        ("Case no. 26-D-1183", "26-D-1183"),
+        ("dawca nr 4410", "4410"),
+        ("cédula 18.442.907", "18.442.907"),
+    ],
+)
+def test_v9_review_spans(text, value):
+    assert value in {e.text for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        # Round-2 review: privacy regressions from round-1 fixes stay fixed.
+        ("Mon numéro est +33 6 12 34 56 78", "+33 6 12 34 56 78"),
+        ("Hi, I'm Aisha Khan Results came back", "Aisha Khan"),
+        ("Name: Semen Kovalenko\nDOB: 1990-02-14", "Semen Kovalenko"),
+        ("Thanks,\nRachel Bank", "Rachel Bank"),
+        ("My name is Dan Center", "Dan Center"),
+        # Round-2 review: variants.
+        ("my username is jsmith", "jsmith"),
+        ("username (portal): hunter.bale", "hunter.bale"),
+        ("last 4 digits of my card: 4471", "4471"),
+        ("mi tarjeta acaba en 4471", "4471"),
+        ("ostatnie 4 cyfry karty: 4471", "4471"),
+        ("Visa ****4471", "****4471"),
+        ("I am known as Kim", "Kim"),
+        ("Je me fais appeler Mimi", "Mimi"),
+        ("Subject: x\n\nHollis,\n\nQuick question", "Hollis"),
+        ("donante nº 4410", "4410"),
+        ("numer dawcy 4410", "4410"),
+        ("plate: 7ABC123", "7ABC123"),
+        ("מספר רישוי 12-345-67", "12-345-67"),
+        ("Alberta Health Care: 12345 6789", "12345 6789"),
+        ("dowód osobisty ABC 123456", "ABC 123456"),
+    ],
+)
+def test_v9_round2_spans(text, value):
+    assert any(value in e.text for e in RegexDetector().detect(text))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Medications:\nI take Menopur daily",
+        "Allergies:\nPlease note penicillin",
+        "Progesterone,\nPlease confirm",
+        "username is required",
+        "my plate is 3 days late",
+    ],
+)
+def test_v9_round2_lookalikes(text):
+    assert not RegexDetector().detect(text)
+
+
+def test_dob_label_is_not_an_id():
+    assert {(e.type, e.text) for e in RegexDetector().detect("DOB: 2026-11-19")} == {(T.DATE, "2026-11-19")}
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Thanks,\r\nClaudia Ramos", "Claudia Ramos"),
+        ("Thanks,\r\n\r\nClaudia Ramos", "Claudia Ramos"),
+        ("Tom and I went", "Tom"),
+        ("Today Sarah and I went", "Sarah"),
+        ("+44 (0)20 7946 0958", "+44 (0)20 7946 0958"),
+        ("00 33 6 12 34 56 78", "00 33 6 12 34 56 78"),
+        ("Numer telefonu 22 123 45 67", "22 123 45 67"),
+        ("My Medicare card is 1234 56789 1 and", "1234 56789 1"),
+        ("username: jsmith", "jsmith"),
+        ("user id: 12345", "12345"),
+        ("the card ends 4471", "4471"),
+        ("Charged to Visa****4471 yesterday", "****4471"),
+        ("my member id gcm 70 4418 21", "gcm 70 4418 21"),
+        ("Witam Anna,\n\nDziękuję", "Anna"),
+        ("Jestem Anna Kowalska", "Anna Kowalska"),
+        ("Nazywają mnie Ania", "Ania"),
+        ("Mon amie Marie Tremblay est enceinte", "Marie Tremblay"),
+    ],
+)
+def test_v9_round3_spans(text, value):
+    assert value in {e.text for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "patient is 91 days post transfer",
+        "Clomid and I get along",
+        "Maybe Sarah and I should",
+        "Merci,\nL'équipe de la clinique",
+        "CPT 58970 and NDC 0052-0316-10",
+    ],
+)
+def test_v9_round3_lookalikes(text):
+    found = [e for e in RegexDetector().detect(text) if e.type.value in ("AGE", "NAME", "PHONE")]
+    assert not found or text.startswith("Maybe") and all(e.text == "Sarah" for e in found)
+
+
+def test_v9_round4():
+    from phiproxy import Masker
+
+    for text in ["Dziękuję,\nRecepcja", "Gracias,\nEnfermería", "Thanks,\nAdmissions", "תודה,\nקבלה", "Cordialement,\nAccueil"]:
+        assert Masker().mask(text, "s").text == text
+    assert Masker().mask("The card on file is 5500********0004, please", "s").text == "The card on file is [ACCOUNT_1], please"
+    assert Masker().mask("ID: ON 1234 5678 90", "s").text == "ID: [HEALTH_CARD_1]"
+    assert Masker().mask("my member id ON 70 4418 21", "s").text == "my member id [HEALTH_CARD_1]"
