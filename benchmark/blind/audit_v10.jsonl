@@ -1,0 +1,63 @@
+{"id": "v10-en-sms-037", "action": "add", "type": "DATE", "surface": "5/6", "occurrence": 1, "reason": "unlabelled transfer date at start"}
+{"id": "v10-en-sms-037", "action": "add", "type": "DATE", "surface": "6/5", "occurrence": 1, "reason": "unlabelled transfer date at start"}
+{"id": "v10-en-chat-063", "action": "add", "type": "PHONE", "surface": "952-555-0151", "occurrence": 1, "reason": "referring clinic office phone, not Tamarack's"}
+{"id": "v10-en-chat-092", "action": "add", "type": "NAME", "surface": "keiko tanaka", "occurrence": 1, "reason": "lowercase patient name"}
+{"id": "v10-en-chat-058", "action": "remove", "type": "ADDRESS", "surface": "Minneapolis", "occurrence": 1, "reason": "clinic's own city is not labelled"}
+{"id": "v10-en-call-107", "action": "add", "type": "ADDRESS", "surface": "Como Avenue", "occurrence": 1, "reason": "old street address of patient"}
+{"id": "v10-en-call-116", "action": "add", "type": "NAME", "surface": "Eisenberg", "occurrence": 2, "reason": "repeat surname"}
+{"id": "v10-en-call-116", "action": "add", "type": "NAME", "surface": "E-I-S-E-N-B-E-R-G", "occurrence": 1, "reason": "spelled surname"}
+{"id": "v10-en-call-120", "action": "add", "type": "DATE", "surface": "September second", "occurrence": 1, "reason": "restated DOB"}
+{"id": "v10-en-call-122", "action": "add", "type": "NAME", "surface": "B-R-E-E", "occurrence": 1, "reason": "spelled first name"}
+{"id": "v10-en-call-123", "action": "add", "type": "DATE", "surface": "June first", "occurrence": 1, "reason": "restated visit date"}
+{"id": "v10-en-call-123", "action": "add", "type": "NAME", "surface": "Ana", "occurrence": 2, "reason": "first name Ana/Luis"}
+{"id": "v10-en-call-123", "action": "add", "type": "NAME", "surface": "Luis", "occurrence": 2, "reason": "first name Ana/Luis"}
+{"id": "v10-en-call-123", "action": "add", "type": "EMAIL", "surface": "ana_soto at example dot org", "occurrence": 1, "reason": "email read back"}
+{"id": "v10-en-call-126", "action": "add", "type": "ADDRESS", "surface": "Linden Hills", "occurrence": 1, "reason": "neighbourhood where patient lives"}
+{"id": "v10-en-call-127", "action": "add", "type": "NAME", "surface": "K-O-W-A-L-C-Z-Y-K", "occurrence": 1, "reason": "spelled surname"}
+{"id": "v10-en-call-133", "action": "add", "type": "AGE", "surface": "ninety-one", "occurrence": 1, "reason": "age over 89"}
+{"id": "v10-en-call-133", "action": "add", "type": "NAME", "surface": "Eleanor", "occurrence": 2, "reason": "agent addresses caller by name"}
+{"id": "v10-en-call-134", "action": "add", "type": "NAME", "surface": "K I M", "occurrence": 1, "reason": "spelled surname"}
+{"id": "v10-en-call-134", "action": "add", "type": "NAME", "surface": "J I dash H O O N", "occurrence": 1, "reason": "spelled first name"}
+{"id": "v10-en-email-147", "action": "add", "type": "DATE", "surface": "12 April", "occurrence": 1, "reason": "restated DOB"}
+{"id": "v10-en-email-157", "action": "add", "type": "ADDRESS", "surface": "apt 4B", "occurrence": 1, "reason": "unit of address"}
+{"id": "v10-en-note-176", "action": "add", "type": "DATE", "surface": "03/04", "occurrence": 1, "reason": "note date tied to patient"}
+{"id": "v10-en-note-178", "action": "add", "type": "DATE", "surface": "2026-02-11", "occurrence": 1, "reason": "fax date tied to patient referral"}
+{"id": "v10-en-note-178", "action": "add", "type": "DATE", "surface": "12/2025", "occurrence": 1, "reason": "semen analysis month"}
+{"id": "v10-en-note-181", "action": "add", "type": "ADDRESS", "surface": "St Louis Park", "occurrence": 1, "reason": "patient city"}
+{"id": "v10-en-note-185", "action": "add", "type": "DATE", "surface": "03/02/2026", "occurrence": 1, "reason": "order date tied to patient"}
+{"id": "v10-en-note-195", "action": "add", "type": "DATE", "surface": "2026-03-01", "occurrence": 1, "reason": "patient login date"}
+{"id": "v10-en-note-195", "action": "add", "type": "DATE", "surface": "2026-03-01", "occurrence": 2, "reason": "patient login date"}
+{"id": "v10-en-note-195", "action": "add", "type": "DATE", "surface": "2026-03-01", "occurrence": 3, "reason": "patient login date"}
+{"id": "v10-en-email-171", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Shirin Dastgir", "occurrence": 1, "reason": "referring clinic coordinator signature"}
+{"id": "v10-en-call-123", "action": "add", "type": "NAME", "surface": "A-N-A", "occurrence": 1, "reason": "spelled name"}
+{"id": "v10-en-call-123", "action": "add", "type": "NAME", "surface": "S-O-T-O", "occurrence": 1, "reason": "spelled surname"}
+{"id": "v10-en-call-133", "action": "add", "type": "NAME", "surface": "Britta", "occurrence": 2, "reason": "repeat first name"}
+{"id": "v10-en-email-146", "action": "add", "type": "NAME", "surface": "Pavlova", "occurrence": 2, "reason": "surname in attachment name"}
+{"id": "v10-en-email-146", "action": "add", "type": "NAME", "surface": "Pavlova", "occurrence": 3, "reason": "surname in attachment name"}
+{"id": "v10-en-email-146", "action": "add", "type": "DATE", "surface": "2026-03-14", "occurrence": 1, "reason": "date in filename tied to patient"}
+{"id": "v10-en-email-147", "action": "add", "type": "DATE", "surface": "Mar 9, 2026", "occurrence": 1, "reason": "quoted header date"}
+{"id": "v10-en-email-171", "action": "add", "type": "NAME", "surface": "Lopez", "occurrence": 1, "reason": "surname in subject filename"}
+{"id": "v10-en-email-171", "action": "add", "type": "DATE", "surface": "2026-03-14", "occurrence": 1, "reason": "date in filename tied to patient"}
+{"id": "v10-en-note-192", "action": "add", "type": "NAME", "surface": "Delphine", "occurrence": 2, "reason": "repeat first name"}
+{"id": "v10-en-note-192", "action": "add", "type": "NAME", "surface": "Delphine", "occurrence": 3, "reason": "repeat first name"}
+{"id": "v10-es-call-034", "action": "add", "type": "ADDRESS", "surface": "Quito", "occurrence": 1, "reason": "caller's city"}
+{"id": "v10-es-email-040", "action": "add", "type": "DATE", "surface": "7 abr 2026", "occurrence": 1, "reason": "quoted email header date"}
+{"id": "v10-es-email-042", "action": "add", "type": "NAME", "surface": "Mónica", "occurrence": 2, "reason": "patient name in signature"}
+{"id": "v10-es-email-042", "action": "add", "type": "ADDRESS", "surface": "Guadalajara", "occurrence": 1, "reason": "city where patient was treated/lived"}
+{"id": "v10-es-email-044", "action": "add", "type": "NAME", "surface": "Pilar Escobedo", "occurrence": 2, "reason": "sender name in signature"}
+{"id": "v10-es-email-044", "action": "add", "type": "NAME", "surface": "Ceci", "occurrence": 2, "reason": "patient first name in body"}
+{"id": "v10-es-email-049", "action": "add", "type": "ADDRESS", "surface": "Valencia", "occurrence": 1, "reason": "city patient writes from"}
+{"id": "v10-es-email-049", "action": "add", "type": "NAME", "surface": "Concha", "occurrence": 1, "reason": "nickname"}
+{"id": "v10-es-email-049", "action": "add", "type": "NAME", "surface": "Concha", "occurrence": 2, "reason": "nickname in signature"}
+{"id": "v10-es-email-050", "action": "add", "type": "NAME", "surface": "Gutiérrez Salas, Marta", "occurrence": 1, "reason": "From display name"}
+{"id": "v10-fr-call-021", "action": "add", "type": "NAME", "surface": "c comme Charles, l, a, i, r, e", "occurrence": 1, "reason": "name spelled out"}
+{"id": "v10-fr-call-021", "action": "add", "type": "NAME", "surface": "D-U-B-O-I-S", "occurrence": 1, "reason": "name spelled out"}
+{"id": "v10-fr-email-027", "action": "add", "type": "DATE", "surface": "3 mars 2026", "occurrence": 1, "reason": "quoted email header date"}
+{"id": "v10-fr-email-030", "action": "add", "type": "NAME", "surface": "Amandine R.", "occurrence": 1, "reason": "patient name in signature"}
+{"id": "v10-fr-chat-014", "action": "add", "type": "NAME", "surface": "M-U-K-E-N-D-I", "occurrence": 1, "reason": "name spelled out"}
+{"id": "v10-es-call-027", "action": "add", "type": "HEALTH_CARD", "surface": "W, 4, 4, 1, 9, 0, 0, 7, 2", "occurrence": 1, "reason": "member id repeated spelled out"}
+{"id": "v10-fr-call-021", "action": "add", "type": "NAME", "surface": "Dubois", "occurrence": 1, "reason": "surname repeated by agent"}
+{"id": "v10-pl-sms-004", "action": "add", "type": "NAME", "surface": "Ewa", "occurrence": 1, "reason": "first name in signature before labelled surname"}
+{"id": "v10-pl-email-025", "action": "add", "type": "NAME", "surface": "Anna", "occurrence": 1, "reason": "patient first name in signature"}
+{"id": "v10-pl-note-027", "action": "add", "type": "NAME", "surface": "Ewelina", "occurrence": 1, "reason": "patient first name next to labelled surname"}
+{"id": "v10-mixed-email-032", "action": "add", "type": "EMPLOYER", "surface": "Somali Community Interpreter Cooperative", "occurrence": 1, "reason": "named workplace of signer in signature"}

@@ -118,6 +118,8 @@ class _Run:
         self.span = (0, 0)
         self.repeat = 1
         self.spoken = 0  # number words and phonetic letters (not written digits)
+        self.singles = 0  # written digits read one at a time: "6 5 1 5 5 5"
+        self.multi = 0  # written numbers of two or more digits
 
     def _flush(self) -> None:
         if self.open is not None:
@@ -186,6 +188,15 @@ class _Run:
 
 def _runs(text: str) -> list[list[tuple[str, int, int]]]:
     """Every maximal spoken run, as (char, start, end) lists."""
+    return [chars for chars, spoken, _, _ in _scan(text) if spoken]
+
+
+def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
+    """Every maximal run as (chars, spoken words, single digits, longer numbers).
+
+    A run of single written digits ("6 5 1 5 5 5 0 1 4 4", "W, 4, 4, 1, 9") is kept too,
+    with ``spoken`` 0: the caller decides whether its context makes it an identifier.
+    """
     out = []
     run = _Run()
     joins = 0  # separator words since the last spoken character ("and then")
@@ -193,9 +204,10 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
     def close() -> None:
         nonlocal run, joins
         chars = run.finish()
-        # Identifiers written in figures are the pattern rules' job.
-        if chars and run.spoken:
-            out.append(chars)
+        # Identifiers written in figures are the pattern rules' job, except digits
+        # read one at a time.
+        if chars and (run.spoken or (run.singles >= 3 and not run.multi)):
+            out.append((chars, run.spoken, run.singles, run.multi))
         run = _Run()
         joins = 0
 
@@ -222,6 +234,9 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
                 run.number(kind, v, s, e, raw if kind == "digits" else "")
                 # A lone "o" is a zero only beside other spoken numbers (OCR: "555-O188").
                 run.spoken += kind != "digits" and w not in ("o", "oh")
+                if kind == "digits":
+                    run.singles += len(raw) == 1
+                    run.multi += len(raw) > 1
             joins = 0
             continue
         # "A as in apple": the letter was already taken; skip "as in <word>".
@@ -237,7 +252,12 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
             continue
         if len(w) == 1 and w.isalpha() and w.isascii() and text[s - 1 : s] not in ("'", "’"):
             # A single letter belongs to a run only beside a number or another letter.
-            rest = [t.group(0).lower() for t in tokens[i + 1 :] if t.group(0) not in _PAUSES]
+            rest = []  # the next four tokens that are not pauses
+            for t in tokens[i + 1 : i + 12]:
+                if t.group(0) not in _PAUSES:
+                    rest.append(t.group(0).lower())
+                    if len(rest) == 4:
+                        break
             if rest[:2] == ["as", "in"]:
                 rest = rest[3:]  # "A as in apple, seven ..."
             nxt = rest[0] if rest else ""
@@ -245,8 +265,13 @@ def _runs(text: str) -> list[list[tuple[str, int, int]]]:
             # Lowercase "i" and "a" are also words: "... oh one four two i think".
             # "a nineteen, eighteen and two": the article, not a letter.
             starts = not (run.chars or run.open)
-            if (ahead and not (starts and raw in ("a", "i"))) or (
-                not starts and (raw.isupper() or w not in ("i", "a"))
+            # After a full stop, or as "y"/"e"/"u" ("... 5 7, y mi tarjeta"), a letter
+            # joins only when more of the code follows: "We spoke. I think".
+            prev = tokens[i - 1].group(0) if i else ""
+            weak = not ahead and (prev == "." or w in ("y", "e", "u"))
+            if not weak and (
+                (ahead and not (starts and raw in ("a", "i")))
+                or (not starts and (raw.isupper() or w not in ("i", "a")))
             ):
                 run.letter(w, s, e)
                 joins = 0
@@ -306,6 +331,25 @@ def _classify(s: str) -> Optional[EntityType]:
     return None
 
 
+# A group word right before a short spoken number belongs to the identifier.
+_GROUP_CUE = re.compile(r"(?<![^\W\d_])(?:grupa|grupo|groupe|קבוצה|קבוצת)\s+$", re.IGNORECASE)
+
+# Single digits that count up or down are a list, not an identifier.
+_COUNTING = re.compile(r"0?1234567|7654321|3456789|9876543|2345678|8765432")
+
+def _counting(s: str) -> bool:
+    """True when the digits are a count (up or down) with at most one digit off the run."""
+    if not s.isdigit():
+        return bool(_COUNTING.search(s))
+    best = run = 1
+    for a, b in zip(s, s[1:]):
+        step = int(b) - int(a)
+        run = run + 1 if step in (1, -1) and (run == 1 or step == prev) else 2 if step in (1, -1) else 1
+        prev = step
+        best = max(best, run)
+    return best >= len(s) - 1 and best >= 7 or bool(_COUNTING.fullmatch(s))
+
+
 # Follicle sizes read out are lists of numbers, not identifiers.
 _MEASURES = re.compile(r"follic|ovar|p[ęe]cherzyk|זקיק|\bmm\b|millim|right\s+side|left\s+side", re.IGNORECASE)
 
@@ -320,14 +364,15 @@ _ASKED = [
         r"date\s+de\s+naissance|\bn[ée]e?\s+le\b|fecha\s+de\s+nacimiento|naci[óo]|"
         r"data\s+urodzenia|urodzi|datę\s+urodzenia|תאריך\s+(?:ה)?לידה|נולד", re.IGNORECASE)),
     (EntityType.POSTAL_CODE, re.compile(
-        r"postal\s+code|\bzip\b|code\s+postal|c[óo]digo\s+postal|kod\s+pocztowy|מיקוד", re.IGNORECASE)),
+        r"postal\s+code|\bzip\b|זיפ|code\s+postal|c[óo]digo\s+postal|kod\s+pocztowy|מיקוד", re.IGNORECASE)),
     (EntityType.PHONE, re.compile(
-        r"phone|call\s*back|\bcell\b|reach\s+you|my\s+number|t[ée]l[ée]phone|mon\s+num[ée]ro|"
+        r"phone|call\s*back|\bcell\b|reach\s+(?:you|me)|call\s+me\s+(?:at|on)|my\s+number|t[ée]l[ée]phone|mon\s+num[ée]ro|"
         r"tel[ée]fono|celular|mi\s+n[úu]mero|telefon|kom[óo]rk|טלפון|נייד", re.IGNORECASE)),
     (EntityType.ID, re.compile(
         r"health\s+(?:card\s+)?number|member\s+(?:id|number)|rx\s+number|prescription\s+number|"
         r"social\s+(?:security|insurance)|\bsin\b|\bssn\b|s[ée]curit[ée]\s+sociale|seguro\s+social|"
-        r"\bpesel\b|תעודת\s+זהות|ת\.ז|מספר\s+חבר|account|policy|claim|chart\s+number|\bmrn\b|"
+        r"\bpesel\b|תעודת\s+זהות|ת\.ז|מספר\s+חבר|account|policy|claim|chart\s+number|\bmrn\b|medical\s+record|record\s+number|"
+        r"group\s+(?:number|no\b|id)|\bgrup[ao]\b|\bgroupe\b|קבוצה|"
         r"num[ée]ro\s+de\s+dossier|n[úu]mero\s+de\s+(?:expediente|tarjeta|socio)|numer\s+(?:karty|polisy)", re.IGNORECASE)),
 ]
 _TIME_AFTER = re.compile(r"^\s*(?:a\.?m\b|p\.?m\b|o['’]?clock|h\b|heures?|horas?|godzin)", re.IGNORECASE)
@@ -373,15 +418,32 @@ def _asked(text: str, pos: int) -> Optional[EntityType]:
 def detect(text: str) -> list[Entity]:
     out: list[Entity] = []
     time_end = -1
-    for chars in _runs(text):
+    for chars, spoken, singles, _ in _scan(text):
         line_start = text.rfind("\n", 0, chars[0][1]) + 1
         if _MEASURES.search(text[max(line_start, chars[0][1] - 120) : chars[0][1]]):
             continue
         s = "".join(c for c, _, _ in chars)
         start, end = _span(chars)
+        if not spoken:
+            # Digits read one at a time ("6 5 1 5 5 5 0 1 4 4", "G 7 7 3"): seven or more
+            # are an identifier; a shorter run only after a question that asks for an ID
+            # (not a phone number: "the last four digits" are a part).
+            if singles >= 7:
+                if _counting(s):
+                    continue
+            elif _asked(text, start) is not EntityType.ID or sum(c.isdigit() for c in s) < 3:
+                continue
         if s.isdigit() and (_MONEY_AFTER.match(text[end:]) or _THOUSAND.search(text[start:end])):
             continue  # an amount, not an identifier ("D twenty thousand ..." is a code)
         t = _classify(s)
+        if not spoken and singles < 7 and t is not EntityType.POSTAL_CODE:
+            t = _asked(text, start)
+        elif t in (EntityType.PHONE, EntityType.ID) and s.isdigit():
+            # The cue tells a seven-digit chart number from a local phone number, and a
+            # phone number with a digit lost from one with nine.
+            asked = _asked(text, start)
+            if (len(s) == 7 and asked is EntityType.ID) or (len(s) == 9 and asked is EntityType.PHONE):
+                t = asked
         if t is None:
             digits = sum(c.isdigit() for c in s)
             if not digits:
@@ -405,6 +467,10 @@ def detect(text: str) -> list[Entity]:
                 lead = _DATE_LEAD.search(text[max(line_start, start - 20) : start])
                 if lead:
                     start = max(line_start, start - 20) + lead.start()
+        if t is EntityType.ID:
+            cue = _GROUP_CUE.search(text[max(line_start, start - 14) : start])
+            if cue:
+                start = max(line_start, start - 14) + cue.start()  # "grupa cztery cztery jeden"
         out.append(Entity(t, start, end, text[start:end], "regex"))
     return out
 

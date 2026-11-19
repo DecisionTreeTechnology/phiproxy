@@ -664,3 +664,773 @@ def test_v9_round4():
     assert Masker().mask("The card on file is 5500********0004, please", "s").text == "The card on file is [ACCOUNT_1], please"
     assert Masker().mask("ID: ON 1234 5678 90", "s").text == "ID: [HEALTH_CARD_1]"
     assert Masker().mask("my member id ON 70 4418 21", "s").text == "my member id [HEALTH_CARD_1]"
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("write me: ana [at] example [dot] org ok", T.EMAIL, "ana [at] example [dot] org"),
+        ("mkim [dot] 88 [at] example [dot] net", T.EMAIL, "mkim [dot] 88 [at] example [dot] net"),
+        ("mail marisol_t88(at)example(dot)com please", T.EMAIL, "marisol_t88(at)example(dot)com"),
+        ("it is ximena.tb [at] example.org", T.EMAIL, "ximena.tb [at] example.org"),
+        ("x (at) example . com", T.EMAIL, "x (at) example . com"),
+        ("a punto beltran punto ochenta y ocho arroba example punto com", T.EMAIL,
+         "a punto beltran punto ochenta y ocho arroba example punto com"),
+        ("j dot nguyen at example dot org", T.EMAIL, "j dot nguyen at example dot org"),
+        ("jean point roy arobase example point ca", T.EMAIL, "jean point roy arobase example point ca"),
+        ("jan kropka nowak małpa example kropka pl", T.EMAIL, "jan kropka nowak małpa example kropka pl"),
+        ("insta @thaolee_ttc if you want", T.ID, "@thaolee_ttc"),
+        ("Instagram is @ruiz.baby.hopes too.", T.ID, "@ruiz.baby.hopes"),
+        ("user gwen_larue_77 locked", T.ID, "gwen_larue_77"),
+        ("Username yael.peretz88. Can you reset", T.ID, "yael.peretz88"),
+        ("we will post on amywhitcombe.example.com soon", T.URL, "amywhitcombe.example.com"),
+        ("my blog is jane-doe.com", T.URL, "jane-doe.com"),
+    ],
+)
+def test_v10_email_handle_url(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "meet at 3pm @ 10am",
+        "dose 5 mg @ bedtime, @5pm",
+        "the user logged in. user is locked",
+        "login failed, user 12345 tried",
+        "user session timed out",
+        "please visit the page tomorrow",
+        "call me at (416) 555-0142 at home",
+        "arrive at noon at the clinic",
+    ],
+)
+def test_v10_email_handle_url_lookalikes(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type in (T.EMAIL, T.ID, T.URL)]
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("call me back at 416-555-\n0166 sorry", T.PHONE, "416-555-\n0166"),
+        ("number is 416-\n555-0166 thanks", T.PHONE, "416-\n555-0166"),
+        ("the number is 416 555 0.1.7.2, dots from my keyboard", T.PHONE, "416 555 0.1.7.2"),
+        ("Phone: (763) 555-01xx pt did not finish", T.PHONE, "(763) 555-01xx"),
+        ("[DTMF: 4 1 6 5 5 5 0 1 4 4 #]", T.PHONE, "4 1 6 5 5 5 0 1 4 4"),
+        ("System: enter your medical record number.\n[DTMF: 0 0 7 4 1 2 9 #]", T.ID, "0 0 7 4 1 2 9"),
+        ("el número de miembro: W, 4, 4, 1, 9, 0, 0, 7, 2.", T.ID, "W, 4, 4, 1, 9, 0, 0, 7, 2"),
+        ("member number is Z X 9 1 4 4 4 0 2 7, group", T.ID, "Z X 9 1 4 4 4 0 2 7"),
+        ("Claim number C L M dash 7 7 3 0 2 1 4 4. I spoke to", T.ID, "C L M dash 7 7 3 0 2 1 4 4"),
+        ("And the group number? Paciente: ¿Grupo? uh, G 7 7 3.", T.ID, "G 7 7 3"),
+        ("grupa jest... ee... grupa cztery cztery jeden. Ubezpieczyciel", T.ID, "grupa cztery cztery jeden"),
+        ("קבוצה... אה... קבוצה ארבע ארבע אחת. חברת הביטוח", T.ID, "קבוצה ארבע ארבע אחת"),
+        ("מספר הביטוח הוא W K 3 8 8 1 0 6 5, קבוצה", T.ID, "W K 3 8 8 1 0 6 5"),
+        ("Call me at 612-555-0192, that's six one two, five five five, then zero one nine and the letter L.", T.PHONE,
+         "six one two, five five five, then zero one nine"),
+        ("Farah is F as in Foxtrot A R A H", T.NAME, "F as in Foxtrot A R A H"),
+        ("that's P-R-I-Y-A-N-K-A and R as in Robert, A, M, A, N.", T.NAME, "R as in Robert, A, M, A, N"),
+        ("c comme Charles, l, a, i, r, e.", T.NAME, "c comme Charles, l, a, i, r, e"),
+        ("It is, uh, A-N-A, then underscore", T.NAME, "A-N-A"),
+        ("ת.ז. שלו 312 555 874, לא, טעות, זה שלי. שלו 058 555 761. סורי", T.ID, "058 555 761"),
+        ("ת.ז. 3O5 555 412\nאבחנה", T.ID, "3O5 555 412"),
+        ("מספר זהות: 204-555-119", T.ID, "204-555-119"),
+    ],
+)
+def test_v10_spoken_spaced_identifiers(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Follow-up scheduled 1 2 3 4 5 6 7 weeks, no",
+        "Day 1 2 3 4 5 6 7 of stims",
+        "Counting: 0 1 2 3 4 5 6 7 8 9",
+        "Reply Y 1 2 3 to confirm",
+        "We spoke. I think we should go on Thursday at 5 5",
+        "Trigger at 9 PM, then 2 tablets, 3 times a day, 5 days",
+        "ultrasound showed I-V-F cycle, H-C-G and F-S-H are back",
+        "the group number is 441 and the abc is A-B-C",
+        "ת.ז. ושם: אבא, 12 ילדים, 3 נשים",
+    ],
+)
+def test_v10_spoken_spaced_lookalikes(text):
+    got = [e for e in RegexDetector().detect(text) if e.type in (T.ID, T.NAME, T.PHONE)]
+    assert not got, got
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("I'll be away Mar 3–7 for work", "Mar 3–7"),
+        ("transfer the week of March 16-20, ok", "March 16-20"),
+        ("screening April 6 to 8 at the clinic", "April 6 to 8"),
+        ("ok so DOB 03/xx/1988 and the rest", "03/xx/1988"),
+        ("Fecha de nac.: 09/XX/1991", "09/XX/1991"),
+        ("Attachment: Smith_J_labs_2026-03-14.pdf", "2026-03-14"),
+        ("el mar, 7 abr 2026 a las 9:14", "7 abr 2026"),
+        ("Fecha: lun, 2 mar 2026 18:02", "lun, 2 mar 2026"),
+        ("Nac.: 12-ago-1985", "12-ago-1985"),
+        ("W dniu wt., 12 sty 2026 o 9:14", "12 sty 2026"),
+        ("urodzona 3-go maja 1991.", "3-go maja 1991"),
+        ("SA 12/2025: 4 M/mL, motility 22 pct", "12/2025"),
+        ("She is due in July. She wants to book", "July"),
+        ("I'm due about late October.", "late October"),
+        ("Mi mamá murió el tres de enero de este año, de cáncer", "el tres de enero de este año"),
+        ("Un transfert en mai, est-ce possible", "mai"),
+        ("hay que cancelar desde mayo", "mayo"),
+        ("I am on a trip till 12.12. Thanks", "12.12"),
+        ("the surrogate visit on the primero of June.", "the primero of June"),
+    ],
+)
+def test_v10_date_forms(text, value):
+    assert (T.DATE, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Es date: May the fifth, no sorry, the sixth, nineteen eighty-four.", "May the fifth, no sorry, the sixth, nineteen eighty-four"),
+        ("Y la fecha, es tres, equis equis, mil novecientos ochenta y ocho, no más", "tres, equis equis, mil novecientos ochenta y ocho"),
+        ("Quiero cambiar el, el seis de, no perdón, el siete de abril", "seis"),
+        ("c'est le cinq, non, le six mai, c'est ça?", "cinq"),
+        ("le vingt-deux février. Non, pardon, le vingt-trois.", "vingt-trois"),
+        ("Przyjadę piątego, nie przepraszam, szóstego maja na pobranie", "piątego"),
+        ("to come on the, uh, nineteenth but she can't", "nineteenth"),
+        ("operación en el hospital el 7 de enero", "el 7 de enero"),
+        ("zabieg w ciągu 5 dni, bez maiła", None),
+    ],
+)
+def test_v10_date_spoken_corrections(text, value):
+    if value is None:
+        assert not [e for e in RegexDetector().detect(text) if e.type is T.DATE]
+    else:
+        assert (T.DATE, value) in types_in(text)
+
+
+def test_v10_date_hebrew_prefixed_gematria_day():
+    got = types_in('הניתוח היה בכ"ג בתשרי.')
+    assert (T.DATE, 'כ"ג בתשרי') in got
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "p. 1/3 of the fax",
+        "--- page 2/3 ---",
+        "str. 1/2 wypisu",
+        "עמ' 1/2",
+        "take 1/2 tablet daily and 1/3 cup water",
+        "FSH 18.4, testosterone 290",
+        "AMH 24.3 pmol/L today",
+        "new lot of Menopur, lot 8A331, expiry 2027-04; Gonal-f ok",
+        "NDC 12345-678-90 Lot A4417Z Exp 2027-01",
+        "lote 220481, caducidad 06/2027",
+        "LOT 5K021 DISCARD AFTER 12/2027",
+        "dose 2.5 to 12.5 mg; trip until 12.5 mg",
+    ],
+)
+def test_v10_date_lookalikes(text):
+    got = [e for e in RegexDetector().detect(text) if e.type is T.DATE]
+    assert not got, got
+
+
+def test_v10_date_range_not_time():
+    got = [e.text for e in RegexDetector().detect("open Mar 3 to 7pm, then Mar 3 - 4 mg") if e.type is T.DATE]
+    assert "Mar 3 to 7" not in got and "Mar 3 - 4" not in got, got
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("The court file number is 27-FA-26-4410, thanks", T.ID, "27-FA-26-4410"),
+        ("insurance card nr UB-77/204519, what do I do", T.ACCOUNT, "UB-77/204519"),
+        ("Ua tsaug. Can we get an interpreter? Acct# 88412-07 for the payment plan", T.ACCOUNT, "88412-07"),
+        ("oh too late lol, 4929 5550 0142 0042 exp 08/28", T.ACCOUNT, "4929 5550 0142 0042"),
+        ("Please don't type card numbers here.\nPatient: sorry 4111 2222 3333 4445", T.ACCOUNT, "4111 2222 3333 4445"),
+        ("the card is a Visa **** **** **** 3318.", T.ACCOUNT, "**** **** **** 3318"),
+        ("Mon numéro Santé Manitoba est 123 456 789.", T.HEALTH_CARD, "123 456 789"),
+        ("PHIN 987 654 32l\nDx: azoospermia", T.HEALTH_CARD, "987 654 32l"),
+        ("Can I give just the last 4 of my SSN, 0932? Not the whole thing", T.SSN, "0932"),
+        ("my SSN ends in 4417 only", T.SSN, "4417"),
+        ("mon NAS finit par 417, je donne pas le reste", T.SIN, "417"),
+        ("sperme de donneur D-5513.", T.DONOR_ID, "D-5513"),
+        ("My husband Gerald passed away in January. He was ninety-one.", T.AGE, "ninety-one"),
+        ("for my sister Kiara. Our uncle Walter is 91 and wants to come", T.AGE, "91"),
+        ("pedido de suministros #TF-20933 fue enviado", None, None),
+    ],
+)
+def test_v10_id_account_forms(text, etype, value):
+    found = types_in(text)
+    if etype is None:
+        assert not {f for f in found if f[0] in (T.ID, T.ACCOUNT)}, found
+    else:
+        assert (etype, value) in found, found
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ticket TKT-5521 opened. Quote Q-55810 for tank model CT-300. Part numbers: SEAL-114.",
+        "Order PO-30771 shipped. See SOP-114 v3.2.",
+        "Supply order #TF-48213 has shipped. Reply STOP to opt out.",
+        "Embryo 4AA, 3BB, 3BC. Transfer one.",
+        "embryo 5AB+ was frozen",
+        "Take the last 4 weeks off. Cost 4929 5550 0142 dose",
+        "my husband is 100% on board, wife is 95 kg",
+        "Lot 4929 5550 0142 0042 expires 08/28 (lot of syringes)",
+        "SSN not needed. The sin of omission ended in 2024.",
+        "Room 27-FA 26 4410 is booked",
+    ],
+)
+def test_v10_id_account_lookalikes(text):
+    found = [e for e in RegexDetector().detect(text) if e.type in (T.ID, T.ACCOUNT, T.SSN, T.SIN, T.DONOR_ID, T.AGE, T.HEALTH_CARD)]
+    assert not found, found
+
+
+# --- v10 names, addresses and employers --------------------------------------------------------
+def _masked(text, known=None, **policy):
+    from phiproxy import KnownEntities, Masker, Policy
+
+    m = Masker(policy=Policy(**policy))
+    return m.mask(text, "s", known=KnownEntities(names=known) if known else None).text
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Files: Lopez_M_bloodwork_2026-03-14.pdf", "Lopez_M"),
+        ("see USG_Sobczak_A.pdf", "Sobczak_A"),
+        ("the Vang-Lees are coming", "Vang-Lees"),
+        ("we're the Hendersons and we booked", "Hendersons"),
+        ("somebody at the insurer named Priscilla Dunmore called", "Priscilla Dunmore"),
+        ("we named him Anders yesterday", "Anders"),
+        ("Nickname: Josie", "Josie"),
+        ("everyone calls me Baby", "Baby"),
+        ("soy Concepción (Concha para los amigos)", "Concha"),
+        ("Kuya Bong will pick it up", "Bong"),
+        ("#TeamOkonkwo is almost at transfer", "Okonkwo"),
+        ("between Tessa Marie Holloway (the Donor) and the agency", "Tessa Marie Holloway"),
+    ],
+)
+def test_v10_name_cues(text, value):
+    assert any(value in e.text for e in RegexDetector().detect(text))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Files: Lab_B_results.pdf and Form_A.pdf",
+        "the Rh-Negatives group",
+        "a drug named Menopur was started",
+        "The dog's name is Pierogi",
+        "my dad passed on 10/02/2026",
+        "From: Calendar <calendar@clinic.example.org>",
+        "Reference: Quote Q-55810",
+        "Donor Program Coordinator\nMinnesota Medical Assistance",
+        "Asistente: Versión del portal 4.12.3",
+        "Hola, soy médica, la Dra. Cárdenas",
+        "mi nombre siempre lo escriben mal",
+        "Preferred: Email or phone",
+        "Kuya Jun sa lab will call",
+        "Interpreter: Hmong line, three-way",
+        "תודה, קיבלתי. תודה מראש. תודה רבה, ביי.",
+    ],
+)
+def test_v10_not_names(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type is T.NAME]
+
+
+def test_v10_echoed_names_and_initials():
+    out = _masked("Her name is Halina Kowalczyk. Is Halina able to come? The carrier signed.")
+    assert out.count("[NAME_") == 2 and "Halina" not in out and "carrier" in out
+    out = _masked("calendar: FET - K. Yang, Dec 14. I'm Kou Yang.", known=["Kou Yang"])
+    assert "K." not in out and "Yang" not in out
+    # a clinician, a law firm and a lower-case word stay
+    out = _masked("My name is Marta Brandt. Dr. Brandt will call. Brandt & Pike LLP wrote. The brandt of it.")
+    assert "Dr. Brandt" in out and "Brandt & Pike" in out
+
+
+def test_v10_family_name_with_particles_in_known():
+    out = _masked("Lucía de la Cruz called. Gracias de nada. Ms. de la Cruz agreed.", known=["Lucía de la Cruz"])
+    assert out.count("[NAME_") == 2 and "de nada" in out and "de la Cruz" not in out
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("dos mil cuatrocientos cincuenta y uno de la calle Lake, apartamento tres B, Saint Paul", "apartamento tres B, Saint Paul"),
+        ("ulica Lyndale trzysta dwanaście, mieszkanie cztery", "mieszkanie cztery"),
+        ("ברחוב הרצל 14 דירה 7", "דירה 7"),
+        ("עכשיו במיניאפוליס, ברחוב ליינדייל שלוש מאות שתים עשרה דירה ארבע", "דירה ארבע"),
+        ("j'ai déménagé du Précieux-Sang le mois passé", "Précieux-Sang"),
+        ("4408 Chicago Ave S Apt 2B, Minneapolis", "Ave S Apt 2B, Minneapolis"),
+        ("2240 Maryland Ave E, St. Paul, 55119", "St. Paul"),
+        ("addr1: 1807 Stevens Ave\ncity: Winona\nzip: 55987", "Winona"),
+    ],
+)
+def test_v10_addresses(text, value):
+    assert any(value in e.text for e in RegexDetector().detect(text))
+
+
+def test_v10_addresses_not_over_matched():
+    assert not [e for e in RegexDetector().detect("Call 1200 Wellington Street, Ottawa. Tel 613") if "Tel" in e.text]
+    assert not [e for e in RegexDetector().detect("moved to Menopur 75 and moved from Gonal-f") if e.type is T.ADDRESS]
+    assert not [e for e in RegexDetector().detect("city: unknown") if e.type is T.ADDRESS]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("ya at work till 1 target on lake st", "target on lake st"),
+        ("His wife is Dr. Anita Lee, a paediatrician at Children's North Clinic; they", "Children's North Clinic"),
+        ("my husband works nights at Prairie Cold Storage so", "Prairie Cold Storage"),
+        ("My work, Medtronic Plains Biologics, just added coverage", "Medtronic Plains Biologics"),
+        ("Greta - Teacher, Eden Prairie Montessori", "Eden Prairie Montessori"),
+        ("su empleador, Distribuidora Andina", "Distribuidora Andina"),
+        ("המנהל במפעלי אורן לא משחרר אותי", "מפעלי אורן"),
+        ("אני עובדת בזטה טק", "זטה טק"),
+        ("je perds ma job chez Transcona Foods", "Transcona Foods"),
+    ],
+)
+def test_v10_employers(text, value):
+    assert any(e.type is T.EMPLOYER and value in e.text for e in RegexDetector().detect(text))
+
+
+def test_v10_employers_not_for_vendors():
+    text = "I'm the pharmacist at the Harmon Place Pharmacy. Hi, this is Raj, pharmacist at Crestline Specialty."
+    assert not [e for e in RegexDetector().detect(text) if e.type is T.EMPLOYER]
+
+
+def _v10r1_spans(text, kind):
+    return [e.text for e in RegexDetector().detect(text) if e.type is kind]
+
+
+def test_v10_review1_obfuscated_email_dotted_local():
+    for text, want in [
+        ("my email is sarah.k.test at example dot com", "sarah.k.test at example dot com"),
+        ("email me at jane.doe AT example DOT org", "jane.doe AT example DOT org"),
+        ("email sarah-test AT example DOT net please", "sarah-test AT example DOT net"),
+    ]:
+        assert want in _v10r1_spans(text, T.EMAIL)
+
+
+def test_v10_review1_plain_at_email():
+    assert "sarah.test at example.ca" in _v10r1_spans("email sarah.test at example.ca", T.EMAIL)
+    assert "jane at gmail com" in _v10r1_spans("jane at gmail com", T.EMAIL)
+    assert _v10r1_spans("look at example.com for details", T.EMAIL) == []
+    assert _v10r1_spans("meet me at the clinic org chart", T.EMAIL) == []
+
+
+def test_v10_review1_bracket_email_span_stops_at_domain():
+    assert _v10r1_spans("sarah(at)example.com.\nBye", T.EMAIL) == ["sarah(at)example.com"]
+    assert _v10r1_spans("sarah(at)example.com. Bye now", T.EMAIL) == ["sarah(at)example.com"]
+    assert _v10r1_spans("x (at) example . com", T.EMAIL) == ["x (at) example . com"]
+
+
+def test_v10_review1_bare_handle_after_cue():
+    for text, want in [("ig: jane88doe", "jane88doe"), ("my instagram is jane88doe", "jane88doe"),
+                       ("on tiktok I'm janedoe88", "janedoe88"), ("my snap is janedoe_88", "janedoe_88")]:
+        assert want in _v10r1_spans(text, T.ID)
+    assert _v10r1_spans("my instagram is private", T.ID) == []
+
+
+def test_v10_review1_phone_split_groups():
+    for text in ["my number is 41 65 55 01 23", "my number is 416-555-01 23", "my number is 416 55 50123",
+                 "c'est le 416 55 50 12 3"]:
+        assert _v10r1_spans(text, T.PHONE), text
+    assert _v10r1_spans("my number is 12 34 56", T.PHONE) == []
+
+
+def test_v10_review1_partial_ssn_are():
+    assert _v10r1_spans("last four digits of my social security number are 1234", T.SSN) == ["1234"]
+
+
+def test_v10_review1_hebrew_range_prefix():
+    spans = _v10r1_spans("בין ה-3 ל-7 במרץ", T.DATE)
+    assert "3" in spans
+
+
+def test_v10_review1_spelled_stops_at_newline():
+    assert _v10r1_spans("spell: S A R A H\r\nA: yes", T.NAME) == ["S A R A H"]
+    assert _v10r1_spans("S A R A H\nS. later", T.NAME) == ["S A R A H"]
+
+
+def test_v10_review1_duplicate_spans_and_card_prefix():
+    ents = RegexDetector().detect("OHIP 1234-567-890-AB")
+    assert [(e.type, e.text) for e in ents].count((T.HEALTH_CARD, "1234-567-890-AB")) == 1
+    assert "4111-xxxx-xxxx-1111" in _v10r1_spans("card 4111-xxxx-xxxx-1111", T.ACCOUNT)
+
+
+def test_v10_review1_lab_month_year_not_date():
+    assert _v10r1_spans("AMH 1/2024", T.DATE) == []
+
+
+def test_v10_review2_employer_cue_skips_clause_starter():
+    d = RegexDetector()
+    for t in ("my employer is a school, I'm a teacher", "I work at a school, I’m a teacher",
+              "I work at a clinic, she's a nurse", "my school, we're moving", "I work at a school, I've been there"):
+        assert not [e for e in d.detect(t) if e.type is T.EMPLOYER], t
+    got = [e.text for e in d.detect("I work at Acme Roofing, I'm a nurse") if e.type is T.EMPLOYER]
+    assert got == ["Acme Roofing"]
+
+
+def _v10r2_dates(text):
+    return [e.text for e in RegexDetector().detect(text) if e.type is T.DATE]
+
+
+def test_v10_review2_fraction_filter_needs_word_boundary():
+    for t, want in (
+        ("My appointment is 3/14 of next month", "3/14"),
+        ("She was born 5/12 of last year", "5/12"),
+        ("Can I come in on 3/14 weekend? My surgery is 3/20 weekday", "3/14"),
+        ("Her due date is 11/20 daytime shifts", "11/20"),
+        ("I can do 3/14 hours 10-2", "3/14"),
+    ):
+        assert want in _v10r2_dates(t), t
+    for t in ("take 1/2 tab", "3/4 cup", "1/2 hour", "add 1/2 tsp"):
+        assert _v10r2_dates(t) == [], t
+
+
+def test_v10_review2_lab_cue_does_not_hide_day_first_dates():
+    for t in ("Visit date = 14/03", "result 14/03 was my egg retrieval", "my surgery, total 14/03",
+              "Retrieval ~14/03 or 15/03", "score: 14/03", "result 05/2024"):
+        assert _v10r2_dates(t), t
+    assert len(_v10r2_dates("Retrieval ~14/03 or 15/03")) == 2
+    for t in ("FSH 18.4", "AMH level 13.4", "AMH = 13.4", "AMH 1/2024"):
+        assert _v10r2_dates(t) == [], t
+
+
+def test_v10_review2_product_expiry_only_in_same_clause():
+    for t in ("I have a lot to say. My card expires 05/29.", "Visa exp 09/27, passport exp 2028-09",
+              "kit ordered, health card exp 06/27", "Ref 1234, passport expiry 2027-04",
+              "Lot 33 kit; patient's health card expiry 2027-06", "batch 55, health card valid thru 2026-08"):
+        assert _v10r2_dates(t), t
+    for t in ("lot 5512 exp 08/28", "kit exp 2027-04", "lot 8A331, expiry 2027-04", "Lot 4471B. Exp 08/2027",
+              "Item: kit, lot 24-0713, qty 6, exp 06/2027"):
+        assert _v10r2_dates(t) == [], t
+
+
+def test_v10_review2_ordinal_day_list_covers_suffix():
+    from phiproxy import Masker
+
+    assert Masker().mask("between 3rd and 7th May 2023", "s").text == "between [DATE_1] and [DATE_2]"
+    assert Masker().mask("on 1st and 2nd June", "s").text == "on [DATE_1] and [DATE_2]"
+    assert Masker().mask("March 3rd to 7th", "s").text == "[DATE_1]"
+    assert Masker().mask("the 3rd-7th of March", "s").text == "[DATE_1]"
+
+
+def _mtext(text):
+    from phiproxy import Masker
+
+    return Masker().mask(text, "s").text
+
+
+def test_v10_review2_spoken_nine_digit_id():
+    for t in ("my ID is 0 3 4 5 6 7 8 9 1", "תעודת זהות שלי 0 3 4 5 6 7 8 9 1", "המספר שלי 0 5 2 3 4 5 6 7 8"):
+        assert "[ID_1]" in _mtext(t) and _mtext(t).count("[ID_1]") == 1 and "9" not in _mtext(t), t
+    # a plain count is still a list
+    assert _mtext("count 1 2 3 4 5 6 7 8 9") == "count 1 2 3 4 5 6 7 8 9"
+
+
+def test_v10_review2_handle_after_platform_cue():
+    for t in (
+        "my instagram is janedoe88", "mon instagram c'est janedoe88", "mi instagram es janedoe88",
+        "mój instagram to janedoe88", "האינסטגרם שלי הוא janedoe88", "you can find me on twitter as janedoe_88",
+        "my handle is jane.doe88",
+    ):
+        assert "janedoe" not in _mtext(t) and "jane.doe" not in _mtext(t), t
+    assert _mtext("my instagram is private") == "my instagram is private"
+
+
+def test_v10_review2_partial_national_id():
+    for t in (
+        "last 4 of social: 1234", "last4 of my SSN 1234", "mi seguro social termina en 1234",
+        "mój pesel kończy się na 1234", "my sin ends in 789",
+    ):
+        assert "1234" not in _mtext(t) and "789" not in _mtext(t), t
+    assert ("SIN" in {e.type.value for e in RegexDetector().detect("my sin ends in 789")})
+
+
+def test_v10_review2_health_card_dash_and_spaces():
+    for t in ("health card 1234 dash 567 dash 890 dash AB", "OHIP 1234 - 567 - 890 - AB", "my health card is 1234-567-890-A B"):
+        assert _mtext(t).endswith("[HEALTH_CARD_1]") and "AB" not in _mtext(t) and "A B" not in _mtext(t), t
+
+
+def test_v10_review2_patient_with_doctor_title():
+    assert _mtext("My name is Dr Sarah Cohen") == "My name is Dr [NAME_1]"
+    assert _mtext("I'm Dr. Sarah Cohen, a patient") == "I'm Dr. [NAME_1], a patient"
+    assert _mtext("patient Dr. Sarah Cohen called") == "patient Dr. [NAME_1] called"
+    assert _mtext("I'm Dr. Sarah Cohen and I'm a patient") == "I'm Dr. [NAME_1] and I'm a patient"
+    assert _mtext("Dr Sarah Cohen here, I'm booked tomorrow").startswith("Dr [NAME_1] here")
+    # clinicians stay readable
+    assert _mtext("Dr. Sarah Cohen said to come in") == "Dr. Sarah Cohen said to come in"
+    assert _mtext("I'm Dr. Sarah Cohen, the clinician") == "I'm Dr. Sarah Cohen, the clinician"
+    assert _mtext("Dr Sarah Cohen here, I have a patient waiting") == "Dr Sarah Cohen here, I have a patient waiting"
+
+
+def test_v10_review2_phone_across_crlf():
+    for t in ("my number is 416 555\r\n0123 thanks", "call 416-555\r\n0123 now", "call 416-555-\r\n0123 now"):
+        assert "[PHONE_1]" in _mtext(t) and "0123" not in _mtext(t), t
+
+
+def test_v10_review2_ssn_type_beats_account():
+    types = {e.type for e in __import__("phiproxy").Masker().mask("SSN ends in 1234. ok", "s").entities}
+    assert types == {T.SSN}
+    assert _mtext("SSN ends in 1234. ok") == "SSN ends in [SSN_1]. ok"
+    assert _mtext("SIN ends in 789") == "SIN ends in [SIN_1]"
+
+
+def test_v10_review2_file_initial_follows_surname_on_echo():
+    assert _mtext("Lopez_M_2024.pdf and Lopez_M. Lopez_M, Lopez_M_") == "[NAME_1]_2024.pdf and [NAME_1]. [NAME_1], [NAME_1]_"
+
+
+def test_v10_review2_url_trailing_punctuation_and_duplicates():
+    def urls(t):
+        return [e.text for e in RegexDetector().detect(t) if e.type is T.URL]
+
+    assert urls("my site: www.sarahcohen.ca, ok") == ["www.sarahcohen.ca"]
+    assert urls("visit sarahcohen.com/about. Thanks") == ["sarahcohen.com/about"]
+    assert urls("see https://example.com/a, and https://example.org/b.") == ["https://example.com/a", "https://example.org/b"]
+    assert _mtext("my site: www.sarahcohen.ca, ok") == "my site: [URL_1], ok"
+
+
+def test_v10_review2_spoken_email_spelled_name_as_in_words():
+    assert _mtext("mój mail to ania małpa gmail.com. Dzięki") == "mój mail to [EMAIL_1]. Dzięki"
+    assert _mtext("ania małpa example.org") == "[EMAIL_1]"
+    assert _mtext("c comme Charles o comme Oscar h comme Hotel, merci") == "[NAME_1], merci"
+    out = _mtext("spelled A as in Alpha N as in November A. Then I")
+    assert "November" not in out and "[NAME_1]" in out and "DATE" not in out
+    assert "[DATE" in _mtext("I was born in November")
+
+
+def test_v10_review3_echo_multiword_terms_and_brands():
+    out = _masked("Call me Ann. Ann Arbor is far. Ann said hi. Ann's chart.")
+    assert "Ann Arbor" in out and "[NAME_1] said hi" in out and "[NAME_1]'s chart" in out
+    out = _masked("My name is Pat Johnson. Johnson & Johnson makes it. Johnson's baby powder")
+    assert "Johnson & Johnson" in out and "[NAME_2]'s baby" in out
+    assert "Pfizer vaccine" in _masked("My name is Amy Pfizer. Pfizer vaccine")
+    # the person's own surname after the first name still echoes
+    assert "Ann" not in _masked("Call me Ann Lee. Ann Lee will come.")
+
+
+def test_v10_review3_echo_couples():
+    for tail in ("Sarah and Mark came", "Sarah & Mark came", "Sarah Cohen and Mark are coming", "Ana y Luis"):
+        name = "Ana Ruiz" if tail.startswith("Ana") else "Sarah Cohen"
+        out = _masked(f"my name is {name}. {tail}")
+        assert tail.split()[0] not in out
+    assert "Brandt & Pike" in _masked("My name is Marta Brandt. Brandt & Pike LLP wrote.")
+
+
+def test_v10_review3_echo_case_and_scripts():
+    out = _masked("My name is Sarah Cohen. Sarah's Cohen's. sarah. COHEN. cohen. Cohen,Sarah")
+    assert "Sarah" not in out and "ohen" not in out and "sarah" not in out and "COHEN" not in out
+    out = _masked("My name is Ana Ruiz. ANA called. Thanks ana")
+    assert "ANA" not in out and "ana" not in out
+    out = _masked("my name is שרה כהן. שרה אמרה, כהן")
+    assert "שרה" not in out and "כהן" not in out
+    out = _masked("My name is Marta Brandt. The brandt of it.")
+    assert "brandt of it" in out
+
+
+def test_v10_review3_patient_locality_no_comma_and_newline():
+    allow = ["1420 Nicollet Ave, Suite 310", "Minneapolis", "MN", "55403"]
+    for t in (
+        "55 Oak St\nMinneapolis, MN 55403",
+        "Address:\n55 Oak St\r\nMinneapolis MN 55403",
+        "I live at 55 Oak St Apt 4 Minneapolis MN 55403",
+        "12 Elm Street Minneapolis",
+    ):
+        out = _masked(t, allow=allow)
+        assert "Minneapolis" not in out and "55403" not in out, out
+    out = _masked("Visit us at 1420 Nicollet Ave, Suite 310, Minneapolis, MN 55403", allow=allow)
+    assert "Minneapolis" in out and "55403" in out
+
+
+def test_v10_review3_allow_list_unit_and_city_on_next_line():
+    allow = ["123 Main Avenue, Suite 4, Toronto"]
+    for t in (
+        "Come to 123 Main Avenue\nSuite 4\nToronto",
+        "Come to 123 Main Avenue\r\nSuite 4\r\nToronto",
+        "Come to 123 Main Avenue, Suite 4\r\nToronto",
+        "Come to 123 Main Avenue\r\nSuite 4, Toronto",
+    ):
+        assert _masked(t, allow=allow, staff=["Dr. Smith"]) == t
+    assert "123 Main" not in _masked("Come to 124 Main Avenue\nSuite 4\nToronto", allow=allow)
+
+
+def _r3(text):
+    from phiproxy import Masker
+
+    m = Masker()
+    r = m.mask(text, "r3")
+    assert m.unmask(r.text, "r3") == text
+    return r.text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my email is sarah.cohen [@] example.com",
+        "my email is sarah.cohen {at} example.com",
+        "sarah.cohen @ example.com",
+        "x{dot}y {at} example{dot}org",
+    ],
+)
+def test_v10_review3_obfuscated_email(text):
+    assert "[EMAIL_1]" in _r3(text)
+    assert "sarah" not in _r3(text) and "example" not in _r3(text)
+
+
+def test_v10_review3_spaced_at_is_not_an_email_without_domain():
+    assert _r3("meet @ 5pm at home.com") == "meet @ 5pm at home.com"
+    assert _r3("see you @ clinic.ca tomorrow") == "see you @ clinic.ca tomorrow"
+
+
+@pytest.mark.parametrize(
+    "text,left",
+    [
+        ("my instagram handle is janedoe88", "janedoe88"),
+        ("IG handle: sarah88", "sarah88"),
+        ("my tiktok handle is sarah88", "sarah88"),
+        ("ig @ jane88doe", "jane88doe"),
+        ("my instagram name is sarah88", "88"),
+    ],
+)
+def test_v10_review3_handle_after_cue_word(text, left):
+    out = _r3(text)
+    assert left not in out and "[ID_1]" in out
+
+
+def test_v10_review3_plain_words_after_platform_cue_stay():
+    assert _r3("my instagram handle is private") == "my instagram handle is private"
+
+
+@pytest.mark.parametrize(
+    "text,tag",
+    [
+        ("last 4 ssn: 1234", "[SSN_1]"),
+        ("last 4 ssn 1234", "[SSN_1]"),
+        ("the last 4 digits ssn 5678", "[SSN_1]"),
+        ("last four of my sin is 1234", "[SIN_1]"),
+    ],
+)
+def test_v10_review3_partial_ssn_cue_order(text, tag):
+    out = _r3(text)
+    assert tag in out and "1234" not in out and "5678" not in out
+
+
+def test_v10_review3_partial_ssn_still_ignores_plain_sins():
+    assert _r3("the last 4 sins 1234") == "the last 4 sins 1234"
+
+
+@pytest.mark.parametrize(
+    "text,gone",
+    [
+        ("se escribe S de Sara A R A H", ["Sara", "S de"]),
+        ("my name is S. A. R. A. H.", ["S. A"]),
+        ("spell it S. A. R. A. H. thanks", ["S. A"]),
+        ("sara cohen arroba gmail punto com", ["sara", "cohen"]),
+        ("my email is sarah cohen at gmail dot com", ["sarah", "cohen"]),
+        ("sara cohen arroba gmail.com", ["sara", "cohen"]),
+    ],
+)
+def test_v10_review3_spoken_and_spelled_names(text, gone):
+    out = _r3(text)
+    assert not any(g in out for g in gone), out
+
+
+def test_v10_review3_spoken_email_keeps_lead_in_words():
+    assert _r3("my email is sarah at gmail dot com").startswith("my email is [EMAIL")
+    assert _r3("it is U.S.A.") == "it is U.S.A."
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["ת.ז. 03456789-1", "תעודת זהות 034-567-891", "ת.ז 034 567 891", "ת.ז. 034567891"],
+)
+def test_v10_review3_hebrew_id_layouts(text):
+    out = _r3(text)
+    assert out.endswith("[ID_1]") and not any(c.isdigit() for c in out.replace("_1]", ""))
+
+
+@pytest.mark.parametrize(
+    "text,kept",
+    [
+        ("call 416 555\r\n0123 Dr. Smith. Thanks", "Dr. Smith"),
+        ("my number is 4 1 6 5 5 5 0 1 2 3 Dr. Smith", "Dr. Smith"),
+        ("call 416-555-0123 Dr. Smith will call", "Dr. Smith"),
+    ],
+)
+def test_v10_review3_title_dr_is_not_drive(text, kept):
+    ents = RegexDetector().detect(text)
+    assert not any(e.type is T.ADDRESS for e in ents)
+    assert all("Dr" not in e.text for e in ents)
+    assert kept in _r3(text)
+
+
+def test_v10_review3_drive_still_an_address():
+    assert any(e.type is T.ADDRESS for e in RegexDetector().detect("I live at 22 Pine Ridge Dr, Whitby"))
+    assert any(e.type is T.ADDRESS for e in RegexDetector().detect("55 Oak Dr."))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "תעודת זהות: ‎034‎-567-891",
+        "phone 416‎-555-0123",
+        "כתובת מייל: sarah‏(at)example.com",
+        "נולדתי ב-3 בְּמַרְץ 1990",
+        "שמי שָׂרָה כֹּהֵן.",
+        "call 4 1 6​ 5 5 5 0 1 2 3",
+        "DOB 1990-05​-03",
+        "sar­ah@example.com",
+    ],
+)
+def test_v10_review3_invisible_characters(text):
+    out = _r3(text)
+    assert not any(c.isdigit() for c in out.replace("_1]", "")), out
+    assert "sarah" not in out and "שרה" not in out and "מרץ" not in out
+
+
+def test_v10_review3_invisible_offsets_exact():
+    text = "a‎ phone 416‎-555-0123 ‏ end"
+    (e,) = [e for e in RegexDetector().detect(text) if e.type is T.PHONE]
+    assert text[e.start : e.end] == e.text == "416‎-555-0123"
+    plain = "no marks here 416-555-0123"
+    (p,) = RegexDetector().detect(plain)
+    assert plain[p.start : p.end] == "416-555-0123"
+
+
+def test_v10_review4_product_expiry_needs_product_subject():
+    from phiproxy import Masker
+    m = Masker()
+    for t in ("My prior authorization for Lupron expires 05/29", "Her referral for Menopur expires 05/29",
+              "coverage for Gonal-f pen expires 05/29", "My prescription for letrozole expires 05/29"):
+        assert "05/29" not in m.mask(t, "s").text, t
+    for t in ("pen expires 03/2027", "Gonal-f exp 03/2027", "vial expiry: 03/2027", "Expiry: 03/2027 on the vial"):
+        assert "[DATE_" not in m.mask(t, "s").text, t
+
+
+def test_v10_review4_filename_initial_needs_surname():
+    from phiproxy import Masker
+    for t in ("Protocol_B.pdf", "Policy_Annex_A.docx", "Instructions_Part_A.pdf", "Pre_Op_Instructions_D.pdf",
+              "Medication_List_J.pdf", "Thyroid_Panel_K.pdf", "Egg_Freezing_Guide_V2.pdf", "Semen_Analysis_Guide_Rev_B.pdf"):
+        assert Masker().mask(t, "s").text == t, t
+    assert "Lopez" not in Masker().mask("Lopez_M_labs.pdf", "s").text
+    assert "Okafor" not in Masker().mask("Report_Okafor_J.pdf", "s").text
+
+
+def test_v10_review4_month_year_not_after_billing_cues():
+    from phiproxy import Masker
+    for t in ("Invoice 12/2024", "Billing period 11/2024 to 12/2024", "Last updated 11/2024", "Version 03/2025",
+              "Consent form rev 05/2023", "Offer valid until 01/2025", "Clinic stats for Q3/2024", "Newsletter 2024-11"):
+        assert Masker().mask(t, "s").text == t, t
+    for t in ("born 03/1990", "LMP 12/2025", "surgery in 06/2023"):
+        assert "[DATE_" in Masker().mask(t, "s").text, t
+
+
+def test_v10_review4_unicode_spaces_in_name_cues():
+    from phiproxy import Masker
+    for t in ("My name is Sarah Cohen.", "My name is Sarah Cohen.", "My name is Sarah Cohen."):
+        out = Masker().mask(t, "s").text
+        assert "Cohen" not in out and "Sarah" not in out, (t, out)

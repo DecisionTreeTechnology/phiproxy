@@ -25,12 +25,13 @@ def merge_entities(entities: Iterable[Entity]) -> list[Entity]:
 
     Overlaps are resolved by (span length, source priority, score): the longer
     span wins (an email beats a first name found inside it); on equal length the
-    more trustworthy source wins. If a loser extends past the winner, the winner
+    more trustworthy source wins; on a tie of both, any specific type beats the
+    generic ACCOUNT (an "SSN ends in 1234" span stays SSN). If a loser extends past the winner, the winner
     is widened to the union so no character of the loser leaks.
     """
     ordered = sorted(
         entities,
-        key=lambda e: (e.length, SOURCE_PRIORITY.get(e.source, 0), e.score),
+        key=lambda e: (e.length, SOURCE_PRIORITY.get(e.source, 0), e.type.value != "ACCOUNT", e.score),
         reverse=True,
     )
     kept: list[Entity] = []

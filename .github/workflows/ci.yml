@@ -41,6 +41,8 @@ jobs:
         run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v8.jsonl --config regex+known --min-recall 0.90
       - name: Blind benchmark v9 (regex+known must stay at or above 90% recall)
         run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v9.jsonl --config regex+known --min-recall 0.90
+      - name: Blind benchmark v10 (regex+known must stay at or above 90% recall)
+        run: python benchmark/score.py --data benchmark/data/patient_comms_blind_v10.jsonl --config regex+known --min-recall 0.90
 
   e2e:
     runs-on: ubuntu-latest

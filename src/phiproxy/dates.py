@@ -126,3 +126,21 @@ def shift_date_text(text: str, days: int, day_first: bool = False) -> Optional[s
     except ValueError:  # e.g. 2/30
         return None
     return None
+
+
+# A numeric pair after a card-expiry or a pain-score word is not a calendar date ("exp 03/25",
+# "pain 5/10"). Such a span is still masked, but as a token: shifting it would rewrite a
+# month/year or a score into an invented day.
+_NOT_A_DATE_BEFORE = re.compile(
+    r"(?i:\b(?:exp(?:iry|ires|ired|iration|\.)?|valid\s+(?:thru|until|through)|pain|score|scale|rating|rated|severity|intensity)\b)"
+    r"[^\n\d]{0,20}$"
+)
+
+
+def is_non_date_context(text: str, start: int, end: int) -> bool:
+    """True if ``text[start:end]`` is a bare numeric pair that follows an expiry or score word."""
+    span = text[start:end]
+    m = _NUMERIC.match(span)
+    if m is None or (m["y"] and len(m["y"]) == 4):
+        return False
+    return bool(_NOT_A_DATE_BEFORE.search(text[max(0, start - 40) : start]))

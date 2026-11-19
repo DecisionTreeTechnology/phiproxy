@@ -68,3 +68,27 @@ PLACE_RE = re.compile(
     + "|".join(sorted((p.strip() for p in PLACES.replace("\n", "").split("|") if p.strip()), key=len, reverse=True))
     + r")(?![א-ת])"
 )
+
+
+# Israeli ID (teudat zehut): nine digits, often written in three groups, after its name.
+_ID_CUE = re.compile(
+    r"(?<![֐-׿])(?:ת[.״\"']?\s?ז\b\.?|תעודת[ \-]זהות|מספר[ \t]+זהות|teudat\s+zehut|israeli\s+id)", re.IGNORECASE
+)
+# Nine digits in groups of three, or eight digits, a hyphen or space and the check digit.
+_ID9 = re.compile(
+    r"(?<![\d\-.])(?:(?=[\dO]{3}[ \-]?[\dO]{3}[ \-]?[\dO]{3}(?![\d\-]))(?:[\dO][ \-]?){8}[\dO]"
+    r"|[\dO]{8}[ \-][\dO])(?![\d\-])"
+)
+
+
+def israeli_ids(text: str) -> list[tuple[int, int]]:
+    """Nine-digit numbers after an ID cue on the same line, also a second one after a
+    correction ("ת.ז. שלו 312 555 874, לא, טעות, זה שלי. שלו 058 555 761")."""
+    out = []
+    for cue in _ID_CUE.finditer(text):
+        end = text.find("\n", cue.end())
+        region_end = min(len(text) if end < 0 else end, cue.end() + 100)
+        for m in _ID9.finditer(text, cue.end(), region_end):
+            if sum(c.isdigit() for c in m.group(0)) >= 6:
+                out.append(m.span())
+    return out
