@@ -31,6 +31,17 @@ COMMON_WORD_NAMES = {
     "precious", "blessing", "destiny", "harmony", "patience", "charity", "mercy", "noble", "royal",
 }
 
+# Particles inside a surname ("Lucía de la Cruz", "Jan van der Berg"): they match as part of
+# the full name, never alone (a lone "de" is the Spanish word).
+NAME_PARTICLES = {
+    "de", "del", "della", "di", "da", "du", "des", "la", "le", "los", "las", "van", "von",
+    "der", "den", "ter", "ten", "dos", "das", "do", "bin", "ibn", "el",
+}
+
+# True particles: a middle one is matched alone only when it is capitalised in the text
+# ("Van called" for "Nguyen Van Anh", a given name); the lowercase word is the ordinary word.
+_LOWER_PARTICLES = frozenset("de la del van von der da di du le bin ibn al".split())
+
 _MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June", "July", "August",
     "September", "October", "November", "December",
@@ -201,6 +212,8 @@ class KnownEntityDetector:
     def _names(self, text: str, names: Iterable[str]) -> list[Entity]:
         out: list[Entity] = []
         tokens: dict[str, str] = {}  # lowercase -> spelling from the record
+        mid_only: set[str] = set()  # tokens that are only a middle particle of a record name
+        outer: set[str] = set()
         for full in names:
             full = full.strip()
             if not full:
@@ -209,9 +222,16 @@ class KnownEntityDetector:
             parts = full.split()
             pat = r"\b" + r"\s+".join(re.escape(p) for p in parts) + r"\b"
             out += self._find(text, pat, EntityType.NAME, re.IGNORECASE, canonical=" ".join(parts))
-            for p in [*re.split(r"[\s\-]+", full), *re.findall(r"\w+-\w+", full)]:
+            pieces = re.split(r"[\s\-]+", full)
+            for i, p in enumerate([*pieces, *re.findall(r"\w+-\w+", full)]):
                 p = p.strip(".,'")
                 # Short Hebrew name parts are also words: בן (son), בת, טל (dew), גל (wave).
+                # Only a particle in the middle of the name is left out ("de", "la" in "Lucía de la
+                # Cruz"); a first or last part ("Das", "Van", "Le") is a name on its own.
+                if i >= len(pieces) or not (p.lower() in NAME_PARTICLES and 0 < i < len(pieces) - 1):
+                    outer.add(p.lower())
+                elif p.lower() in _LOWER_PARTICLES:
+                    mid_only.add(p.lower())
                 if len(p) >= 2 and not (_HEBREW.search(p) and len(p) <= 2 and p != full):
                     tokens.setdefault(p.lower(), p)
                     # The same name in the other script: "Noa" <-> "נועה".
@@ -251,6 +271,18 @@ class KnownEntityDetector:
                 continue
             if lw in COMMON_WORD_NAMES and not word[0].isupper():
                 continue
+            if lw in mid_only and lw not in outer and word == lw:
+                continue  # a lowercase middle particle is the ordinary word
             start = wstart + lead
+            # The particles in front of a surname belong to it: "de la Cruz", "El Amrani".
+            first = start
+            while True:
+                prev = re.search(r"([^\W\d_]+)[ \t]+$", text[max(0, first - 12) : first])
+                if not prev or prev.group(1).lower() not in NAME_PARTICLES:
+                    break
+                first -= len(prev.group(0))
+            if first != start:
+                out.append(Entity(EntityType.NAME, first, start + len(word), text[first : start + len(word)], self.name))
+                continue
             out.append(Entity(EntityType.NAME, start, start + len(word), word, self.name, canonical=match or None))
         return out
