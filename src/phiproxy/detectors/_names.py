@@ -75,17 +75,38 @@ STOP_WORDS = frozenset(
     passed died dead away deceased lives lived works worked moved left stays stayed
     siempre nunca también se médica médico medica enfermera enfermero asistente paciente
     zawsze nigdy też już
+    hard easy difficult impossible ready busy correct important possible
+    fait hecho oraz lub albo czyli
     """.split()
+)
+# Words added to STOP_WORDS late: ordinary words that are also rare surnames. A courtesy title or an
+# explicit name cue right before a capitalized one ("Mrs. Hard", "My last name is Hard") is stronger evidence.
+_LATE_STOP = frozenset("hard easy difficult impossible ready busy correct important possible fait hecho oraz lub albo czyli".split())
+_TITLE_CUE_BEFORE = re.compile(
+    r"(?i:\b(?:mr|mrs|ms|miss|mx|mme|mlle|sr|sra|srta|pan|pani|pana|panu|panie|se[ñn]or(?:a|ita)?|do[ñn]a|madame|monsieur)\b)\.?[ \t]*$"
+)
+_NAME_CUE_BEFORE = re.compile(
+    r"(?i:\b(?:mr|mrs|ms|miss|mx|mme|mlle|sr|sra|srta|pan|pani|pana|panu|panie|se[ñn]or(?:a|ita)?|do[ñn]a|madame|monsieur|"
+    r"(?:(?:last|first|full|sur|family)[ \t]+)?name(?:[ \t]+(?:is|was))?|surname(?:[ \t]+(?:is|was))?|patient|pt|apellido(?:[ \t]+es)?|nombre(?:[ \t]+es)?|nazwisko(?:[ \t]+to)?|"
+    r"imi[eę]|nom(?:[ \t]+de[ \t]+famille)?|je[ \t]+m['’]appelle|me[ \t]+llamo|this[ \t]+is|it['’]?s|i[ \t]+am|i['’]m|soy|nazywam[ \t]+si[eę]|mon[ \t]+nom[ \t]+est)\b)"
+    r"\.?[ \t]*[:,\-]?[ \t]*$"
 )
 _HE_STOP = frozenset(
     """
     אני אתה את הוא היא אנחנו הם הן זה זאת זו של עם על אל לא כן שלום היי תודה בעלה אשתו
     בעלי אשתי מתקשר מתקשרת רוצה רציתי יש אין גם רק מה מי איך למה כי אבל או אם עוד כבר
     היום מחר אתמול בבקשה ילידת יליד תאריך לידה טלפון מספר מבקשת מבקש מדבר מדברת רבה
-    בוקר טוב ערב מהמרפאה מטופלת מטופל שם משפחה פרטי ד״ר ד"ר לד״ר לד"ר דר גב׳ גב' לך לכם
+    קידומת אחר כך ואז אז שוב בוקר טוב ערב מהמרפאה מטופלת מטופל שם משפחה פרטי ד״ר ד"ר לד״ר לד"ר דר גב׳ גב' לך לכם
     שלי שלה שלו שלנו שלכם שלהם קיבלתי קיבלנו מראש ביי להתראות בסדר סבבה אוקיי אוקי סליחה
     """.split()
 )
+
+
+def _late_stop_cued(m: re.Match[str]) -> bool:
+    before = m.string[max(0, m.start("name") - 30) : m.start("name")]
+    if _TITLE_CUE_BEFORE.search(before):
+        return True
+    return m.group("name")[:1].isupper() and bool(_NAME_CUE_BEFORE.search(before))
 
 
 def _alt(words) -> str:
@@ -94,6 +115,8 @@ def _alt(words) -> str:
 
 _NOT_STOP = rf"(?!(?:{_alt(STOP_WORDS)}){_END})"
 _LWORD = rf"{_NOT_STOP}[{_LO}][{_LO}'’]*(?:-[{_LO}]+)*{_END}"
+# After a courtesy title the late stop words still name a person: "mrs hard called".
+_LWORD_TITLED = rf"(?!(?:{_alt(STOP_WORDS - _LATE_STOP)}){_END})[{_LO}][{_LO}'’]*(?:-[{_LO}]+)*{_END}"
 # Lowercase name, up to three words: "jess", "chen wei", "leah cohen katz".
 LOWER_NAME = rf"{_LWORD}(?:{_SP}{_LWORD}){{0,2}}"
 _HWORD = rf"(?!(?:{_alt(_HE_STOP)})(?![{_HE}]))[{_HE}][{_HE}'׳״\"]*"
@@ -403,7 +426,9 @@ def make_checks(not_names: frozenset[str] | set[str]):
         first = _first(m)
         if not first:
             return False
-        if first in blocked:
+        if first in _LATE_STOP and _late_stop_cued(m):
+            pass  # "Mrs. Hard", "My last name is Hard": the cue outweighs the ordinary word
+        elif first in blocked:
             # A newly blocked first word ("Se Park", "Hindi Patel") after a strong cue: drop only that word's
             # veto when a capitalized, unblocked surname follows, and mask the whole name.
             rest = [w for w in re.findall(r"[^\W\d_]+(?:['’][^\W\d_]+)?", m.group("name"))]
@@ -657,22 +682,52 @@ def rules(
     ]
 
 
+_MISS_VERB_BEFORE = re.compile(
+    r"(?i:\b(?:i|we|you|they|to|will|would|can|can['’]?t|don['’]?t|didn['’]?t|did|do|might|not|always|really|still|also|just|never|"
+    r"so|much|please|and|ll|'ll|’ll|'d|’d|may|could|should|shall|must|he|she)[ \t]+)$"
+)
+
+
+# After "to/and/so much/please" the word "miss" is a title when a surname-like word follows; the verb
+# reading wins only when what follows is clearly not a name.
+_MISS_AMBIG_BEFORE = re.compile(r"(?i:\b(?:to|and|so|much|please)[ \t]+)$")
+_MISS_NOT_NAME_AFTER = frozenset(
+    """the my your his her our their its a an it you him them us me this that these those out on in at for with from
+    work school class classes appointment appointments period periods dose doses shot shots call calls any some more
+    all one another each every home flight bus train meeting meetings visit visits deadline days time
+    text texts message messages email it's no not too so very much many anything something everything someone
+    again about because but if when while as of off up""".split()
+)
+
+
 def courtesy_rules(
     not_names: frozenset[str] | set[str],
 ) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
     """Courtesy titles name patients and relatives, not clinicians."""
     check, *_ = make_checks(not_names)
+
+    def check_miss(m: re.Match[str]) -> bool:
+        # "I miss texts", "we'll miss you": the verb, not the title.
+        if m.group(0).lower().startswith("miss"):
+            before = m.string[max(0, m.start() - 14) : m.start()]
+            # Even after a verb cue ("did not miss garcia") a surname-like word is kept masked; the
+            # verb reading wins only when what follows is clearly not a name.
+            if _MISS_VERB_BEFORE.search(before) and m.group("name").lower() in _MISS_NOT_NAME_AFTER:
+                return False
+        return check(m)
+
     # Courtesy titles and military ranks (a service member is a private person).
     titles = (
-        r"Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Me|Sr|Sra|Srta|Pan|Pani|Panią|Panu|"
+        r"Mr|Mrs|Ms|Miss|Mx|Mme|Mlle|Me|Sr|Sra|Srta|Pan|Pani|Panią|Panu|[Ss]e[ñn]or(?:a|ita)?|[Dd]o[ñn]a|Madame|Monsieur|"
         # "Col." is a Mexican neighbourhood (colonia) and "Cabo" a place, so they are left out;
         # "Cap." and "Maj." need their dot.
         r"Capt|Cap(?=\.)|Sgt|SSgt|SFC|Lt|LTC|Cpl|CPL|Maj(?=\.)|Pvt|PFC|Spc|SPC|Sgto|Teniente|Sargento|Capit[aá]n"
     )
     return [
-        (rf"\b(?:{titles})\.?\s+(?P<name>{NAME})", 0, check),
+        # "Señora Doctora Lee", "Madame la Docteure Roy": a clinician, not a courtesy-titled patient.
+        (rf"\b(?:{titles})\.?\s+(?!(?i:doctora?|docteure?|doktor|dra?\.?|dre?\.?|la\s+docteure?|lekarz)\b)(?P<name>{NAME})", 0, check),
         # Transcripts: "a mrs ostrowski".
-        (rf"\b(?:mr|mrs|ms|miss)\.?\s+(?P<name>{_LWORD})", 0, check),
+        (rf"\b(?:mr|mrs|ms|miss)\.?\s+(?P<name>{_LWORD_TITLED})", 0, check_miss),
     ]
 
 
@@ -681,7 +736,7 @@ SPELLED = (
     # "K as in kilo O W A L C H U K", "H A, N G U Y E N"
     # The key word may be capitalised ("F as in Foxtrot") or French ("c comme Charles").
     rf"(?<![\w\-'’])[A-Za-z{_UP}{_LO}](?:[^\S\n]+(?:as[^\S\n]+in|comme|como|for|de)[^\S\n]+[A-Za-z{_UP}{_LO}]+)?"
-    rf"(?:(?:[^\S\n]+|-|,[^\S\n]*)(?:hyphen[^\S\n]+|dash[^\S\n]+)?[A-Za-z{_UP}{_LO}](?:[^\S\n]+(?:as[^\S\n]+in|comme|como|for|de)[^\S\n]+[A-Za-z{_UP}{_LO}]+)?){{3,}}(?![\w\-])|"
+    rf"(?:(?:[^\S\n]+|-|,[^\S\n]*(?![yY][^\S\n]+[^\W\d_]{{2}}))(?:hyphen[^\S\n]+|dash[^\S\n]+)?[A-Za-z{_UP}{_LO}](?:[^\S\n]+(?:as[^\S\n]+in|comme|como|for|de)[^\S\n]+[A-Za-z{_UP}{_LO}]+)?){{3,}}(?<!,[A-Za-z{_UP}{_LO}][^\S\n][yY])(?<!,[^\S\n][A-Za-z{_UP}{_LO}][^\S\n][yY])(?![\w\-])|"
     rf"(?<![\w\-])[{_HE}](?:-[{_HE}]){{3,}}(?![\w\-])|"
     rf"(?<![\w\-])[{_HE}](?:[ ][{_HE}]){{3,}}(?![\w\-])"
 )
@@ -731,3 +786,199 @@ def hebrew_names(text: str) -> list[tuple[int, int]]:
                 if g in pat.groupindex and m.group(g):
                     out.append(m.span(g))
     return out
+
+
+# Abbreviations a clinic writes in capitals: never a patient's initials.
+CLINICAL_ABBREVIATIONS = frozenset(
+    """
+    FET IVF ICSI IUI IUD ET ER OHSS HSG AMH PGT PGTA PGTM PGTSR LMP US UK EU UAE USA OB OBGYN GYN RN NP MD DO PA PT OT
+    MA CNA LPN RM DOB MRN HCG BHCG E2 P4 LH FSH TSH DHEA BMI BP HR IM IV SC PO PRN BID TID QD QID HX DX TX RX FU PCP GP
+    ED OR PACU NPO NICU AM PM TV TVUS NST CBC CT MRI IVM OI STI HIV HPV UTI PCOS AFC FMLA ID OHIP RAMQ SMS PHI DM HTN
+    FIV PMA AMP DPI TEC IIU IAC DPN RE FW FWD AW TR RV ASAP FYI TBD NA NB PS CC BCC OK IT HR AI AIH COVID PRP ERA NIPT PGS DNA RNA ICU OTC FDA CVS
+    CMV PCR DVT GBS BV SA AFP HCV HBV VTE ASA IBS BRCA CF SMA MTHFR APS NK MFI TTC DOR POI TESE MESA PESA ART SET DET ASRM CDC WHO NHS USG EKG ECG ENT PCO STD OHS EMR EHR IMG
+    TB PGD PRL HSV POF TVS OCP SIS SHG PIO QHS STAT ETA ACK
+    HRT LOR TESA IMSI PICSI EMMA ALICE LPD LUF POR BFP BFN DPO
+    MII OPU ICM LPS NGS AZF DFI TNF APA PAI SIN SSN NAS
+    LDN VTO AUB PPI MTX SOB LBP DUB IBD BCP PMS PMH HPI EPT TFMR ZIFT GIFT OCD LAH HTN PTSD GAD MDD ADHD
+    IMC DDR FUM CCA ATCD SOPK FCS GEU IVG IMG HTA RCIU TRA RHA OMS
+    FAI HLA PTO DPT YOB LOS
+    VMX NSR NKA IGF CCT COC REI DOS DOT EOB EOP PMD LOA WFL ROM ROS PSH EDC PIH AFI BPP FHT LIS MSP TRT SSG PET CVA TIA HLD CAD PAD BPD OSA WHR LDH ALT AST ALP GGT BUN
+    WNL TBA NAD LDL HDL SLE CKD COS SAB POC DNR AMA LWBS BMP CMP UPT HPT TAB EAB DNC LLQ RLQ RUQ LUQ MFM SCH IUP TWW LBR
+    EF LV LVEF EDD CRL FHR RPL RIF COPD CHF AFIB EEG EMG CXR LFT LFTS CRP ESR INR PTT HGB WBC RBC GFR EGFR A1C HBA1C OGTT GTT GDM SVT TSI TPO SHBG PSA CA125 OPK BBT FT3 FT4 T3 T4 DHT
+    """.split()
+)
+# Two-letter clinic abbreviations that are also common initials ("DE" donor egg, "DI" donor insemination,
+# "CD" cycle day): not initials only when a clinical noun follows ("patient DE cycle"); otherwise masked.
+AMBIGUOUS_ABBREVIATIONS = frozenset("DE DI DC CD TI FP LP GS YS HA HH AF NT BT TE PN GV MI ANA PE NO UA AH PB SM CP RF GI MC MS UC RA SO VM LM NS ZP SQ PR PV FH SH FM DS GC SI YI NG GA TA NR".split())
+# Embryology / ultrasound / lab abbreviations that are also initials: a clinical number or noun must follow.
+_AMBIG_COUNT_NEXT = frozenset("AF NT BT TE PN GV MI".split())
+_AMBIG_NEW = _AMBIG_COUNT_NEXT | {"ANA", "PE", "NO", "UA", "AH", "PB", "SM", "GS"}
+_AMBIG_CLINICAL_NEXT = re.compile(
+    r"[ \t]+(?i:cycles?|transfers?|retrievals?|donors?|eggs?|embryos?|sperm|insemination|protocol|iui|ivf|fet|icsi|day|scan|labs?|"
+    r"flares?|relapse|diagnosis|dx|history|hx|meds?|medications?|treatment|on[ \t]+\w+(?:ate|ine|ide|one|mab|cin)|with[ \t]+[A-Z]{2,}|"
+    r"grade|bleeding|full|results?|thickness|level|levels|count|score|normal|abnormal|positive|negative|pos|neg|scheduled|"
+    r"at[ \t]+\d+|\d+(?:[.,]\d+)?(?:[ \t]*(?:mm|cm|ml|%|weeks?|wks?|w|d|days?|u/l|iu))?)(?![\w])|[ \t]*[+\-](?![\w])"
+)
+_AMBIG_CLINICAL_NEXT_EXTRA = re.compile(
+    r"[ \t]+(?i:oocytes?|follicles?|count|measurements?|translucency|screen(?:ing)?|biops(?:y|ies)|blastocysts?|titers?|panel|tests?|results?|positive|negative|show|shows|seen|pain|referral|normal|exam|bleeding|stable|culture|cultures|sac|dip|biopsy)\b"
+)
+_AMBIG_NUM_NEXT = re.compile(r"[ \t]+\d")
+# US state and Canadian province codes: not initials after "re:" ("Re: NY trip"); after "pt"/"patient" they stay.
+PLACE_CODES = frozenset(
+    """AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI
+    SC SD TN TX UT VT VA WA WV WI WY DC AB BC MB NB NL NS NT NU ON PE QC PQ SK YT""".split()
+)
+_ABBR_ALT = "|".join(sorted(CLINICAL_ABBREVIATIONS, key=len, reverse=True))
+_NOT_ABBR = rf"(?!(?:{_ABBR_ALT})(?![\w]))"
+_INITIALS_TAIL = r"(?![\w\-])(?!['’](?!s\b))(?!\.[A-Za-z0-9])"
+# Patient cues for initials: "pt KJ", "patient: A.B.", "re: AB", "Mrs. O".
+_PT_CUE = (
+    r"(?i:\b(?:pts?|patient|patiente|paciente|pacjent(?:ka|ki|a|owi)?|inicja[łl]y(?:[ \t]+pacjent(?:ka|ki|a))?|re|mrs?|ms|miss|mme|mlle|sra|srta|pani)(?![\w]))"
+)
+_TITLE_CUE = r"(?i:\b(?:mr|mrs|ms|miss|mx|mme|mlle|sra|srta|sr|pani|pan)\b)"
+# Clinical nouns that take a patient: "AB's FET", "FET de AB", "AMH de HG".
+_CLIN_NOUN = (
+    rf"{_ABBR_ALT}|cycle|retrieval|transfer|consent|labs?|results?|beta|chart|appt|appointment|file|embryos?|scan|"
+    rf"ultrasound|bloodwork|protocol|lining|trigger|stims?|ciclo|punci[óo]n|transferencia|endometrio|ecograf[íi]a|"
+    rf"protocolo|caso|resultados|an[áa]lisis|dossier|r[ée]sultats|dossier|wyniki|cykl"
+)
+_HANGUL = "\uac00-\ud7a3"
+_KO_CUE = (
+    r"(?i:\b(?:emergency\s+contact|contact|name|spouse|husband|wife|partner|mother|father|guardian|"
+    r"next\s+of\s+kin|caregiver|interpreter|parent)\b)|이름|성함|남편|아내|배우자|보호자|어머니|아버지|연락처"
+)
+
+
+_KO_NOT_NAMES = frozenset(
+    "생년월일 전화번호 주소 이메일 이름 성함 환자 보호자 연락처 병원 의사 간호사 예약 남편 아내 배우자 어머니 아버지 비밀번호 번호".split()
+)
+
+
+def _initials_ok(letters: str) -> bool:
+    return letters.replace(".", "") not in CLINICAL_ABBREVIATIONS
+
+
+def initial_rules(
+    not_names: frozenset[str] | set[str],
+) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
+    """NAME rules for a patient written by initials or a bare name, each gated by a cue.
+
+    A patient is often "pt KJ", "re: AB's FET", "Mrs. O" or "M.R. G3P0" in a clinic's own notes. Capital
+    letters alone are never a name: a clinical abbreviation ("FET", "OHSS", "ER") is skipped, and the
+    masker leaves the initials of the clinic's staff alone."""
+    check, *_ = make_checks(not_names)
+
+    def check_initials(m: re.Match[str]) -> bool:
+        if m.group("name") in PLACE_CODES and re.match(r"(?i:re)(?![\w])", m.string[m.start() : m.start("name")]):
+            return False
+        n = m.group("name")
+        if n in AMBIGUOUS_ABBREVIATIONS and (
+            _AMBIG_CLINICAL_NEXT.match(m.string, m.end("name"))
+            or (n in _AMBIG_NEW and _AMBIG_CLINICAL_NEXT_EXTRA.match(m.string, m.end("name")))
+            or (n in _AMBIG_COUNT_NEXT and _AMBIG_NUM_NEXT.match(m.string, m.end("name")))
+        ):
+            return False
+        return _initials_ok(m.group("name"))
+
+    def check_baby(m: re.Match[str]) -> bool:
+        n = m.group("name")
+        last = n.split()[-1]
+        return last[-1] == "." or last.lower() not in (set(not_names) | _NOT_NAME_EXTRA | STOP_WORDS)
+
+    def check_file_name(m: re.Match[str]) -> bool:
+        return m.group("name").split(",")[0].lower() not in _FILE_WORDS and check(m)
+
+    def check_korean(m: re.Match[str]) -> bool:
+        # Not a form label or a verb/adjective ("생년월일", "전화번호", "좋아요").
+        n = m.group("name")
+        return n not in _KO_NOT_NAMES and n[-1] not in "요다까죠네요함됨"
+
+    def check_caller(m: re.Match[str]) -> bool:
+        # "Caller: Ibrahim Yousef, husband of the patient": a summary line, not "Caller: Thank you, ...".
+        return check(m) and not m.group("name").isupper()
+
+    return [
+        # "pt KJ", "patient: AB", "re: AB's FET", "Pt A.B.", "Mrs. O.R." (2-3 capitals, or dotted initials).
+        (
+            rf"{_PT_CUE}(?i:(?:['’]s)?[ \t]+initials?(?:[ \t]+(?:are|is))?)?[ \t]*[:.]?[ \t]*{_NOT_ABBR}(?P<name>[A-Z]{{2,3}}|[A-Z](?:\.[A-Z]){{1,2}}\.?|[A-Z]\.(?:[ \t][A-Z]\.){{1,2}}|[A-Z]\.){_INITIALS_TAIL}",
+            0,
+            check_initials,
+        ),
+        # Dotted initials after a patient word, with the surname that follows: "patient J.R. Smith called",
+        # "patient A. B. C." (two or three initials; one initial and a surname is handled elsewhere).
+        (
+            rf"(?i:\b(?:pts?|patient|paciente|patiente)(?:['’]s)?)[ \t]*:?[ \t]*{_NOT_ABBR}"
+            rf"(?P<name>[A-Z]\.(?:[ \t]?[A-Z]\.){{1,2}}(?:[ \t]+[A-Z][a-z]+(?:['’\-][A-Z]?[a-z]+)?)?)(?![\w\-])",
+            0,
+            lambda m: check_baby(m) and _initials_ok(m.group("name").split()[0]),
+        ),
+        # Spaced initials after "pt" or "patient": "Pt: J T", "patient initials J T" (two or three single capitals).
+        (
+            rf"(?i:\b(?:pts?|patient)(?:['’]s)?(?:[ \t]+initials?)?)[ \t]*:?[ \t]*(?P<name>[A-Z](?:[ \t][A-Z]){{1,2}}){_INITIALS_TAIL}",
+            0,
+            lambda m: _initials_ok(re.sub(r"\s", "", m.group("name"))) and m.group("name").replace(" ", "") not in PLACE_CODES,
+        ),
+        # Hebrew initials after the patient word: "הפציינטית: ג.ט.", "המטופלת: ג״ט".
+        (
+            r"(?<![א-ת])[ובלמהש]{0,2}(?:פציינט(?:ית)?|מטופל(?:ת)?)[ \t]*[:\-]?[ \t]*(?P<name>[א-ת](?:\.[ \t]?[א-ת]){1,2}\.?|[א-ת][\"״׳'][א-ת])(?![א-ת\w])",
+            0,
+            lambda m: re.sub(r"[\"״׳'.]", "", m.group("name")) not in {"דר", "מר", "גב", "גבר", "עו"},
+        ),
+        # A courtesy title and one letter: "Mrs. O in rm 5", "Sra. A llamó".
+        # The title must not be all capitals ("MS" is multiple sclerosis or a degree), and "I" or "A" starting
+        # a sentence is the pronoun ("I have MS. I am tired").
+        (rf"(?<![A-Z]){_TITLE_CUE}(?<![A-Z]{{2}})\.?[ \t]+(?P<name>[A-Z]\.?)(?![\w'’\-])(?<!\bI)", 0, None),
+        # The possessive of initials before a clinical noun: "AB's FET", "KJ's labs".
+        (rf"(?<![\w'’\-.]){_NOT_ABBR}(?P<name>[A-Z]{{2,3}})(?=['’]s[ \t]+(?i:{_CLIN_NOUN})\b){_INITIALS_TAIL}", 0, check_initials),
+        # "FET de AB", "AMH de HG", "endometrio de AB": initials after a clinical noun and "of".
+        (
+            rf"(?i:\b(?:{_CLIN_NOUN})[ \t]+(?:de|del|d['’]|du|dla)[ \t]+(?:la[ \t]+)?){_NOT_ABBR}(?P<name>[A-Z]{{2,3}}){_INITIALS_TAIL}",
+            0,
+            check_initials,
+        ),
+        # A note line that opens with dotted initials and a chart detail: "M.R. G3P0 - ecografía", "M.O. (2nd call) - ...".
+        (
+            rf"(?<![\w.])(?P<name>[A-Z]\.[A-Z]\.(?:[A-Z]\.)?)(?=[ \t]+(?:\(|[-–—](?:[ \t]|$)|G\d+[ \t]?P\d+|\d{{2}}[ \t]?(?i:y/?o|a|ans|l\.?)\b|c/o\b|rm\b|room\b|hab\b))",
+            0,
+            check_initials,
+        ),
+        # A relative given by an initial: "Esposo J. contesta", "husband R.".
+        (rf"(?i:\b(?:{_LOWER_RELATIONS}))[ \t]+(?P<name>[A-Z]\.)(?=[ \t]+[a-z]|[ \t]*[,;:]|\s*$)", 0, None),
+        # A baby named for the adoption or birth record: "Baby Girl M.", "Baby Boy Okafor".
+        (rf"(?P<name>(?i:\bbaby[ \t]+(?:girl|boy))[ \t]+(?:[A-Z]\.|{_CW}))", 0, check_baby),
+        # A parent or guardian of a named child: "foster parents to Kiara, who is nine".
+        (
+            rf"(?i:\b(?:parents?|guardians?|mother|father|mom|dad|caregivers?|carers?|grandparents?|grandmother|grandfather)[ \t]+(?:to|of))[ \t]+"
+            rf"(?P<name>{_CW})(?=[ \t]*[,.;)]|[ \t]+(?i:who|is|was|has|had|and|age[d]?)\b)",
+            0,
+            check,
+        ),
+        # A nickname told in passing: "elle a Espé comme surnom", "con Pepa como apodo".
+        (
+            rf"(?<![\w'’\-])(?P<name>{_CW})[ \t]+(?i:comme[ \t]+(?:surnom|petit[ \t]+nom)|como[ \t]+apodo|jako[ \t]+(?:przydomek|przezwisko)|as[ \t]+(?:a[ \t]+|her[ \t]+|his[ \t]+)?nick\s*name)\b",
+            0,
+            check,
+        ),
+        # "Last, First" in a file name: "Scan - Okafor, Ngozi.pdf".
+        (rf"(?<![\w,])(?P<name>{_CW},[ \t]?{_CW})(?=\.{_FILE_EXT}\b)", 0, check_file_name),
+        # A caller named on a summary line: "Caller: Ibrahim Yousef, husband of ...".
+        (
+            rf"(?m:^)[ \t]*(?i:caller|called[ \t]+by|appelant|llamante)(?:[ \t]+name)?[ \t]*:[ \t]*(?P<name>{_MULTI_NAME})(?=[ \t]*(?:,|\(|[-–—]|\n|$))",
+            0,
+            check_caller,
+        ),
+        # A Korean name with its romanization: "정민아 (Mina Jung)".
+        (rf"(?<![{_HANGUL}])(?P<name>[{_HANGUL}]{{2,4}})(?=[ \t]*\([ \t]*{_CW}(?:[ \t]+{_CW}){{1,2}}[ \t]*\))", 0, check_korean),
+        # A Korean name after a cue: "Emergency contact: 정현수 470-555-0112", "환자: 김영희".
+        (
+            rf"(?:{_KO_CUE})[ \t]*[:：]?[ \t]*(?P<name>[{_HANGUL}]{{2,4}}?)(?=(?:님|씨|은|는|이|가|을|를|의|도|입니다|이에요|예요)?(?![{_HANGUL}]))",
+            0,
+            check_korean,
+        ),
+    ]
+
+
+# Spanish names for letters that are not themselves a letter: "p, e, eñe, a".
+SPELLED_ES = (
+    r"(?<![\w\-'’])[A-Za-z](?:,[^\S\n]*(?:(?![yY][^\S\n]+[^\W\d_])[A-Za-z]|e[ñn]e|ene|ese|erre|ele|eme|equis|hache|jota|zeta|uve|doble[^\S\n]+ve|i[^\S\n]+griega)(?![\w])){3,}(?![\w\-])"
+)

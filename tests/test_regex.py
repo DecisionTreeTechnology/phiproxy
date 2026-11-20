@@ -1434,3 +1434,1467 @@ def test_v10_review4_unicode_spaces_in_name_cues():
     for t in ("My name is Sarah Cohen.", "My name is Sarah Cohen.", "My name is Sarah Cohen."):
         out = Masker().mask(t, "s").text
         assert "Cohen" not in out and "Sarah" not in out, (t, out)
+
+
+@pytest.mark.parametrize(
+    "text,values",
+    [
+        (
+            "Patient: what is the new phone number?\nPatient: the area code is 212\nPatient: then 555\nPatient: 0147\n"
+            "Assistant: Just to confirm: 212-555-0147?\nPatient: sorry, 0174 not 0147\n",
+            ["212", "555", "0147", "0174"],
+        ),
+        (
+            "Paciente: mi numero de telefono\nPaciente: el codigo de area es 305\nPaciente: luego 555\nPaciente: termina en 0133\n"
+            "Paciente: perdon, es 0138\n",
+            ["305", "555", "0133", "0138"],
+        ),
+        ("Caller: Sure. The area code is 646, then 555, then 0119.\n", ["646", "555", "0119"]),
+        ("Pacjent: numer telefonu?\nPacjent: kierunkowy 312\nPacjent: potem 555\nPacjent: i 0104\n", ["312", "555", "0104"]),
+    ],
+)
+def test_v11_phone_in_pieces(text, values):
+    got = [e.text for e in RegexDetector().detect(text) if e.type is T.PHONE and len(e.text) <= 4]
+    for v in values:
+        assert v in got
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # no phone talk near the groups
+        "Patient: the code is 212\nPatient: then 555\nPatient: 0147\n",
+        # times, doses and extensions after a phone question: not a NANP sequence of pieces
+        "Agent: what is your phone number?\nPatient: see you at 0930\nPatient: my dose is 150 mg\nPatient: ext 4412\n",
+        "Agent: what is the best number to reach you?\nPatient: 0845h works\nPatient: and 0930\n",
+        # area code and exchange only: no line number follows
+        "Agent: your phone number?\nPatient: area code 212\nPatient: then 555\nPatient: let me look it up\n",
+    ],
+)
+def test_v11_phone_in_pieces_lookalikes(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type is T.PHONE]
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("Pod numer plus 48 555 010 203. Dziękuję.", T.PHONE, "plus 48 555 010 203"),
+        ("me llaman al más 52 555 010 2030 gracias", T.PHONE, "más 52 555 010 2030"),
+        ("Caller: mi, k, e, l, l, i, s, o, n, eight eight, at example dot com", T.EMAIL, "k, e, l, l, i, s, o, n, eight eight, at example dot com"),
+        ("L'adresse, c, tremblay, tiret, roy, arobase example point org.", T.EMAIL, "c, tremblay, tiret, roy, arobase example point org"),
+        ("y el apellido p, e, eñe, a. Es la cita", T.NAME, "p, e, eñe, a"),
+        ("số điện thoại em là bốn không bốn, năm năm năm, không một tám hai", T.PHONE, "bốn không bốn, năm năm năm, không một tám hai"),
+    ],
+)
+def test_v11_spoken_and_spelled_pieces(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Add plus 2 more vials and 100 units",
+        "plus 20 30 40",
+        "Blood type A, B, O are all fine to donate",
+        "yes, sure, ok, at example dot com",
+        "ba năm trước tôi đến đây",
+    ],
+)
+def test_v11_pieces_lookalikes(text):
+    got = {e.type for e in RegexDetector().detect(text)}
+    assert not (got & {T.PHONE, T.EMAIL})
+
+
+def test_v11_phone_pieces_later_number_not_a_correction():
+    text = "Agent: phone number?\nPatient: 212\nPatient: 555\nPatient: 0147\nPatient: room 3300 please\nPatient: 0930\n"
+    got = [e.text for e in RegexDetector().detect(text) if e.type is T.PHONE]
+    assert got == ["212", "555", "0147"]
+
+
+def test_v11_vietnamese_three_needs_vietnamese_neighbour():
+    assert (T.PHONE, "ba không bốn, năm năm năm, không một tám hai") in types_in("số điện thoại em là ba không bốn, năm năm năm, không một tám hai")
+    assert not [e for e in RegexDetector().detect("Dish B: #7 5AA, #8 4BA. Lot BA06431") if e.type is T.PHONE]
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("please use RR 5, Site 2, Box 31, Greenfield NS B0X 1A0 for the courier", T.ADDRESS, "RR 5, Site 2, Box 31, Greenfield"),
+        ("ship to Rural Route 7, Pinecrest please", T.ADDRESS, "Rural Route 7, Pinecrest"),
+        ("She lives at PO Box 204, Oakvale. Thanks", T.ADDRESS, "PO Box 204, Oakvale"),
+        ("meet at the pull-off near 45.1234, -64.5678, bring the cooler", T.ADDRESS, "45.1234, -64.5678"),
+        ("coordenadas 19.1234, menos 99.5678 cerca del mercado", T.ADDRESS, "19.1234, menos 99.5678"),
+        ("the drop location is at 33.1234, 84.5678 near the barn", T.ADDRESS, "33.1234, 84.5678"),
+        ("it's the red house past the Shell on Hwy 7, then the second gravel drive on the left", T.ADDRESS,
+         "the red house past the Shell on Hwy 7, then the second gravel drive on the left"),
+        ("we're in Pinewood County so it is a drive", T.ADDRESS, "Pinewood County"),
+        ("vivo en el condado de Larkin y es lejos", T.ADDRESS, "condado de Larkin"),
+        ("אנחנו גרים בקאונטי לרקין ואני מחכה", T.ADDRESS, "קאונטי לרקין"),
+        ("We live in Fairhaven First Nation near the lake", T.ADDRESS, "Fairhaven First Nation"),
+        ("I'm from Tidewater and about three hours out", T.ADDRESS, "Tidewater"),
+        ("we are now in the Harbourview area", T.ADDRESS, "Harbourview"),
+        ("J'habite à Rivière-du-Moulin depuis un an", T.ADDRESS, "Rivière-du-Moulin"),
+        ("Vivimos en Villanueva del Rio desde marzo", T.ADDRESS, "Villanueva del Rio"),
+        ("Mieszkamy w Zielonowie od roku", T.ADDRESS, "Zielonowie"),
+        ("אני גרה בנווה צדק עכשיו", T.ADDRESS, "נווה צדק"),
+        ("referral, de Millhaven, N.-É. Diagnostic: SOPK", T.ADDRESS, "Millhaven"),
+        ("Unit 9, Maple Row 22, Fort Calder, 31999", T.ADDRESS, "Unit 9, Maple Row 22, Fort Calder"),
+        ("Unit 9, Maple Row 22, Fort Calder, 31999", T.ZIP, "31999"),
+        ("mail to PSC 1234, Box 55, APO AE 09999", T.ADDRESS, "PSC 1234, Box 55"),
+        ("mail to PSC 1234, Box 55, APO AE 09999", T.ZIP, "09999"),
+        ("vivo en Hartley Residence Hall, room 305", T.ADDRESS, "Hartley Residence Hall, room 305"),
+        ("Nuestro domicilio es Calle Sol 12, Colonia del Prado, San Marcos", T.ADDRESS, "Colonia del Prado, San Marcos"),
+        ("cerca del mercado en colonia Santa Clara del Sur. Mi número", T.ADDRESS, "colonia Santa Clara del Sur"),
+        ("hay un buzón con el número 5521. Si me llaman", T.ADDRESS, "5521"),
+        ("une boîte aux lettres rouge avec le 3377 écrit dessus", T.ADDRESS, "3377"),
+        ("My postal code is bee three ell, two cee four.", T.POSTAL_CODE, "bee three ell, two cee four"),
+        ("저희 Suwanee로 이사했어요. 우편번호 30099", T.POSTAL_CODE, "30099"),
+        ("저희 Suwanee로 이사했어요.", T.ADDRESS, "Suwanee"),
+        ("Nou rete nan Westfield kounye a", T.ADDRESS, "Westfield"),
+        ("my niece Anna Brook from Eastport", T.ADDRESS, "Eastport"),
+        ("we live in Duluth, off Candle Road, so we will leave early", T.ADDRESS, "Candle Road"),
+        ("Agent: mailing address?\nCaller: Okay. The number is forty-one.\nAgent: Forty-one what?\nCaller: Oak Row Lane. Hold on", T.ADDRESS, "forty-one"),
+        ("Agent: mailing address?\nCaller: Okay. The number is forty-one.\nAgent: Forty-one what?\nCaller: Oak Row Lane. Hold on", T.ADDRESS, "Oak Row Lane"),
+        ("My daughter goes to Hillside Elementary and I need to pick her up", T.EMPLOYER, "Hillside Elementary"),
+        ("our kids attend Cedar Montessori", T.EMPLOYER, "Cedar Montessori"),
+        ("3 Birchwood Cove, Marietta", T.ADDRESS, "3 Birchwood Cove, Marietta"),
+        ("send it to 4B-123 Main St", T.ADDRESS, "4B-123 Main St"),
+        ("2210 Briarcliff Road, mieszkanie 4B", T.ADDRESS, "2210 Briarcliff Road, mieszkanie 4B"),
+        ("send to 123, rue Principale, app. 4, Dieppe", T.ADDRESS, "123, rue Principale, app. 4, Dieppe"),
+    ],
+)
+def test_v11_places_and_addresses(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "TSH 2.4567, 3.1234 mIU/L",
+        "Is the lot on Dundas Street open? And the pharmacy off Bay Road?",
+        "Dear Dr. Lee, thank you",
+        "this is Dana from Garden State Mutual calling about the claim",
+        "the court of Marion County, docket 1234; condado de Larkin, expediente 55",
+        "I'm in Day 3 of stims and from Monday I am off",
+        "I'm from Canada originally, we speak French",
+        "We moved to Menopur 75 and switched from Gonal-f",
+        "I live in a house past the church",
+        "back in April we met; now in Week 8",
+        "the Fulton County Family Services caseworker called",
+        "the case is at the court of Marion County",
+        "Go to Hillcrest Pharmacy on Monday",
+        "We are from the Nigerian community in the city",
+        "RR 2 interval was normal",
+        "the blue house is nice and the other house is green",
+        "my number is forty-one and I'll call back",
+        "pick up my son's school bag, Elementary school ok",
+        "Hello, Mark, NS here",
+    ],
+)
+def test_v11_places_lookalikes_not_masked(text):
+    got = {e.text for e in RegexDetector().detect(text) if e.type in {T.ADDRESS, T.EMPLOYER, T.ZIP, T.POSTAL_CODE}}
+    assert not got
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Best regards,\nJoanna Kral\nRidgefield, GA\nblog: example.net", "Ridgefield"),
+        ("Pozdrawiam\nAnna\nזמני\nרידג'פילד, GA\nx", None),
+        ("zam. ul. Lipowa 4/2, 31-120 Wieliczka, tel. 555", "Wieliczka"),
+    ],
+)
+def test_v11_town_on_signature_or_after_postal_code(text, value):
+    got = [e.text for e in RegexDetector().detect(text) if e.type is T.ADDRESS]
+    if value:
+        assert value in got
+
+
+def test_v11_signature_lookalikes():
+    for text in ["Thanks, OK\nsee you", "Regards, IN\nbye", "Hello, ME\n"]:
+        assert not [e for e in RegexDetector().detect(text) if e.type is T.ADDRESS]
+
+
+def _texts(text):
+    return {e.text for e in RegexDetector().detect(text)}
+
+
+def _covers(text, value):
+    start = text.index(value)
+    ents = RegexDetector().detect(text)
+    return all(any(e.start <= i < e.end for e in ents) for i in range(start, start + len(value)))
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("paid via Venmo @rsmith-ATL77 yesterday", "@rsmith-ATL77"),
+        ("my Zelle handle is @ana-gomez-4 ok", "@ana-gomez-4"),
+        ("I can send via Venmo @pat-lee-12 if you have one", "@pat-lee-12"),
+        ("Venmo @piperj", "@piperj"),
+        ("Cash App, it's $rsmith77.", "$rsmith77"),
+        ("tengo cash app $ana.m.0412 y zelle", "$ana.m.0412"),
+        ("su venmo es @lu-perez-12 y el mio es $luperez88", "$luperez88"),
+        ("בוונמו מהחשבון @dan-levi-88 תודה", "@dan-levi-88"),
+    ],
+)
+def test_v11_payment_handles(text, value):
+    assert _covers(text, value)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the deposit is $400 and the balance $1,200 due",
+        "costs $5k per cycle or $2.50 each",
+        "see you @ 5pm at the clinic",
+        "follow our page @magnolia-ra-clinic for news",
+        "send it to billing@example.org",
+        "meet me at the front-desk, not the side door",
+    ],
+)
+def test_v11_payment_handle_lookalikes(text):
+    got = {e.text for e in RegexDetector().detect(text) if e.type in {T.ACCOUNT, T.ID}}
+    assert not got
+
+
+def test_v11_bank_numbers_after_cue():
+    assert _covers("my transit and institution are 54321-004, account 1234567", "54321-004")
+    assert _covers("bank transit 54321 004 and", "54321 004")
+    assert _covers("My bank is routing 021000021 account 0012345678", "021000021")
+    assert _covers("el routing es 123456780 y la cuenta", "123456780")  # cue present: no checksum needed
+    assert _covers("ABA 011401533", "011401533")
+    # no bank cue: a bare nine digits or a postal-like 5-3 group is not an account
+    assert "021000021" not in {e.text for e in RegexDetector().detect("Order 021000021 shipped") if e.type is T.ACCOUNT}
+    assert not [e for e in RegexDetector().detect("room 54321-004 is free") if e.type is T.ACCOUNT]
+
+
+def test_v11_cheque_numbers():
+    assert _covers("I mailed cheque #2218 for $1,500", "#2218")
+    assert _covers("my check number 1042 bounced", "1042")
+    assert _covers("su cheque número 7788 fue devuelto", "7788")
+    assert not [e for e in RegexDetector().detect("please check number of vials and cheque or card") if e.type is T.ACCOUNT]
+    assert not [e for e in RegexDetector().detect("check #1 done, cheque 2 later") if e.type is T.ACCOUNT]
+
+
+def test_v11_last_four_answered_on_next_line():
+    t = "Asistente: Los últimos cuatro del seguro social?\nPaciente: es 4417\nAsistente: Gracias."
+    assert _covers(t, "4417")
+    t = "Agent: Can you give me the last four of the card?\nCaller: it is 8821."
+    assert _covers(t, "8821")
+    # not a last-four question: the next line's number stays
+    assert "4417" not in _texts("Asistente: Cuándo es su cita?\nPaciente: es 4417 el cuarto piso")
+
+
+def test_v11_card_ending_not_a_lot_number():
+    assert "0457" not in _texts("the lot number on the box ends in 0457")
+    assert "0457" not in _texts("batch is stamped, serial ends in 0457")
+    assert "7702" in _texts("Card ending 7702")
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("log: login ok user=u_55102 ip=203.0.113.9", "u_55102"),
+        ("app account name is moon_phase_21 on the app", "moon_phase_21"),
+        ("usr=jdoe_7741 download", "jdoe_7741"),
+        ("Account name: mtorres_2026", "mtorres_2026"),
+        ("my pump serial is SN 4KT0071XZ2 thanks", "SN 4KT0071XZ2"),
+        ("my wearable band serial, WQ-44-12345", "WQ-44-12345"),
+    ],
+)
+def test_v11_app_accounts_and_device_serials(text, value):
+    assert _covers(text, value)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "user error occurred twice",
+        "the label printer serial ZX9Q-1234-5678 was replaced",
+        "Pipette set serial 33AB-4455 checked",
+        "account name changed",
+    ],
+)
+def test_v11_account_and_serial_lookalikes(text):
+    got = {e.text for e in RegexDetector().detect(text) if e.type in {T.ACCOUNT, T.ID}}
+    assert not got
+
+
+def test_v11_court_and_military_ids():
+    assert _covers("court file number 24-FC-01234, hearing in May", "24-FC-01234")
+    assert _covers("matter 25-DR-99871 pending", "25-DR-99871")
+    assert _covers("מספר ההליך תמ״ש 1234-25 בבית המשפט", "תמ״ש 1234-25")
+    assert _covers("I'm 1234-56-7890 for the military ID if you need it", "1234-56-7890")
+    assert _covers("my DoD ID number is 1234567890", "1234567890")
+    assert not [e for e in RegexDetector().detect("the 2026-11-03 visit, 12-34-5678 pages") if e.type is T.ID]
+
+
+def test_v11_ids_in_digit_groups_after_cue():
+    assert _covers("Mi cédula es 12 345 678 y mi pasaporte", "12 345 678")
+    assert _covers("her status card number is 1234 567 89 thanks", "1234 567 89")
+    assert not [e for e in RegexDetector().detect("Insur ID card scanned on 11 03 2026") if e.type is T.ID]
+    assert not [e for e in RegexDetector().detect("la cédula quedó en 12 sala") if e.type is T.ID]
+
+
+def test_v11_health_cards_in_groups_and_pieces():
+    assert _covers("CARTE MEDICARE N.-B.: 123 456 789", "123 456 789")
+    assert _covers("MSI card 123 456 789 expires", "123 456 789")
+    t = "Bot: numéro de votre carte d'assurance maladie?\nPatiente: C'est ABCD 1234\nPatiente: 5678\nBot: merci"
+    assert _covers(t, "ABCD 1234") and _covers(t, "5678")
+    # no health-card word before it: a letters+digits label is not a card
+    assert not [e for e in RegexDetector().detect("tube EDTA 1234\nnext: 5678") if e.type is T.HEALTH_CARD]
+    assert not [e for e in RegexDetector().detect("Medicare visit on 2026-11-03") if e.type is T.HEALTH_CARD]
+
+
+def test_v11_sin_named_earlier_needs_no_checksum():
+    t = "The form asks for my SIN, which is 123 456 782. His is 412 880 659. Thanks."
+    assert _covers(t, "412 880 659")
+    # no SIN named: nine digits that fail the checksum are not a SIN
+    assert not [e for e in RegexDetector().detect("ref 412 880 659 for the shipment") if e.type is T.SIN]
+
+
+def test_v11_insurer_contract_and_plate():
+    assert _covers("ma mutuelle est la ACME contrat 4408217.", "ACME contrat 4408217")
+    assert not [e for e in RegexDetector().detect("HIPAA policy 164 applies") if e.type is T.ACCOUNT]
+    assert _covers("a grey Subaru, plate ABC 1234, Georgia", "ABC 1234")
+    assert not [e for e in RegexDetector().detect("the plate was warm, 37 degrees") if e.type is T.ID]
+
+
+def test_v11_time_and_spanish_sin_are_not_ids():
+    assert not [e for e in RegexDetector().detect("first one at 0800h. Two FETs at 1030h") if e.type is T.ID]
+    assert not [e for e in RegexDetector().detect("esperé sin que nadie avisara, FSH de 11 y un AMH de 0.6") if e.type is T.ID]
+    assert not [e for e in RegexDetector().detect("Lote del medio: LOT-5503 y TRK-90044172") if e.type in {T.ID, T.ACCOUNT}]
+
+
+def _v11d(text):
+    return {e.text for e in RegexDetector().detect(text) if e.type is T.DATE}
+
+
+def _v11d_has(text, value):
+    return any(value in t or t in value for t in _v11d(text))
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Attached: IMG_20260314_sam.jpg", "20260314"),
+        ("see IMG-20250102.jpg", "20250102"),
+        ("Assistant: Please give your date of birth.\nPatient: June\nAssistant: Which day?", "June"),
+        ("Paciente: julio\nAsistente: Y el año?", "julio"),
+        ("normal HSG last April. Seen by Dr. Lee", "last April"),
+        ("Is it the twenty-second still? That is what I wrote", "the twenty-second"),
+        ("mon rendez-vous est jeudi le 21 avec le docteur", "jeudi le 21"),
+        ("de mardi le 12 parce que mon mari travaille", "mardi le 12"),
+        ("생년월일은 1991년 8월 14일", "1991년 8월 14일"),
+        ("Interpreter: 1994년 2월 9일입니다.", "1994년 2월 9일"),
+        ("em sinh ngày mười hai tháng ba năm 1990, số điện thoại", "ngày mười hai tháng ba năm 1990"),
+        ("sinh 12 tháng 3 năm 1990", "12 tháng 3 năm 1990"),
+        ("מתורגמן: שלושה במאי שבעים ותשע.", "שלושה במאי שבעים ותשע"),
+        ("pacjentami od marca", "marca"),
+        ("my retrieval is 31.2", "31.2"),
+        ("pain started 5/10", "5/10"),
+        ("retrieval 11/12", "11/12"),
+        ("recalibrated 11/12 for you", "11/12"),
+        ("closed Dec 24, my appointment is Dec 23", "Dec 23"),
+        ("Coverage effective January 1", "January 1"),
+        ("the clinic is closed Monday. My retrieval is January 1", "January 1"),
+    ],
+)
+def test_v11_dates_masked(text, value):
+    assert _v11d_has(text, value), (text, _v11d(text))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BMI 31.2 means metformin first",
+        "my BMI was 29.4 at the consult",
+        "IMC de 31.2",
+        "pain >7/10 go to the ER",
+        "pain 4/10, voided",
+        "rated 8/10",
+        "dispose when 3/4 full",
+        "Incubator 2 recalibrated 11/12, no embryos affected",
+        "Patient: may",
+        "hai tháng ba lần",
+        "the third embryo looks good",
+    ],
+)
+def test_v11_dates_lookalikes_not_masked(text):
+    assert not _v11d(text), (text, _v11d(text))
+
+
+def _v11n(text):
+    return {e.text for e in RegexDetector().detect(text) if e.type is T.NAME}
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Triage 1420h. Pt KJ 34yo G2P1 c/o cramping", "KJ"),
+        ("nurse huddle: also re: QX's FET, consent unsigned", "QX"),
+        ("RE: RE: FET de QX - protocolo", "QX"),
+        ("revisa el caso de la FET de QX antes del huddle", "QX"),
+        ("LLAMAR: lab re: AMH de ZV (0.4, repetir?)", "ZV"),
+        ("Mrs. Q rm 3 - retrieval today", "Q"),
+        ("Hab 1: Sra. Q - HSG 0830h", "Q"),
+        ("pt Z.Q. rm 3 wants the 1400 slot", "Z.Q."),
+        ("Hab 2: Z.Q. G3P0 - ecografía", "Z.Q."),
+        ("Z.Q. (2nd call) - bleeding after transfer", "Z.Q."),
+        ("the matched child, Baby Girl Z., is placed through the agency", "Baby Girl Z."),
+        ("Esposo Z. contesta el teléfono fijo", "Z."),
+        ("they are foster parents to Zadie, who is nine", "Zadie"),
+        ("Voici Zoé, elle a Zozo comme surnom", "Zozo"),
+        ("Attached: Scan - Zeller, Ngozi.pdf (the other lab)", "Zeller, Ngozi"),
+        ("Emergency contact: 정현수 470-555-0112", "정현수"),
+        ("Patient: 정민아 (Mina Zeller), DOB 1990-05-22", "정민아"),
+        ("Se escribe a-l-t-a, y el apellido p, e, eñe, a. Es la cita", "p, e, eñe, a"),
+        ("la señora Karla Zeller tiene su domicilio en Macon", "Karla Zeller"),
+        ("Caller: Ibrahim Zeller, husband of the patient\nSummary follows", "Ibrahim Zeller"),
+    ],
+)
+def test_v11_name_initials_and_cued_names(text, value):
+    assert any(value in n or n in value for n in _v11n(text)), (text, _v11n(text))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "pt FET day 5, beta Friday",
+        "pt ER visit, OHSS watch",
+        "RE: FET de IVF - protocolo",
+        "lab for CPT 83001 and 84702",
+        "bill from the lab for ICSI add-on",
+        "Dr. Zeller M.D. (REI) - 0830h",
+        "O.R. - 0830h, E.R. 4 pm",
+        "client IP 198.51.100.24, call dropped",
+        "Partner PHN: ___ (out of province)",
+        "DONOR EGG RESERVATION CONFIRMATION",
+        "Patient: 좋아요. Thank you",
+        "생년월일은 1991년 8월 14일, 전화번호가 바뀌었어요",
+        "I miss texts about the beta",
+        "Caller: It's hard to find, I'm up the road",
+        "Conjointe de fait",
+        "Proszę o imię i nazwisko oraz datę urodzenia.",
+        "Pt PT 2x/wk",
+        "foster parents to a boy, who is nine",
+        "a Scan, Results.pdf",
+    ],
+)
+def test_v11_name_initials_lookalikes_not_masked(text):
+    assert not _v11n(text), (text, _v11n(text))
+
+
+def test_v11_long_inputs_stay_fast_and_do_not_crash():
+    import time
+
+    d = RegexDetector()
+    d.detect("1" * 70000)  # a digit run past Python's int() limit must not raise
+    t0 = time.time()
+    d.detect("ngày " + "hai mươi " * 3000)
+    assert time.time() - t0 < 5
+
+
+def _v11r1_vals(text, typ=None):
+    return [(e.type.name, e.text) for e in RegexDetector().detect(text) if typ is None or e.type.name == typ]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Answer a, b, c, d to the quiz",
+        "Opciones a, b, c, d",
+        "Survey answers: a, b, c, d, e",
+        "Questions 1-4: a, b, c, d",
+        "Opcje a, b, c, d",
+        "apellido: a, b, c, d",
+    ],
+)
+def test_v11_review1_comma_letters_need_name_cue(text):
+    assert _v11r1_vals(text, "NAME") == []
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("el apellido p, e, eñe, a", "p, e, eñe, a"),
+        ("mi apellido es p, e, eñe, a, y mi nombre es Ana", "p, e, eñe, a"),
+        ("my last name is k, o, w, a, l", "k, o, w, a, l"),
+        ("apellido: c, a, s, a, l, a, s y", "c, a, s, a, l, a, s"),
+        ("k o w a l c z y k", "k o w a l c z y k"),
+        ("w i l l y", "w i l l y"),
+    ],
+)
+def test_v11_review1_comma_letters_with_cue_stay_masked_without_y(text, value):
+    assert ("NAME", value) in _v11r1_vals(text)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("my cheque #2218", "#2218"),
+        ("I mailed cheque number 1042", "1042"),
+        ("cheque #2218 from me", "#2218"),
+        ("mon chèque n° 8841", "8841"),
+    ],
+)
+def test_v11_review1_patient_cheque_masked(text, value):
+    assert ("ACCOUNT", value) in _v11r1_vals(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Cheque #4521 was deposited", "Please mail the cheque to the clinic, cheque number 12345", "Cheque number 12345 has cleared"],
+)
+def test_v11_review1_clinic_cheque_unmasked(text):
+    assert _v11r1_vals(text, "ACCOUNT") == []
+
+
+def test_v11_review1_device_serial_needs_personal_device():
+    assert _v11r1_vals("Device serial CryoTank-4421 is calibrated", "ID") == []
+    assert _v11r1_vals("The monitor serial number CRYO44210 was replaced", "ID") == []
+    assert ("ID", "ABC123456") in _v11r1_vals("my pump serial is ABC123456")
+    assert ("ID", "XY12345678") in _v11r1_vals("home glucometer serial is XY12345678")
+    assert ("ID", "3MH0041AB7") in _v11r1_vals("her dexcom serial 3MH0041AB7")
+
+
+@pytest.mark.parametrize("text", ["IMG_20261114.jpg", "PXL_20261114_1.jpg", "Screenshot_20261114.png", "VID_20261114.mp4"])
+def test_v11_review1_photo_name_date_masked(text):
+    assert ("DATE", "20261114") in _v11r1_vals(text)
+
+
+@pytest.mark.parametrize("text", ["scan_20261114.pdf", "consent_form_20261114.pdf", "Form_20261114.pdf", "report_20261114.pdf"])
+def test_v11_review1_clinic_file_name_date_unmasked(text):
+    assert _v11r1_vals(text, "DATE") == []
+
+
+def test_v11_review1_numbers_list_is_not_phone_pieces():
+    assert _v11r1_vals("Estradiol numbers: 350, 420, 1100", "PHONE") == []
+    assert _v11r1_vals("AMH numbers 250, 300, 1200", "PHONE") == []
+    assert ("PHONE", "0100") in _v11r1_vals("phone numbers: 613, 555, 0100")
+    assert ("PHONE", "0100") in _v11r1_vals("my number is 613\n555\n0100")
+    assert ("PHONE", "1200") in _v11r1_vals("Here are my AMH numbers\n250\n300\n1200\nare they ok?")
+
+
+@pytest.mark.parametrize("text", ["Re: TB test results", "Re: PGD", "Re: NY trip", "Re: BC pills", "Re: PRL", "Re: HSV", "pt POF; pt PGD; pt TVS", "Re: OCP"])
+def test_v11_review1_abbreviations_not_initials(text):
+    assert _v11r1_vals(text, "NAME") == []
+
+
+@pytest.mark.parametrize("text,value", [("pt JT, 34yo", "JT"), ("Re: JT", "JT"), ("Re: KJ's FET", "KJ"), ("pt NY", "NY")])
+def test_v11_review1_real_initials_stay(text, value):
+    assert ("NAME", value) in _v11r1_vals(text)
+
+
+def test_v11_review1_three_letters_cue_keeps_member_id_letters():
+    got = _v11r1_vals("empieza con tres letras, W, B, K y luego 90284715")
+    assert ("NAME", "W, B, K") in got
+    assert _v11r1_vals("tres letras, A, B, C", "NAME") == []
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("email: k - e - l - l - i at gmail dot com", "k - e - l - l - i at gmail dot com"),
+        ("my email is k e l l i at gmail dot com", "k e l l i at gmail dot com"),
+        ("my email is k. e. l. l. i at gmail dot com", "k. e. l. l. i at gmail dot com"),
+        ("email: k e l l i 8 8 at gmail dot com", "k e l l i 8 8 at gmail dot com"),
+        ("my email is k e l l i@gmail.com", "k e l l i@gmail.com"),
+    ],
+)
+def test_v11_review1_spelled_email_variants(text, value):
+    assert (T.EMAIL, value) in types_in(text)
+
+
+@pytest.mark.parametrize("text", ["I am at the gmail dot com", "k e at home", "a b at the clinic dot com today"])
+def test_v11_review1_spelled_email_lookalikes_stay(text):
+    assert not any(t is T.EMAIL and len(v) > 12 for t, v in types_in(text))
+
+
+@pytest.mark.parametrize("text", ["my phone number is\n404-\n555-\n1234", "my cell: 404-\n555-\n1234"])
+def test_v11_review1_phone_pieces_with_trailing_dashes(text):
+    got = types_in(text)
+    assert {(T.PHONE, "404"), (T.PHONE, "555"), (T.PHONE, "1234")} <= got
+
+
+def test_v11_review1_dashed_pieces_need_phone_cue_and_sequence():
+    assert not types_in("the dose is\n250-\n500-\n750")
+    assert not types_in("my phone number is\n404-\n555-\n")
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("my account number is 1234 5678 9012", "1234 5678 9012"),
+        ("account: 1234 5678 9012", "1234 5678 9012"),
+        ("bank account 1234 5678 9012 3456", "1234 5678 9012 3456"),
+    ],
+)
+def test_v11_review1_account_in_groups_of_four(text, value):
+    assert (T.ACCOUNT, value) in types_in(text)
+
+
+def test_v11_review1_account_groups_lookalikes():
+    assert (T.ACCOUNT, "2024 2025") not in types_in("my account 2024 2025")
+    assert not any(v == "1234 5678" for _, v in types_in("on page 1234 5678 there is a table"))
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("I live on the Six Nations Reserve", "Six Nations Reserve"),
+        ("I live on Wikwemikong Unceded Reserve", "Wikwemikong Unceded Reserve"),
+        ("Six Nations Reserve No. 40", "Six Nations Reserve No. 40"),
+        ("Curve Lake IR 35", "Curve Lake IR 35"),
+        ("M'Chigeeng Reserve", "M'Chigeeng Reserve"),
+        ("réserve de Kahnawake", "réserve de Kahnawake"),
+        ("Reserve No. 40", "Reserve No. 40"),
+    ],
+)
+def test_v11_review1_first_nation_reserves(text, value):
+    assert (T.ADDRESS, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["the Federal Reserve raised rates", "Nature Reserve Park", "Reserve Bank of India", "réserve ovarienne basse", "réserve de sperme", "The Marine Reserve is closed"],
+)
+def test_v11_review1_reserve_lookalikes_stay(text):
+    assert not any(t is T.ADDRESS for t, _ in types_in(text))
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("I am at RR 2, Smithville", "RR 2, Smithville"),
+        ("R.R.#2 Smithville ON", "R.R.#2 Smithville"),
+        ("RR#2, Lacombe AB", "RR#2, Lacombe"),
+        ("I live at R.R. #2, Smithville", "R.R. #2, Smithville"),
+        ("RR2 Smithville", "RR2 Smithville"),
+        ("Route rurale 2, Saint-Jean", "Route rurale 2, Saint-Jean"),
+    ],
+)
+def test_v11_review1_rural_route_variants(text, value):
+    assert (T.ADDRESS, value) in types_in(text)
+
+
+@pytest.mark.parametrize("text", ["RR 2.5 (95% CI)", "RR 2 Results show", "RR 2, Patients", "the RR 2 was low"])
+def test_v11_review1_rr_ratio_lookalikes_stay(text):
+    assert not any(t is T.ADDRESS for t, _ in types_in(text))
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("mieszkam w powiecie krakowskim", "powiecie krakowskim"),
+        ("powiat wielicki", "powiat wielicki"),
+        ("in Cobb county", "Cobb county"),
+    ],
+)
+def test_v11_review1_counties_polish_and_lowercase(text, value):
+    assert (T.ADDRESS, value) in types_in(text)
+
+
+@pytest.mark.parametrize("text", ["w powiecie", "in the county hospital", "rotation of the county sheriff"])
+def test_v11_review1_county_lookalikes_stay(text):
+    assert not any(t is T.ADDRESS for t, _ in types_in(text))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Voici mon numéro de chèque : 1045",
+        "J'ai envoyé le numero de cheque: 1045",
+        "Mi número de cheque 1045",
+        "I sent cheque 1045",
+    ],
+)
+def test_v11_review1_cheque_number_fr_es(text):
+    assert (T.ACCOUNT, "1045") in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["cheque 1045", "The clinic sent cheque 1045", "numéro de chèque : 1045 reçu par la clinique", "I sent a cheque 500 dollars", "please check 1045 patients"],
+)
+def test_v11_review1_cheque_lookalikes_stay(text):
+    assert (T.ACCOUNT, "1045") not in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Pt: J T", "J T"),
+        ("Pt initials JT", "JT"),
+        ("patient initials: JT", "JT"),
+        ("הפציינטית: ג.ט.", "ג.ט."),
+        ("המטופלת: ג.ט.", "ג.ט."),
+        ("המטופלת: ג״ט", "ג״ט"),
+    ],
+)
+def test_v11_review1_patient_initials_variants(text, value):
+    assert (T.NAME, value) in types_in(text)
+
+
+@pytest.mark.parametrize("text", ["Pt: I V", "re: A B", "patient: A B", "המטופלת היא אישה"])
+def test_v11_review1_initials_lookalikes_stay(text):
+    assert not any(t is T.NAME for t, _ in types_in(text))
+
+
+def test_v11_review1_directions_with_owner_landmark_and_tail():
+    got = types_in("the cabin behind the Smith barn, then the first road on the right. Please call")
+    assert (T.ADDRESS, "the cabin behind the Smith barn, then the first road on the right") in got
+    assert (T.ADDRESS, "the cabin behind the barn") in types_in("the cabin behind the barn")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "last 4 of your ssn?\nPatient: it's 4417\nThanks",
+        "last 4 of your ssn?\n\nPatient: 4417\n",
+        "last four of ssn?\nPatient: 4417 and then 9\n",
+        "last 4 of your ssn?\nPatient: es 4417",
+    ],
+)
+def test_v11_review1_last_four_reply_variants(text):
+    assert (T.SSN, "4417") in types_in(text)
+
+
+def test_v11_review1_last_four_reply_lookalikes_stay():
+    assert not any(t is T.SSN for t, _ in types_in("last 4 of your ssn?\nPatient: no idea\n"))
+    assert not any(t is T.SSN for t, _ in types_in("last 4 of your ssn?\nPatient: 44171\n"))
+
+
+def test_v11_review1_hebrew_doctor_abbreviation_is_not_initials():
+    assert not any(t is T.NAME for t, _ in types_in('המטופל ד"ר כהן הגיע'))
+    assert not any(t is T.NAME for t, _ in types_in("המטופלת ד״ר"))
+
+
+def test_v11_review1_spoken_plus_needs_phone_shape():
+    d = RegexDetector()
+    for t in ("plus 5 10 15 20 25 30 35", "más 1 2 3 4 5 6 7 8 9 10", "plus 20 100 200 300 units"):
+        assert not [e for e in d.detect(t) if e.type is T.PHONE], t
+    for t in ("plus 48 555 010 203", "más 34 612 345 678"):
+        assert [e for e in d.detect(t) if e.type is T.PHONE], t
+
+
+def test_v11_review1_miss_surname_after_verb_cue_masked():
+    from phiproxy import Masker
+
+    assert Masker().mask("did not miss garcia", "s").text == "did not miss [NAME_1]"
+    for t in ("I miss texts", "we'll miss you", "i will miss work tomorrow", "to miss the appointment"):
+        assert Masker().mask(t, "s").text == t
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "My insurance policy is effective January 1, 2026",
+        "My coverage policy was effective from March 3 2025",
+        "My treatment schedule effective Nov 14",
+        "Mi póliza de seguro vigente schedule effective March 3 2025, mis datos",
+    ],
+)
+def test_v11_review2_personal_effective_date_stays_masked(text):
+    assert any(t is T.DATE for t, _ in types_in(text))
+
+
+@pytest.mark.parametrize("text", ["My GPS is 45.4215, -75.6972.", "gps: 45.4215,-75.6972."])
+def test_v11_review2_gps_pair_before_full_stop(text):
+    found = RegexDetector().detect(text)
+    assert [e.text for e in found if e.type is T.ADDRESS] == [text.split("is ")[-1].split(": ")[-1][:-1]]
+
+
+def test_v11_review2_gps_lookalike_keeps_old_behaviour():
+    assert not any(t is T.ADDRESS for t, _ in types_in("gps 45.4215, -75.6972.5"))
+
+
+@pytest.mark.parametrize(
+    "text,span",
+    [
+        ("PO Box 12, Station A", "PO Box 12, Station A"),
+        ("Mail to PO Box 12 Stn B", "PO Box 12 Stn B"),
+        ("PO Box 118, Cartersville", "PO Box 118, Cartersville"),
+    ],
+)
+def test_v11_review2_po_box_station_span(text, span):
+    assert span in [e.text for e in RegexDetector().detect(text) if e.type is T.ADDRESS]
+
+
+def test_v11_review2_plate_span_excludes_cue():
+    ids = [e.text for e in RegexDetector().detect("plate ABC 123.") if e.type is T.ID]
+    assert ids == ["ABC 123"]
+    assert [e.text for e in RegexDetector().detect("the plate TFR 4418 was seen") if e.type is T.ID] == ["TFR 4418"]
+
+
+def test_v11_review2_initials_do_not_swallow_possessive():
+    names = [e.text for e in RegexDetector().detect("pt MJ's chart") if e.type is T.NAME]
+    assert names and all(n == "MJ" for n in names)
+
+
+def test_v11_review2_spelled_accent_letters_keep_conjunction():
+    names = [e.text for e in RegexDetector().detect("apellido: G, a, r, c, í, a, y mi nombre es Ana") if e.type is T.NAME]
+    assert "G, a, r, c, í, a" in names and not any(n.endswith("y") for n in names)
+
+
+def test_v11_review2_toneless_vietnamese_phone_needs_cue():
+    got = [e.text for e in RegexDetector().detect("so dien thoai cua toi la khong mot hai ba bon nam sau bay tam chin") if e.type is T.PHONE]
+    assert got == ["khong mot hai ba bon nam sau bay tam chin"]
+    assert not RegexDetector().detect("khong mot hai ba bon nam sau bay tam chin")
+    assert not RegexDetector().detect("sdt khong mot hai ba bon")
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("patient J.R. Smith called", "J.R. Smith"),
+        ("Patient J.T. Smith, 34F", "J.T. Smith"),
+        ("patient A. B. C.", "A. B. C."),
+    ],
+)
+def test_v11_review3_dotted_initials_take_the_surname(text, value):
+    got = [e.text for e in RegexDetector().detect(text) if e.type is T.NAME]
+    assert value in got
+
+
+@pytest.mark.parametrize("text", ["patient e.g. Smith", "see plan B. Then call", "the patient A.B. then called"])
+def test_v11_review3_dotted_initials_lookalikes(text):
+    got = [e.text for e in RegexDetector().detect(text) if e.type is T.NAME]
+    assert not any(len(g) > 5 for g in got)
+
+
+# ---- v11 review round 3 (fixer b) -------------------------------------------------------------
+
+
+def _found(text):
+    return {(e.type.value, e.text) for e in RegexDetector().detect(text)}
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("My GPS is 44.65 N, 63.57 W", "44.65 N, 63.57 W"),
+        ("gps: 44.65 N, 63.57 W", "44.65 N, 63.57 W"),
+        ("GPS: 44°39'N, 63°34'W", "44°39'N, 63°34'W"),
+        ("our GPS pin is 44.65°N 63.57°W", "44.65°N 63.57°W"),
+        ("my coords: 44.65 N 63.57 W", "44.65 N 63.57 W"),
+        ("my GPS is 44.65,-63.57", "44.65,-63.57"),
+    ],
+)
+def test_v11_review3_gps_hemisphere(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+@pytest.mark.parametrize("text", ["The flight was 44.65 N then 63 W", "temp 12.5 N, 3.4 W", "dose 44.65 N, 63.57 W"])
+def test_v11_review3_gps_lookalikes_stay(text):
+    assert not [e for e in _found(text) if e[0] == "ADDRESS"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Mail me at Unit 2050 Box 4190, APO AP 96278", "Unit 2050 Box 4190, APO AP"),
+        ("my mailing address: Unit 2050 Box 4190\nAPO AP 96278", "Unit 2050 Box 4190\nAPO AP"),
+        ("Unit 2050 Box 4190, APO, AE 09012", "Unit 2050 Box 4190, APO, AE"),
+        ("send it to PSC 802 Box 74, FPO AA 34090", "PSC 802 Box 74, FPO AA"),
+    ],
+)
+def test_v11_review3_military_mail_line(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+def test_v11_review3_military_lookalike_stays():
+    assert not _found("Unit 4 is the lab, Box 12 is lunch")
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("I live at Route rurale no 2, Saint-Jean", "Route rurale no 2, Saint-Jean"),
+        ("I live at Rang 3, Saint-Jean", "Rang 3, Saint-Jean"),
+        ("I live at Concession 5 Lot 12, Elgin", "Concession 5 Lot 12, Elgin"),
+        ("I live at Lot 12 Concession 4, Perth", "Lot 12 Concession 4, Perth"),
+        ("I live at rr 1 site 5 comp 3", "rr 1 site 5 comp 3"),
+        ("my address: Rang 3", "Rang 3"),
+    ],
+)
+def test_v11_review3_rural_forms(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+@pytest.mark.parametrize("text", ["take the route 7 to the clinic", "Lot 12 of the vials", "the vial lot 12 expires soon", "send my vial lot 4471B to the lab"])
+def test_v11_review3_rural_lookalikes_stay(text):
+    assert not _found(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["los últimos cuatro 1234", "les quatre derniers chiffres 1234", "ostatnie cztery cyfry 1234", "last four 1234"],
+)
+def test_v11_review3_last_four_other_languages(text):
+    assert ("ACCOUNT", "1234") in _found(text)
+
+
+@pytest.mark.parametrize("text", ["the last four weeks 1234 times", "los últimos cuatro días fueron duros", "ostatnie cztery dni"])
+def test_v11_review3_last_four_lookalikes_stay(text):
+    assert not _found(text)
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("numer konta 12 3456 7890 1234 5678 9012 3456", "ACCOUNT", "12 3456 7890 1234 5678 9012 3456"),
+        ("account no: 123 456 789", "ACCOUNT", "123 456 789"),
+        ("transit number 12345, institution number 004", "ACCOUNT", "12345"),
+        ("transit number 12345, institution number 004", "ACCOUNT", "004"),
+        ("routing 0 2 1 0 0 0 0 2 1", "ACCOUNT", "0 2 1 0 0 0 0 2 1"),
+        ("cash.app/$janedoe", "ID", "$janedoe"),
+        ("venmo me at jane_doe_ivf", "ID", "jane_doe_ivf"),
+    ],
+)
+def test_v11_review3_payment_and_bank_forms(text, etype, value):
+    assert (etype, value) in _found(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["venmo me at lunch", "transit number 12345 for the bus", "numer konta nieznany 12 34", "routing 0 2 1"],
+)
+def test_v11_review3_payment_lookalikes_stay(text):
+    assert ("ACCOUNT", "2026 11 20") not in _found("account no: 2026 11 20")
+    assert not [e for e in _found(text) if e[0] in ("ACCOUNT", "ID")]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("court number 2026 FC 1234", "2026 FC 1234"),
+        ("case number 2026 FC 1234", "2026 FC 1234"),
+        ("Court file no. 123-26", "123-26"),
+        ("numero de causa 1234-2026", "1234-2026"),
+        ("mi expediente de divorcio es 123/2026", "123/2026"),
+        ("court: SC 1234/26", "SC 1234/26"),
+    ],
+)
+def test_v11_review3_court_numbers(text, value):
+    assert ("ID", value) in _found(text)
+
+
+@pytest.mark.parametrize("text", ["SC 1234/26", "the case number 5 was a twin cycle", "court number 12/03"])
+def test_v11_review3_court_lookalikes_stay(text):
+    assert not [e for e in _found(text) if e[0] == "ID"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Where do you live?\nElm Street", "Elm Street"),
+        ("¿En qué calle vive?\nHidalgo", "Hidalgo"),
+        ("Which town do you live in?\nSudbury", "Sudbury"),
+        ("Où habitez-vous?\nSudbury", "Sudbury"),
+        ("Gdzie mieszkasz?\nKraków", "Kraków"),
+        ("you'll see our blue house after the Shell station on Hwy 7", "our blue house after the Shell station on Hwy 7"),
+        ("notre maison est après le Tim Hortons sur la route 7", "notre maison est après le Tim Hortons sur la route 7"),
+    ],
+)
+def test_v11_review3_bare_reply_and_directions(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Where do you live?\nNot sure yet, maybe later today", "Where do you live?\nYes", "Where do you live?\nthanks", "my house after the transfer"],
+)
+def test_v11_review3_bare_reply_lookalikes_stay(text):
+    assert not [e for e in _found(text) if e[0] == "ADDRESS"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("mailing address is mailbox 123, Sudbury", "mailbox 123, Sudbury"),
+        ("mi dirección es casilla 123", "casilla 123"),
+        ("I live at skrytka pocztowa 123", "skrytka pocztowa 123"),
+        ("I live at col. Del Valle", "col. Del Valle"),
+        ("I live at fraccionamiento Las Palmas", "fraccionamiento Las Palmas"),
+        ("I live at osiedle Słoneczne 12", "osiedle Słoneczne 12"),
+        ("I live at kibbutz Ein Gedi", "kibbutz Ein Gedi"),
+    ],
+)
+def test_v11_review3_postbox_and_neighbourhood(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+@pytest.mark.parametrize("text", ["the mailbox 123 at the clinic", "col. Del Valle clinic opens at nine", "the kibbutz Ein Gedi trip"])
+def test_v11_review3_postbox_lookalikes_stay(text):
+    assert not _found(text)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("apellido se escribe ge, a, erre, ce, i, a", "ge, a, erre, ce, i, a"),
+        ("se escribe ese, i, ele, ve, a", "ese, i, ele, ve, a"),
+    ],
+)
+def test_v11_review3_spanish_letter_name_spelling(text, value):
+    assert ("NAME", value) in _found(text)
+
+
+def test_v11_review3_spelled_email_is_one_span():
+    assert _found("my email is kelli dash smith at gmail dot com") == {("EMAIL", "kelli dash smith at gmail dot com")}
+    assert _found("email k, e, l, l, i, 8, 8 at gmail dot com") == {("EMAIL", "k, e, l, l, i, 8, 8 at gmail dot com")}
+
+
+def test_v11_review3_spanish_letters_need_cue():
+    assert not _found("las opciones son ge, a, erre, ce, i, a")
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("90210 Beverly Hills CA and my phone", "Beverly Hills"),
+        ("10001 New York NY", "New York"),
+        ("I live at 12 Oak St, 90210 Los Angeles", "Los Angeles"),
+        ("M5V 2T6 Niagara Falls ON", "Niagara Falls"),
+    ],
+)
+def test_v11_review3_town_after_postal_code(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("90210 Beverly Hills Please call me", "Beverly Hills"),
+        ("12 Oak St, 90210 Los Angeles. Thanks", "Los Angeles"),
+    ],
+)
+def test_v11_review3_town_after_postal_code_stops(text, value):
+    assert ("ADDRESS", value) in _found(text)
+    assert not [e for e in _found(text) if "Please" in e[1] or "Thanks" in e[1]]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("St. Louis County, MO", "St. Louis County"),
+        ("Mt. Pleasant County", "Mt. Pleasant County"),
+        ("my address is St. John's First Nation", "St. John's First Nation"),
+        ("I live in Ste. Anne Reserve No. 4", "Ste. Anne Reserve No. 4"),
+        ("Cobb County", "Cobb County"),
+    ],
+)
+def test_v11_review3_saint_prefix_in_span(text, value):
+    assert ("ADDRESS", value) in _found(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["patient HRT", "patient LOR", "patient DE cycle", "patient BFP", "pt CD day 3"],
+)
+def test_v11_review3_clinical_abbreviations_pass(text):
+    assert not [e for e in _found(text) if e[0] == "NAME"]
+
+
+@pytest.mark.parametrize("text,value", [("Re: JK", "JK"), ("Re: TL's IUI", "TL"), ("patient DE", "DE"), ("pt TI", "TI"), ("patient DC", "DC")])
+def test_v11_review3_true_initials_stay_masked(text, value):
+    assert ("NAME", value) in _found(text)
+
+
+@pytest.mark.parametrize("text,value", [("inicjały pacjentki: AK", "AK"), ("patiente M. T.", "M. T."), ("inicjały: AK", "AK")])
+def test_v11_review3_patient_initials_cues(text, value):
+    assert ("NAME", value) in _found(text)
+
+
+def test_v11_review3_vietnamese_digit_words_need_seven():
+    assert not _found("số điện thoại không có, một hai ba ngày nữa")
+    assert not _found("Số điện thoại của tôi? Năm nay tôi đi hai lần")
+    assert _found("số điện thoại của tôi là không chín bốn một hai ba bốn năm sáu")
+
+
+def test_v11_review3_dates_lists_of_values():
+    for text in ["Scores 7/10, 8/10", "BMI 24.5, 26.1", "pain 4/10, 6/10 and 8/10"]:
+        assert not [e for e in _found(text) if e[0] == "DATE"], text
+    # not after a clinical word
+    assert [e for e in _found("we met 13.4, 14.5") if e[0] == "DATE"]
+    assert [e for e in _found("Call me 7/10, 8/10") if e[0] == "DATE"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Patient initials: J. T.", "J. T."),
+        ("re: J. T.", "J. T."),
+        ("pacjentka J. K.", "J. K."),
+        ("patient initials: J. T. S.", "J. T. S."),
+    ],
+)
+def test_v11_review4_spaced_dotted_initials_one_span(text, value):
+    assert ("NAME", value) in [(e.type.name, e.text) for e in RegexDetector().detect(text)]
+    assert ("NAME", "J.") not in [(e.type.name, e.text) for e in RegexDetector().detect(text)]
+
+
+def test_v11_review4_hebrew_signature_town_without_verb():
+    spans = [e.text for e in RegexDetector().detect("גרה באלפרטה, GA")]
+    assert "גרה באלפרטה" not in spans and "אלפרטה" in spans
+    assert "אלפרטה" in [e.text for e in RegexDetector().detect("אלפרטה, GA")]
+
+
+def _kinds(text):
+    return [(e.type.name, e.text) for e in RegexDetector().detect(text)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Patient AF scan done", "patient MII oocytes 8", "patient OPU done", "Patient NT scan", "patient ICM", "patient LPS",
+        "patient NGS", "patient AZF", "patient DFI", "patient TNF", "patient APA", "patient PAI", "paciente OPU", "Re: MII",
+        "Re: OPU", "pt AF 10 right", "patient AF 12 on the right", "patient TE biopsy", "pacjentka OPU", "La patiente MII",
+    ],
+)
+def test_v11_review4_embryology_abbreviations_not_initials(text):
+    assert not [e for e in _kinds(text) if e[0] == "NAME"]
+
+
+def test_v11_review4_embryology_abbreviation_no_second_span():
+    assert [e for e in _kinds("patient OPU Monday") if e[0] == "NAME"] == [("NAME", "OPU Monday")]
+
+
+@pytest.mark.parametrize("text,value", [("patient AB scan", "AB"), ("pt KJ 12", "KJ"), ("patient AF", "AF"), ("patient GV", "GV"), ("pt AB called", "AB")])
+def test_v11_review4_embryology_lookalike_initials_stay(text, value):
+    assert ("NAME", value) in _kinds(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Find us in the red brick house past the Starbucks on King St",
+        "Come to the yellow house past the Circle K on Hwy 20",
+        "Visit us at the red house past the Tim Hortons on Main St",
+    ],
+)
+def test_v11_review4_clinic_directions_not_a_home(text):
+    assert not [e for e in _kinds(text) if e[0] == "ADDRESS"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "we live in the red brick house past the Starbucks on King St",
+        "my house is the red brick house past the Starbucks on King St",
+        "Come to my house past the Circle K on Hwy 20",
+    ],
+)
+def test_v11_review4_home_directions_stay(text):
+    assert [e for e in _kinds(text) if e[0] == "ADDRESS"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Which street is the clinic on?\nMain Street",
+        "What's the address of the clinic?\nKing Street West",
+        "What street is the pharmacy on?\nBloor Street",
+    ],
+)
+def test_v11_review4_street_reply_about_clinic_not_masked(text):
+    assert not [e for e in _kinds(text) if e[0] == "ADDRESS"]
+
+
+def test_v11_review4_street_reply_about_home_keeps_direction():
+    assert ("ADDRESS", "King Street West") in _kinds("What street do you live on?\nKing Street West")
+    assert ("ADDRESS", "Elm Street E") in _kinds("your address?\nElm Street E")
+    assert ("ADDRESS", "Bloor Street") in _kinds("What is your street?\nBloor Street")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Nang trứng: hai, ba, năm, sáu, bảy, tám, chín, mười",
+        "Tiêm một hai ba bốn năm sáu bảy",
+        "Sau khi chuyển phôi, một hai ba bốn năm sáu bảy ngày sau thử thai",
+        "Kích thước nang: hai, ba, bốn, năm, sáu, bảy, tám",
+    ],
+)
+def test_v11_review4_vietnamese_counts_not_phone(text):
+    assert not [e for e in _kinds(text) if e[0] == "PHONE"]
+
+
+def test_v11_review4_vietnamese_phone_with_cue_stays():
+    assert [e for e in _kinds("số điện thoại của tôi là một hai ba bốn năm sáu bảy tám chín") if e[0] == "PHONE"]
+    assert [e for e in _kinds("số điện thoại: không chín tám bảy sáu năm bốn ba hai") if e[0] == "PHONE"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Pay us via PayPal @torontofertility", "Cash App $torontofert for deposits", "Please send the deposit to our venmo @clinicpay"],
+)
+def test_v11_review4_clinic_payment_handle_not_masked(text):
+    assert not [e for e in _kinds(text) if e[0] in ("ID", "ACCOUNT")]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("my venmo is @jane-doe-12", "@jane-doe-12"),
+        ("I paid with Venmo @jane-doe-12", "@jane-doe-12"),
+        ("Pay us via PayPal, my venmo is @jane-doe-12", "@jane-doe-12"),
+    ],
+)
+def test_v11_review4_patient_payment_handle_stays(text, value):
+    assert ("ID", value) in _kinds(text)
+
+
+def test_v11_review4_payment_handle_allow_list():
+    from phiproxy import Masker, Policy
+
+    out = Masker(policy=Policy(allow=["@clinic-2"])).mask("Venmo: @clinic-2", "s").text
+    assert "@clinic-2" in out
+
+
+@pytest.mark.parametrize(
+    "text,pieces",
+    [
+        ("my phone number is\n501\n234\n567", ["501", "234", "567"]),
+        ("mi celular es:\n55\n1234\n5678", ["55", "1234", "5678"]),
+        ("mój numer telefonu:\n501\n234\n567", ["501", "234", "567"]),
+        ("mój telefon komórkowy to\n501\n234\n567", ["501", "234", "567"]),
+        ("numer telefonu:\n22\n123\n45\n67", ["22", "123", "45", "67"]),
+    ],
+)
+def test_v11_review4_phone_pieces_other_shapes(text, pieces):
+    got = [v for t, v in _kinds(text) if t == "PHONE"]
+    assert all(p in got for p in pieces)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["call me\n501\n234\n567", "Version\n501\n234\n567", "Estradiol numbers\n501\n234\n567", "my phone number is\n12\n34"],
+)
+def test_v11_review4_phone_pieces_lookalikes(text):
+    assert not [e for e in _kinds(text) if e[0] == "PHONE"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("mi número de cuenta es 1234 5678 90", "1234 5678 90"),
+        ("account 1234 5678 90", "1234 5678 90"),
+        ("Account number is\n1234\n5678\n9012", "1234\n5678\n9012"),
+        ("numer konta 12 3456 7890", "12 3456 7890"),
+        ("my routing number is 021 000 021", "021 000 021"),
+        ("routing: 021-000-021", "021-000-021"),
+    ],
+)
+def test_v11_review4_account_and_routing_groups(text, value):
+    assert ("ACCOUNT", value) in _kinds(text)
+
+
+@pytest.mark.parametrize("text", ["account 12 34", "the account\n1234\n5678", "Ticket 021 000 021", "call routing 604 555 0123"])
+def test_v11_review4_account_group_lookalikes(text):
+    assert not [e for e in _kinds(text) if e[0] == "ACCOUNT" and len(e[1]) > 6]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("my coordinates are lat 44.6488 lon -63.5752", "lat 44.6488 lon -63.5752"),
+        ("GPS: N 44.65 W 63.57", "N 44.65 W 63.57"),
+        ("my GPS is 44 39.5 N 63 34.2 W", "44 39.5 N 63 34.2 W"),
+        ("coordonnées GPS 45.50 N, 73.57 O", "45.50 N, 73.57 O"),
+    ],
+)
+def test_v11_review4_gps_other_forms(text, value):
+    assert ("ADDRESS", value) in _kinds(text)
+
+
+@pytest.mark.parametrize("text", ["lat 44.6 lon", "N 44.65 W 63.57", "score 44 39.5 N 63 34.2 W", "Group N 5 O 6"])
+def test_v11_review4_gps_other_forms_need_cue(text):
+    assert not [e for e in _kinds(text) if e[0] == "ADDRESS"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("my email is k-e-l-l-i-at-gmail-dot-com", "k-e-l-l-i-at-gmail-dot-com"),
+        ("email: k, e, l, l, i, at, gmail dot com", "k, e, l, l, i, at, gmail dot com"),
+        ("האימייל שלי הוא kelli שטרודל gmail נקודה com", "kelli שטרודל gmail נקודה com"),
+    ],
+)
+def test_v11_review4_spelled_email_variants(text, value):
+    assert ("EMAIL", value) in _kinds(text)
+
+
+@pytest.mark.parametrize("text", ["a-b-c-at-home-dot-com", "my plan is to-do-at-noon", "ללא שטרודל gmail נקודה com"])
+def test_v11_review4_spelled_email_lookalikes(text):
+    assert not [e for e in _kinds(text) if e[0] == "EMAIL"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("I live on Tyendinaga Mohawk Territory", "Tyendinaga Mohawk Territory"),
+        ("I live in the county of Simcoe", "county of Simcoe"),
+        ("I live on Township Road 512", "Township Road 512"),
+        ("vivo en el municipio de Zapopan, Jalisco", "municipio de Zapopan"),
+        ("mieszkam w gminie Lesznowola", "gminie Lesznowola"),
+    ],
+)
+def test_v11_review4_county_and_territory_variants(text, value):
+    assert ("ADDRESS", value) in _kinds(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["the county of Simcoe is large", "I visited Mohawk Territory", "el municipio de Zapopan aprobó la ley", "Township Road 512 is closed"],
+)
+def test_v11_review4_county_variants_need_residence_cue(text):
+    assert not [e for e in _kinds(text) if e[0] == "ADDRESS"]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("pagué con el cheque #4521", "#4521"),
+        ("pagué con cheque 4521", "4521"),
+        ("I wrote you a cheque, number 4521", "4521"),
+    ],
+)
+def test_v11_review4_cheque_first_person_verbs(text, value):
+    assert ("ACCOUNT", value) in _kinds(text)
+
+
+@pytest.mark.parametrize("text", ["cheque no. 4521", "chèque #4521", "the cheque number 4521", "pagó con cheque 4521"])
+def test_v11_review4_cheque_bare_stay_visible(text):
+    assert not [e for e in _kinds(text) if e[0] == "ACCOUNT"]
+
+
+# ---- v11 final round 5, findings 1-7 ----
+def _fin_masker():
+    from phiproxy import Masker, Policy
+
+    return Masker(policy=Policy(staff=["Dr. Sarah Lee"], allow=["100 Main Street, Suite 200, Toronto"]))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Please come to Reception at 8 am for your scan.",
+        "Arrived at Mount Sinai at 8.",
+        "Please stay in Fasting mode.",
+        "I'm in Recovery now, Room 4.",
+        "Please come to Billing to pay.",
+        "Arrived at Gate B.",
+        "Community of Practice for Fertility.",
+        "City of Toronto Public Health guidelines apply.",
+        "We are near Fertility Centre.",
+        "Thanks for reaching out to Maple Fertility!",
+        "Please make the cheque out to Maple Fertility Clinic.",
+        "We reach out to Sun Life for pre-authorization.",
+        "Please reach out to Billing if you have questions.",
+        "You will need to go back to Northside Associates for records.",
+        "Send results back to Mount Sinai.",
+        "Currently in Treatment Cycle 2.",
+        "Come back to Maple for the scan.",
+        "I moved to Recovery after the procedure.",
+        "Jestem z Polski. Mąż z Ukrainy.",
+        "patient ASAP",
+        "Patient ENROLLED in study, patient ENDOMETRIOSIS stage 3",
+        "patient ACTH",
+        "patient ADHD",
+        "patient aPTT",
+        "patient DUPLICATE CHART",
+        "patient AUTOIMMUNE",
+    ],
+)
+def test_v11_final_ordinary_text_not_masked(text):
+    assert _fin_masker().mask(text, "s").text == text
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("We live in Oakville now.", "Oakville"),
+        ("I grew up in Pickering.", "Pickering"),
+        ("We moved to Wolfville last year.", "Wolfville"),
+        ("I'm from Truro.", "Truro"),
+        ("She's originally from Sackville.", "Sackville"),
+        ("My husband and I live near Oakville.", "Oakville"),
+        ("Pochodzę z Krakowa.", "Krakowa"),
+        ("Mieszkam w Gdyni.", "Gdyni"),
+        ("J'habite à Wolfville.", "Wolfville"),
+        ("patiente à Wolfville", "Wolfville"),
+        ("My husband and I arrived from Aleppo.", "Aleppo"),
+        ("We're out past Indian Brook.", "Indian Brook"),
+    ],
+)
+def test_v11_final_real_residence_cues_still_masked(text, value):
+    assert value not in _fin_masker().mask(text, "s").text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "patient WNL", "patient TBA", "patient NAD", "patient LDL", "patient SLE", "patient CKD", "patient COS",
+        "patient SAB", "patient NO show", "patient POC results", "patient LLQ pain", "patient CMP normal",
+        "patient MFM referral", "patient GS seen", "patient SCH", "patient IUP", "patient TWW", "patient PE exam",
+        "patient UA results", "patient PB biopsy", "patient SM results", "patient AH exam", "patient LBR",
+    ],
+)
+def test_v11_final_chart_abbreviations_not_initials(text):
+    assert _fin_masker().mask(text, "s").text == text
+
+
+@pytest.mark.parametrize("text", ["Pt AB called re: IUI", "patient KJ called", "patient PE called"])
+def test_v11_final_initials_lookalikes_still_masked(text):
+    out = _fin_masker().mask(text, "s").text
+    assert "[NAME_1]" in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cell count\n250\n300\n150",
+        "Cell culture\n250\n300\n450",
+        "Phone number confirmed. Doses today:\n150\n225\n300",
+        "Número de teléfono\n150\n225\n300",
+        "Phone number confirmed. Doses today:\n225\n300\n150",
+    ],
+)
+def test_v11_final_pieces_not_phone(text):
+    assert _fin_masker().mask(text, "s").text == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Phone number\n604\n555\n0199", "My cell\n604\n555\n0199", "Numer telefonu\n600\n123\n456"],
+)
+def test_v11_final_pieces_real_phone_still_masked(text):
+    out = _fin_masker().mask(text, "s").text
+    assert "[PHONE_1]" in out and "0199" not in out and "123" not in out.replace("[PHONE_1]", "")
+
+
+def test_v11_final_street_reply_after_clinic_question():
+    m = _fin_masker()
+    t = "Which clinic location? Yonge Street or Main Street?\nMain Street"
+    assert m.mask(t, "s").text == t
+    # a home-address question still masks the bare street reply
+    assert "Oak Hollow" not in m.mask("What is your home address?\nOak Hollow Lane", "s").text
+
+
+def test_v11_final_spoken_plus_pair_grouped_phone():
+    d = RegexDetector()
+    for t in ("Appelez plus 33 6 12 34 56 78. Trois jours.", "plus 1 4 1 6 5 5 5 0 1 8 2 and then 3 vials", "más 34 612 345 678"):
+        assert [e for e in d.detect(t) if e.type is T.PHONE], t
+    for t in ("plus 5 10 15 20 25 30 35", "más 1 2 3 4 5 6 7 8 9 10", "plus 20 100 200 300 units", "plus 2 4 6 8 10 12 14"):
+        assert not [e for e in d.detect(t) if e.type is T.PHONE], t
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Patiente IMC 24.", "Patiente: CCA ok", "Pacjent IMC 24.", "Paciente FUM 3 de octubre."],
+)
+def test_v11_final4_non_english_chart_abbreviations_not_initials(text):
+    assert not [e for e in RegexDetector().detect(text) if e.type is T.NAME], text
