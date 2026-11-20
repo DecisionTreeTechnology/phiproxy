@@ -13,7 +13,7 @@ from importlib import resources
 from typing import Callable, Optional
 
 from ..entities import Entity, EntityType
-from . import _hebrew, _names, _spoken, _structured
+from . import _accounts, _geo, _hebrew, _pieces, _names, _spoken, _structured
 
 _MONTHS = (
     "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
@@ -29,7 +29,7 @@ _US_STATES = (
 
 _STREET_SUFFIX = (
     "street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|crescent|cres|"
-    "way|place|pl|terrace|ter|circle|cir|parkway|pkwy|highway|hwy|trail|trl|square|sq"
+    "way|place|pl|terrace|ter|circle|cir|parkway|pkwy|highway|hwy|trail|trl|square|sq|cove|loop|grove|ridge|hollow|path|row"
 )
 
 # Capitalized words that follow "this is", "Dr." etc. but are not names.
@@ -155,6 +155,25 @@ _CARD_WORD = re.compile(r"\b(?:cards?|visa|mastercard|amex|credit|debit|carte|ta
 _CARD_EXPIRY_AFTER = re.compile(r"[ \t,;]*(?:exp\w*|valid\w*|cvv2?|cvc2?|security\s+code)\b", re.IGNORECASE)
 
 
+# A lot, batch or serial number "ends in 0457": the product's, not a card.
+# Only a product-number shape counts ("lot #", "lot no", "lot A1234", "batch 77", "NDC", "serial no", "kit lot");
+# "a lot", "lots of", "thanks a lot" and a plain "kit" do not. A card word right before the digits always wins.
+_PRODUCT_NEAR = re.compile(
+    r"(?i:\b(?:lot|lote|batch)[ \t]*(?:#|no\b|num\b|number|n[uú]mero|:)|\b(?:lot|lote)[ \t\-]+(?=[A-Za-z0-9\-]*\d)[A-Za-z0-9\-]+|"
+    r"\bbatch[ \t]+(?=[A-Za-z0-9\-]*\d)[A-Za-z0-9\-]+|\bndc\b|\bserial[ \t]*(?:#|no\b|num\b|number)|\bserial[ \t,:\-]*$|\bkit[ \t]*(?:#|no\b|num\b|number|lot\b))"
+)
+_CARD_GOVERNS = re.compile(
+    r"(?i:\b(?:cards?|visa|mastercard|master\s*card|amex|credit|debit|carte|tarjeta|karta|kart[ąy])\b[^.;!?\n\d]{0,25}$)"
+)
+
+
+def _not_product_last4(m: re.Match[str]) -> bool:
+    before = m.string[max(m.string.rfind("\n", 0, m.start()) + 1, m.start() - 60) : m.start()]
+    if _CARD_GOVERNS.search(before):
+        return True
+    return not _PRODUCT_NEAR.search(before)
+
+
 def _card_context(m: re.Match[str]) -> bool:
     """A 16-digit group is a card when the text around it talks about cards or gives an expiry."""
     text = m.string
@@ -165,6 +184,22 @@ def _card_context(m: re.Match[str]) -> bool:
 
 def _digits(s: str) -> str:
     return re.sub(r"\D", "", s)
+
+_UNIT_AFTER = re.compile(r"[ \t]*(?:units?|iu|mg|mcg|ml|cc|%|x\b|times|veces|fois|razy)", re.IGNORECASE)
+
+
+def _spoken_plus_phone(m: re.Match[str]) -> bool:
+    """"plus 48 555 010 203" is a phone; "plus 5 10 15 20 25" or "más 1 2 3 4 5" (a count or a
+    dose list) and "plus 20 100 200 300 units" are not."""
+    if not 10 <= len(_digits(m.group(0))) <= 14 or _UNIT_AFTER.match(m.string, m.end()):
+        return False
+    groups = re.findall(r"\d+", m.group(0))[1:]
+    # A count or dose list goes up in even steps ("5 10 15 20", "1 2 3 4"); a phone does not,
+    # whatever its grouping ("plus 33 6 12 34 56 78", "plus 48 555 010 203").
+    vals = [int(g) for g in groups if len(g) <= 6]
+    steps = {b - a for a, b in zip(vals, vals[1:])}
+    return not (len(vals) >= 3 and len(steps) == 1 and steps != {0})
+
 
 
 def _sin_check(m: re.Match[str]) -> bool:
@@ -399,6 +434,28 @@ def _not_alphabet_run(m: re.Match[str]) -> bool:
     return True
 
 
+# A name cue right before spelled letters: a list of options ("a, b, c, d") is not a name.
+_SPELL_CUE_BEFORE = re.compile(
+    r"(?i:(?:apellido|nombre|last[ \t]+name|surname|first[ \t]+name|\bname|pr[ée]nom|nom(?:[ \t]+de[ \t]+famille)?|nazwisko|imi[ęe]|"
+    r"spell(?:ed|ing|s)?|spelt|deletre\w*|[eé]pelle\w*|se[ \t]+escribe|escribe|pisze[ \t]+si[ęe]|letters?)"
+    r"(?:[ \t]+(?:it|that))?(?:[ \t]+(?:is|es|est|to|c['’]est|it['’]?s))?[ \t:,\-–]{0,4}"
+    r"|(?:שם(?:[ \t]+משפחה)?|פרטי)[ \t:,\-–]{0,4})$"
+)
+
+
+def _alphabet_sequence(letters: str) -> bool:
+    letters = letters.lower()
+    return len(letters) >= 3 and any(letters in abc for abc in ("abcdefghijklmnopqrstuvwxyz", _HE_ALEPHBET))
+
+
+def _spelled_es_check(m: re.Match[str]) -> bool:
+    """Comma-spelled letters need a name or spelling cue before them and are not an alphabet run."""
+    if not _SPELL_CUE_BEFORE.search(m.string[max(0, m.start() - 40) : m.start()]):
+        return False
+    singles = "".join(x.strip() for x in m.group(0).split(",") if len(x.strip()) == 1)
+    return not _alphabet_sequence(singles)
+
+
 # Three-letter abbreviations a clinic writes with hyphens or reads out letter by letter.
 _ACRONYMS_3 = {
     "IVF", "IUI", "FSH", "TSH", "HCG", "AMH", "LH", "ICSI", "PGT", "DNA", "BMI", "LMP", "PCO", "PCP", "HSG",
@@ -444,12 +501,12 @@ _PAGE_BEFORE = re.compile(r"(?i:\b(?:p|pp|pg|pag|page|p[áa]gina|str|strona|seit
 # A lab analyte right before a decimal ("FSH 18.4", "AMH level 1.2"): not a day.month date.
 _LAB_BEFORE = re.compile(
     r"(?i:\b(?:fsh|lh|amh|tsh|hcg|bhcg|e2|p4|prl|psa|a1c|hba1c|hgb|wbc|rbc|ferritin|estradiol|progesterone|"
-    r"testosterone|inhibin|t3|t4)\b(?:\s+(?:level|levels|value|result|results))?\W{0,3})$"
+    r"testosterone|inhibin|t3|t4|bmi|imc)\b(?:\s+(?:level|levels|value|result|results|was|is|of|de|es|fue))?\W{0,3})$"
 )
 _FRACTION_DOSE = re.compile(
     r"(?i)\s*(?:tab(?:s|lets?)?\b|cups?\b|doses?\b|vials?\b|amps?\b|pens?\b|mg\b|ml\b|tsp\b|tbsp\b|teaspoons?\b|cc\b|inch(?:es)?\b|%)"
 )
-_FRACTION_TIME = re.compile(r"(?i)\s*(?:of\s+an?\s+)?(?:hours?\b|days?\b|weeks?\b|cups?\b|tab(?:s|lets?)?\b)")
+_FRACTION_TIME = re.compile(r"(?i)\s*(?:of\s+an?\s+)?(?:hours?\b|days?\b|weeks?\b|cups?\b|tab(?:s|lets?)?\b|(?:full|empty)\b)")
 
 
 def _is_fraction(m: re.Match[str]) -> bool:
@@ -548,12 +605,45 @@ def _not_doc_period(m: re.Match[str]) -> bool:
     return not _DOC_PERIOD_BEFORE.search(before)
 
 
+# "pain 4/10", "pain >7/10", "rated 8/10", and equipment upkeep ("recalibrated 11/12") are not a person's date.
+_SCORE_BEFORE = re.compile(
+    r"(?i)\b(?:pain|score[ds]?|scale|rated?|rating|severity|nausea|discomfort|cramps?|cramping|bloating|distress)\b"
+    r"(?:[^\S\n]+(?:level|score|scale|rating|is|was|of|at|about|around|rated|a|an))?[^\S\n]*\W{0,3}$"
+)
+_UPKEEP_BEFORE = re.compile(r"(?i)\b(?:re)?(?:calibrated|serviced|cleaned|validated|replaced)\W{0,3}$")
+
+
+_EQUIPMENT_NOUN = re.compile(
+    r"(?i:\b(?:freezers?|incubators?|tanks?|dewars?|filters?|hoods?|microscopes?|machines?|equipment|alarms?|sensors?|batter(?:y|ies)|"
+    r"co2|nitrogen|ln2|fridges?|refrigerators?|centrifuges?)\b)"
+)
+_PATIENT_PROCEDURE_WORD = re.compile(
+    r"(?i:\b(?:embryos?|my|transfers?|retrievals?|beta|me|mine|patient|pt)\b)|(?-i:\bI(?:['’](?:m|ll|ve|d))?\b)"
+)
+
+
+_SCORE_LIST_TAIL = re.compile(r"(?:\b\d{1,2}/10[ \t]*(?:,|;|and|&|y|et)[ \t]*)+$")
+_DECIMAL_LIST_TAIL = re.compile(r"(?:\b\d{1,3}\.\d{1,2}[ \t]*(?:,|;|and|&|y|et)[ \t]*)+$")
+
+
+def _score_or_equipment(m: re.Match[str]) -> bool:
+    before = m.string[max(0, m.start() - 40) : m.start()]
+    if m.group(0).endswith("/10") and (_SCORE_BEFORE.search(before) or _SCORE_BEFORE.search(_SCORE_LIST_TAIL.sub("", before))):
+        # a list of scores: "Scores 7/10, 8/10" (the later items have the shape of the first)
+        return True
+    if not _UPKEEP_BEFORE.search(before):
+        return False
+    window = m.string[max(0, m.start() - 80) : m.start()]
+    clause = re.split(r"[.;!?\n]", window)[-1]
+    return bool(_EQUIPMENT_NOUN.search(clause)) and not _PATIENT_PROCEDURE_WORD.search(clause)
+
+
 def _short_date_check(m: re.Match[str]) -> bool:
     """A short numeric date, not an expiry, a page number ("p. 1/3") or a fraction ("1/2 tablet")."""
     before = m.string[max(0, m.start() - 24) : m.start()]
     if _is_product_expiry(m) or _PAGE_BEFORE.search(before):
         return False
-    if _FRACTION_DOSE.match(m.string, m.end()):
+    if _FRACTION_DOSE.match(m.string, m.end()) or _score_or_equipment(m):
         return False
     return not (_is_fraction(m) and _FRACTION_TIME.match(m.string, m.end()))
 
@@ -562,7 +652,9 @@ def _not_lab_value(m: re.Match[str], dot_only: bool = True) -> bool:
     """Not a result like "FSH 18.4". For a day-first date only a decimal point can be a result; a slash is a date."""
     if dot_only and "." not in m.group(0):
         return True
-    return not _LAB_BEFORE.search(m.string[max(0, m.start() - 32) : m.start()])
+    before = m.string[max(0, m.start() - 32) : m.start()]
+    # a list of decimals after the analyte: "BMI 24.5, 26.1"
+    return not (_LAB_BEFORE.search(before) or _LAB_BEFORE.search(_DECIMAL_LIST_TAIL.sub("", before)))
 
 
 _SPELLING_WORD = re.compile(r"(?i)\b[a-z][ \t]+(?:as[ \t]+in|comme|como|for)[ \t]+$")
@@ -604,7 +696,7 @@ _YEAR_WORDS = (
     r"un|deux|trois|quatre|cinq|six|sept|huit|neuf|onze|douze|treize|quatorze|quinze|seize|"
     r"tysi[ąa]c\w*|dwa|jeden|trzy|cztery|pi[ęe][ćc]|sze[śs][ćc]|siedem|osiem|dziewi[ęe][ćc]|dziewi[ęe][ćc]set|osiemset|\w+dziesi[ąa]t\w*|\w+na[śs]cie|"
     r"(?:pierwsz|drug|trzec|czwart|pi[ąa]t|sz[óo]st|si[óo]dm|[óo]sm|dziewi[ąa]t)\w*|roku|"
-    r"אלף|מאות|תשע|שמונה|תשעים|שמונים|ו?אחת|ו?אחד|ו?שתיים|ו?שלוש|ו?ארבע|ו?חמש|ו?שש|ו?שבע|ו?שמונה|ו?תשע"
+    r"אלף|מאות|תשע|שמונה|תשעים|שמונים|שבעים|שישים|חמישים|ארבעים|ו?אחת|ו?אחד|ו?שתיים|ו?שלוש|ו?ארבע|ו?חמש|ו?שש|ו?שבע|ו?שמונה|ו?תשע"
 )
 
 
@@ -640,10 +732,10 @@ def _places() -> tuple[dict[str, bool], re.Pattern[str]]:
 
 
 _STREET = (
-    rf"\b\d{{1,6}}[^\S\n]{{1,2}}(?:[A-Za-z0-9'\-]+[^\S\n]{{1,2}}){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
+    rf"\b(?:\d{{1,4}}[A-Za-z]?-)?\d{{1,6}}[^\S\n]{{1,2}}(?:[A-Za-z0-9'\-]+[^\S\n]{{1,2}}){{0,3}}(?:{_STREET_SUFFIX})\b\.?"
     # A direction after the street word: "Lyndale Ave S", "58 Dupont Ave N".
     r"(?:[^\S\n]+(?-i:[NSEW]|NE|NW|SE|SW)\b\.?(?![\w\-]))?"
-    r"(?:,?\s*(?:apt|apartment|unit|suite|ste|#)\.?\s*[A-Za-z0-9\-]+)?"
+    r"(?:,?\s*(?:apt|apartment|unit|suite|ste|#|mieszkanie|lokal|apto|apartamento|depto|appartement|appt|app)\.?\s*[A-Za-z0-9\-]+)?"
     # The city right after: "22 Pine Ridge Dr, Whitby", "2240 Maryland Ave E, St. Paul".
     r"(?:,[^\S\n]*(?-i:[A-Z][\w'\-]+(?:(?:(?<=\bSt)|(?<=\bMt)|(?<=\bFt)|(?<=\bSte))\.(?=[^\S\n][A-Z]))?(?:[^\S\n][A-Z][\w'\-]+)?)(?![^\S\n]*(?:\(|\d{3}\b)))?"
 )
@@ -972,6 +1064,16 @@ def _build_rules() -> list[_Rule]:
         rf"terminada\s+en)\s*:?\s*(\d{{4}}|{_ANY_DIGIT_WORD}(?:\s+{_ANY_DIGIT_WORD}){{3}})\b",
         I,
         group=1,
+        check=_not_product_last4,
+    )
+    # The same "last four" cue in Spanish, French and Polish, with the same product-number guard.
+    add(
+        EntityType.ACCOUNT,
+        r"(?<![\w])(?:[úu]ltimos\s+(?:4|cuatro)(?:\s+d[íi]gitos)?|(?:les\s+)?(?:4|quatre)\s+derniers\s+chiffres|ostatnie\s+(?:4|cztery)\s+cyfry)"
+        rf"(?:\s+(?:son|es|est|sont|to))?\s*:?\s*(\d{{4}}|{_ANY_DIGIT_WORD}(?:\s+{_ANY_DIGIT_WORD}){{3}})(?!\w)",
+        I,
+        group=1,
+        check=_not_product_last4,
     )
     # Other ways to say it, only after a card or account word: "tarjeta que termina en 9027",
     # "kartą kończącą się na 4471", "הכרטיס שלי נגמר ב-3308", "carte finissant par 4471".
@@ -1120,6 +1222,25 @@ def _build_rules() -> list[_Rule]:
     # International numbers written with a leading +.
     add(EntityType.PHONE, r"(?:(?<!\w)|(?<=(?<!\w)[ולבמהש]))\+(?:[2-9]\d{0,2})[\s.\-]?\d(?:[\s.\-]?\d){6,12}\b")
 
+    # A national number in groups right after a phone cue: "call 601 234 567", "Zadzwoń 48 601 234 567",
+    # "my phone is 52 55 1234 5678" (nine to thirteen digits, so not a North American shape).
+    add(
+        EntityType.PHONE,
+        r"\b(?:call(?:[ \t]+me)?(?:[ \t]+(?:at|on))?|phone(?:[ \t]+(?:number|no\.?))?(?:[ \t]+is)?|cell(?:[ \t]+(?:number|phone))?(?:[ \t]+is)?|"
+        r"mobile(?:[ \t]+(?:number|is))?|my[ \t]+number(?:[ \t]+is)?|tel\.?|t[ée]l[ée]phone|portable|t[ée]l[ée]fono|celular|m[óo]vil|"
+        r"zadzwo[ńn](?:[ \t]+(?:na|pod))?|telefon(?:[ \t]+to)?|numer(?:[ \t]+telefonu)?|kom[óo]rka|nr[ \t]+tel\.?)[ \t:]*"
+        r"(\d{2,4}(?:[ .\-]\d{2,4}){2,4})(?![ .\-]?\d)",
+        I,
+        group=1,
+        check=lambda m: 9 <= len(_digits(m.group(1))) <= 13,
+    )
+    # A "+" said as a word: "plus 48 555 010 203" (the country code and nine or more digits).
+    add(
+        EntityType.PHONE,
+        r"(?<!\w)(?:plus|m[áa]s)[ \t]+[1-9]\d{0,2}(?:[ \t.\-]?\d){9,12}\b(?![ \t.\-]?\d)",
+        I,
+        check=_spoken_plus_phone,
+    )
     # International numbers with a trunk digit or an area code in brackets, or a 00 prefix:
     # "+44 (0)20 7946 0958", "+7 (495) 123-45-67", "00 33 6 12 34 56 78".
     add(
@@ -1173,6 +1294,57 @@ def _build_rules() -> list[_Rule]:
         r"(?:com|org|net|ca|edu|gov|io|co|uk|fr|es|pl|il)\b",
         I,
     )
+    # A local part spelled letter by letter, with commas: "k, e, l, l, i, s, o, n, eight eight, at example dot com",
+    # "c, tremblay, tiret, roy, arobase example point org". It starts at a single letter and ends at the at-word
+    # and a spoken domain.
+    _sp_item = rf"(?:[^\W\d_]{{1,20}}|(?:{_SPOKEN_NUMBER}|{_SPOKEN_NUMBER_ML}|\d{{1,4}})(?:[ \t]+(?:{_SPOKEN_NUMBER}|{_SPOKEN_NUMBER_ML}|\d{{1,4}})){{0,3}})"
+    add(
+        EntityType.EMAIL,
+        rf"(?<![\w.\-@'’])[^\W\d_](?:[ \t]*,[ \t]*{_sp_item}){{2,16}}[ \t]*,?[ \t]*"
+        r"(?:at|arobase|arroba|ma[łl]pa),?[ \t]+\w{1,40}(?:[ \t]+(?:dot|point|punto|kropka)[ \t]+\w{1,40}){0,3}[ \t]+(?:dot|point|punto|kropka)[ \t]+"
+        r"(?:com|org|net|ca|edu|gov|io|co|uk|fr|es|pl|il)\b",
+        I,
+    )
+    # An address said with hyphens for every gap after an email word: "my email is k-e-l-l-i-at-gmail-dot-com".
+    _tld_all = r"(?:com|org|net|ca|edu|gov|io|co|uk|fr|es|pl|il)"
+    add(
+        EntityType.EMAIL,
+        r"(?i:\b(?:e-?mail|mail|courriel|correo|adres)\b)[^\n]{0,25}?[ \t:=]"
+        rf"(?P<e>[A-Za-z0-9](?:-[A-Za-z0-9]{{1,20}}){{2,24}}-(?i:at|arobase|arroba)(?:-[A-Za-z0-9]{{1,20}}){{1,6}}-(?i:dot|point|punto)-(?i:{_tld_all})\b)",
+        0,
+        "e",
+    )
+    # The same in Hebrew words ("שטרודל" for at, "נקודה" for dot) after an email word, with a Latin address.
+    add(
+        EntityType.EMAIL,
+        r"(?:אימייל|מייל|דוא[\"״]ל|דואל)[^\n]{0,30}?[ \t:](?P<e>[A-Za-z0-9][\w.\-]{0,40}[ \t]+שטרודל[ \t]+[A-Za-z0-9\-]{1,40}"
+        rf"(?:[ \t]+נקודה[ \t]+[A-Za-z0-9\-]{{1,40}}){{0,3}}[ \t]+נקודה[ \t]+(?i:{_tld_all})\b)",
+        0,
+        "e",
+    )
+    # A local part spelled letter by letter with spaces, dashes or dotted letters: "k e l l i at gmail dot com",
+    # "k - e - l - l - i at gmail dot com", "k. e. l. l. i at gmail dot com", "k e l l i 8 8 at ...", "k e l l i@gmail.com".
+    _sp_one = rf"(?:[^\W\d_](?![\w'’])|\d{{1,4}}(?!\d)|(?:{_SPOKEN_NUMBER}|{_SPOKEN_NUMBER_ML})(?![\w]))"
+    _sp_sep = r"(?:[ \t]*[\-.][ \t]*|[ \t]+)"
+    # The run starts at its first letter: a start right after another one-letter item would rescan the same run.
+    _sp_first = (
+        r"(?<![\w.\-@'’])"
+        + "".join(rf"(?<!(?<![\w'’])[^\W_]{x})" for x in (r"[ \t]", r"[\-.]", r"[ \t][\-.]", r"[\-.][ \t]", r"[ \t][\-.][ \t]"))
+    )
+    _sp_run = rf"{_sp_first}[^\W\d_](?![\w'’]){_sp_sep}[^\W\d_](?![\w'’])(?:{_sp_sep}{_sp_one}){{1,24}}"
+    add(
+        EntityType.EMAIL,
+        rf"{_sp_run}[ \t]*[\-.]?[ \t]+(?:at|arobase|arroba|ma[łl]pa)[ \t]+"
+        r"(?:\w{1,40}(?:[ \t]+(?:dot|point|punto|kropka)[ \t]+\w{1,40}){0,3}[ \t]+(?:dot|point|punto|kropka)[ \t]+"
+        r"|[A-Za-z0-9][A-Za-z0-9\-]{0,40}(?:\.[A-Za-z0-9][A-Za-z0-9\-]{0,40}){0,3}\.)"
+        r"(?:com|org|net|ca|edu|gov|io|co|uk|fr|es|pl|il)\b",
+        I,
+    )
+    add(
+        EntityType.EMAIL,
+        rf"{_sp_run}[ \t]*@[ \t]*[A-Za-z0-9][A-Za-z0-9\-]{{0,40}}(?:\.[A-Za-z0-9][A-Za-z0-9\-]{{0,40}}){{0,3}}\.[A-Za-z]{{2,10}}(?![\w@\-])",
+        I,
+    )
     # A spoken at-word before a written domain: "ania małpa gmail.com", "ana arroba wp.pl".
     add(
         EntityType.EMAIL,
@@ -1196,7 +1368,19 @@ def _build_rules() -> list[_Rule]:
         check=_plain_at_check,
     )
     # Spelled-out words ("k o w a l c z y k", "W-O-J-C-I-K") are almost always names.
+    # Vietnamese typed without diacritics: seven or more digit words right after a phone cue
+    # ("so dien thoai cua toi la khong mot hai ba bon nam sau bay"). The words are also English or
+    # Spanish words, so the cue and the length are both required.
+    _vw = r"(?:khong|mot|hai|ba|bon|nam|sau|bay|tam|chin)"
+    add(
+        EntityType.PHONE,
+        rf"(?<![\w])(?:so[ \t]+dien[ \t]+thoai|dien[ \t]+thoai|so[ \t]+dt|sdt)[ \t]*[:,]?[ \t]*(?:(?:cua[ \t]+(?:toi|em|minh|con|chau|anh|chi|bo|me)[ \t]+)?la[ \t]+)?"
+        rf"(?P<p>{_vw}(?:[ \t]*[,.\-]?[ \t]*{_vw}\b){{6,10}})(?![\w])",
+        I,
+        "p",
+    )
     add(EntityType.NAME, _names.SPELLED, check=_not_alphabet_run)
+    add(EntityType.NAME, _names.SPELLED_ES, I, check=_spelled_es_check)
     # Letters each given a key word ("c comme Charles o comme Oscar h comme Hotel", "A as in Alpha N as in
     # November"): three of them, or two after a spelling cue. The word must start with its letter.
     _kw = r"[A-Za-z][ \t]+(?:as[ \t]+in|comme|como|for|de)[ \t]+[^\W\d_]+"
@@ -1216,6 +1400,18 @@ def _build_rules() -> list[_Rule]:
         rf"(?P<name>{_kw}(?:[ \t]*,?[ \t]*(?:{_kw}|(?-i:[A-Z])(?![\w'’\-]))){{1,8}})(?![\w\-'’])",
         I,
         check=_kw_ok,
+    )
+    # Letters said one by one with commas after a name word: "el apellido p, e, eñe, a". Three or more, after
+    # the cue, so a list of options ("type A, B, O") stays.
+    _letter_name = r"(?:(?![yY][ \t]+[^\W\d_])[^\W\d_]|e[ñn]e|ene|ele|ese|equis|ye|zeta|hache|jota|erre|efe|doble[ \t]+ve|i[ \t]+griega|ge|ce|be|eme|pe|cu|uve|ve|te|de|ka|ache|ere|i[ \t]+latina)"
+    _es_first = r"(?:ge|ce|be|de|te|ve|efe|eme|ele|ene|ese|erre|pe|cu|uve|ka|hache|ache|jota|equis|zeta)"
+    add(
+        EntityType.NAME,
+        r"\b(?:apellido|nombre|se\s+llama|se\s+escribe|deletre\w+|last\s+name|surname|first\s+name|pr[ée]nom|nom\s+de\s+famille|"
+        r"nazwisko|imi[ęe]|spell(?:ed|ing|s)?|(?:three|four|3|4|tres|cuatro|trois|quatre|trzy|cztery)[ \t]+(?:letters|letras|lettres|litery))[ \t:,]{1,3}(?:(?:es|is|c['’]est|to|it['’]?s)[ \t]+)?"
+        rf"(?P<name>(?<![\w\-])(?:[^\W\d_](?![^\W\d_])|{_es_first}(?![^\W\d_]))(?:[ \t]*,[ \t]*{_letter_name}){{2,14}})(?![\w'’\-])",
+        I,
+        check=lambda m: not _alphabet_sequence("".join(x.strip() for x in m.group("name").split(",") if len(x.strip()) == 1)),
     )
     # Only three letters ("A-N-A"): a name when someone is spelling it, not "I-V-F" or "H-C-G".
     add(
@@ -1314,7 +1510,7 @@ def _build_rules() -> list[_Rule]:
     _day_alone = (
         rf"(?:{_ORDINAL_WORDS.replace(')|first|', ')|', 1)})(?=\s*(?:[.,?!;)/\n]|$|instead|right|then|works|and|"
         rf"i\s+think|so|at\s+(?:\d|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon)|or|okay|"
-        rf"ok|please|correct|is|was|with\s+(?:dr|doctor|the)|of\s+(?:this|next|the)\s+month))"
+        rf"ok|please|correct|still|yet|again|too|also|now|anyway|is|was|with\s+(?:dr|doctor|the)|of\s+(?:this|next|the)\s+month))"
     )
     add(EntityType.DATE, rf"\bthe\s+{_day_alone}", I)
     add(EntityType.DATE, rf"(?:^|\n|:)[^\S\n]*({_day_alone})", I | re.M, group=1)
@@ -1389,7 +1585,8 @@ def _build_rules() -> list[_Rule]:
         r"\b(?:en|depuis|jusqu['’]en|d['’]ici|desde|hasta|para|w|od|do)\s+"
         r"(janvier|f[ée]vrier|mars|mai|avril|juin|mayo|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|enero|febrero|marzo|"
         r"abril|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|styczniu|lutym|marcu|kwietniu|maju|czerwcu|"
-        r"lipcu|sierpniu|wrze[śs]niu|pa[źz]dzierniku|listopadzie|grudniu)\b(?!\s+\d)",
+        r"lipcu|sierpniu|wrze[śs]niu|pa[źz]dzierniku|listopadzie|grudniu|"
+        r"stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|wrze[śs]nia|pa[źz]dziernika|listopada|grudnia)\b(?!\s+\d)",
         I,
         group=1,
     )
@@ -1512,6 +1709,57 @@ def _build_rules() -> list[_Rule]:
     add(EntityType.DATE, rf"\b(?i:early|mid|late)[\s\-]+{_mon_cap}\b(?!\s+\d)")
     add(EntityType.DATE, rf"\b(?i:probably|maybe|perhaps|hopefully|sometime\s+in)\s+({_mon_cap})\b(?!\s+\d)", group=1)
 
+    # A compact date inside a camera or phone photo name: "IMG_20260314_name.jpg", "PXL_20261114_1.jpg".
+    # Names a clinic generates ("scan_", "consent_form_", "Form_") carry the form's date and stay.
+    add(
+        EntityType.DATE,
+        r"(?<![0-9A-Za-z])(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?!\d)(?=[\w\-]{0,40}\.[A-Za-z0-9]{2,4}\b)",
+        check=lambda m: bool(
+            re.search(
+                r"(?i)(?<![A-Za-z])(?:IMG|PXL|VID|DSCN?|MVIMG|PANO|BURST|Screenshot|WhatsApp[ _\-]Image|WhatsApp[ _\-]Video|photo|Snapchat|signal)[ _\-]+$",
+                m.string[max(0, m.start() - 20) : m.start()],
+            )
+        ),
+    )
+    # A month given alone as the answer to a date question, or as a self-correction fragment on its own line:
+    # "Patient: June", "Paciente: julio", "of June I mean".
+    add(
+        EntityType.DATE,
+        rf"(?:^|\n)[^\S\n]*(?:[^\W\d_]{{2,20}}:[^\S\n]*)?(?:(?:of|de|del|in)[^\S\n]+)?"
+        rf"(January|February|March|April|May|June|July|August|September|October|November|December|"
+        rf"(?i:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|"
+        rf"janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre))"
+        rf"(?=[^\S\n]*(?:[.!,]?[^\S\n]*(?:\n|$)|[.!,]?[^\S\n]+I[^\S\n]+mean))",
+        group=1,
+    )
+    # A past month: "last April", "last September".
+    add(EntityType.DATE, rf"\b(?i:last)[^\S\n]+{_mon_cap}\b(?!\s+\d)")
+    # French, Spanish: a weekday and a day number with the article, no month: "jeudi le 21", "martes el 12".
+    add(
+        EntityType.DATE,
+        rf"(?<!\w)(?:{_WEEKDAY_ML})[^\S\n]+(?:le|el)[^\S\n]+\d{{1,2}}(?:er)?(?![\d:hH]|[.,]\d|[^\S\n]*(?:h\b|heures?|horas?|%|mg|ml))",
+        I,
+    )
+    # Korean (and Chinese, Japanese) year-month-day, month-day and year-month: "1991년 8월 14일", "8월 14일".
+    add(
+        EntityType.DATE,
+        r"(?<!\d)(?:(?:19|20)\d{2}\s*[년年]\s*)?(?:0?[1-9]|1[0-2])\s*[월月]\s*(?:0?[1-9]|[12]\d|3[01])\s*[일日]"
+        r"|(?<!\d)(?:19|20)\d{2}\s*[년年]\s*(?:0?[1-9]|1[0-2])\s*[월月]",
+    )
+    # Vietnamese: "ngày mười hai tháng ba năm 1990", "12 tháng 3 năm 1990". A day and a month need "ngày" or a year,
+    # so "hai tháng ba" (two months, three ...) stays.
+    _vi_ones = r"(?:một|mốt|hai|ba|bốn|tư|năm|lăm|sáu|bảy|tám|chín)"
+    _vi_num = rf"(?:\d{{1,2}}|(?:hai|ba)\s+mươi(?:\s+{_vi_ones})?|mười(?:\s+{_vi_ones})?|mùng\s+{_vi_ones}|{_vi_ones})"
+    _vi_mon = rf"(?:\d{{1,2}}|mười\s+(?:một|hai)|{_vi_ones}|giêng|chạp)"
+    _vi_year = rf"(?:\d{{4}}|(?:một|hai)\s+(?:nghìn|ngàn)(?:\s+(?:{_vi_ones}|trăm|mươi|linh|lẻ|mười)){{0,7}})"
+    add(
+        EntityType.DATE,
+        rf"(?<!\w)(?:ngày\s+)?{_vi_num}\s+tháng\s+{_vi_mon}(?:\s+năm\s+{_vi_year})?(?!\w)",
+        I,
+        check=lambda m: m.group(0).lower().startswith("ngày") or bool(re.search(r"(?i)\bnăm\s+\S", m.group(0))),
+    )
+    add(EntityType.DATE, rf"(?<!\w)tháng\s+{_vi_mon}\s+năm\s+{_vi_year}(?!\w)", I)
+
     # Short numeric dates like 3/14 (no year).
     add(EntityType.DATE, r"(?<![\d/])\b(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\d|3[01])\b(?![/\d])", check=_short_date_check)
 
@@ -1562,11 +1810,11 @@ def _build_rules() -> list[_Rule]:
     # "1205 Calle Mayor", "ul. Kościuszki 12/4", "רחוב הרצל 14", then the city if any.
     add(
         EntityType.ADDRESS,
-        r"(?<!\w)(?:\d{1,5}[,\s]+)?(?i:rue|boulevard|boul\.|chemin|calle|avenida|carrera|paseo|ul\.|ulica|ulicy|"
+        r"(?<!\w)(?:\d{1,5}[,\s]+)?(?i:rue|boulevard|boul\.|chemin|calle|avenida|av\.|avda\.?|carrera|paseo|ul\.|ulica|ulicy|"
         r"ulic[ęe]|aleja|al\.)[^\S\n]+(?:(?i:de\s+la|des|du|de|del|la|le)\s+)?(?:[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+|\d{1,3}\b)"
         r"(?:[^\S\n]+[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+){0,2}(?:[^\S\n]*,?[^\S\n]*(?:\d{1,5}(?:/\d{1,4})?[A-Za-z]?|#\s*\d+-\d+)\b"
         rf"|[^\S\n]+(?i:(?:{_PL_NUM})(?:[^\S\n]+(?:{_PL_NUM})){{0,3}})(?![\w'’]))?"
-        r"(?:,[^\S\n]*(?i:apt|apto|apartment|unit|suite|ste|piso|m\.|lok\.|mieszkanie|lokal|apartamento|departamento|appartement)\.?\s*[\w\-]+(?:[^\S\n][A-Za-z]\b)?)?(?:,[^\S\n]*(?!(?i:apt|apto|unit|suite|ste)\b)[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+(?:[^\S\n][A-ZÀ-Ý][\w'\-]+)?)?",
+        r"(?:,[^\S\n]*(?i:apt|apto|apartment|unit|suite|ste|piso|m\.|lok\.|mieszkanie|lokal|apartamento|departamento|appartement|appt|app|depto)\.?\s*[\w\-]+(?:[^\S\n][A-Za-z]\b)?)?(?:,[^\S\n]*(?!(?i:apt|apto|unit|suite|ste)\b)[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+(?:[^\S\n][A-ZÀ-Ý][\w'\-]+)?)?",
     )
     # The house number may be digits or words, then the flat: "ברחוב הרצל 14 דירה 7",
     # "ברחוב ליינדייל שלוש מאות שתים עשרה דירה ארבע".
@@ -1615,6 +1863,11 @@ def _build_rules() -> list[_Rule]:
     R.append(_Rule(EntityType.ADDRESS, _places()[1], group=0, check=_place_check))
     # Cities written in Hebrew ("גרה בפתח תקווה", "עוברים לטורונטו"); the prefix stays outside.
     R.append(_Rule(EntityType.ADDRESS, _hebrew.PLACE_RE))
+
+    for t, pat, flags, grp, chk in _geo.rules():
+        add(t, pat, flags, grp, chk)
+    for t, pat, flags, grp, chk in _accounts.rules():
+        add(t, pat, flags, grp, chk)
 
     # Canadian postal code.
     add(
@@ -1758,7 +2011,7 @@ def _build_rules() -> list[_Rule]:
 
     # Names introduced by context (see _names.py). The local model or the
     # known-entity list catch names with no cue.
-    for pat, flags, check in [*_names.rules(_NOT_NAMES), *_names.courtesy_rules(_NOT_NAMES)]:
+    for pat, flags, check in [*_names.rules(_NOT_NAMES), *_names.courtesy_rules(_NOT_NAMES), *_names.initial_rules(_NOT_NAMES)]:
         add(EntityType.NAME, pat, flags, check=check)
     # A person who gives a title as their own name and says they are a patient ("my name is Dr. Sarah
     # Cohen", "patient Dr. Sarah Cohen", "I'm Dr. Sarah Cohen and I'm a patient") is a patient, not a
@@ -1856,6 +2109,8 @@ class RegexDetector:
                     continue
                 if rule.type in _NAME_GROUP_TYPES and "name" in m.groupdict():
                     start, end = m.span("name")
+                    if re.fullmatch(r"[A-Z]{2,3}['\u2019][sS]", text[start:end]):
+                        end -= 2  # initials before a possessive: "pt MJ's chart" masks "MJ"
                 elif "place" in m.groupdict():
                     start, end = m.span("place")
                 else:
@@ -1865,6 +2120,8 @@ class RegexDetector:
                 out.append(Entity(rule.type, start, end, text[start:end], self.name))
         # Identifiers read out loud: "four one six... five five five...", "T three A".
         spoken = [*_spoken.detect(text), *_spoken.street_numbers(text, _street_spans)]
+        if self.enabled is None or EntityType.PHONE in self.enabled:
+            spoken.extend(Entity(EntityType.PHONE, a, b, text[a:b], self.name) for a, b in _pieces.detect(text))
         # A field value the rules above already found whole is left to them.
         found = [(e.start, e.end) for e in out]
         spoken.extend(
@@ -1888,7 +2145,13 @@ class RegexDetector:
             e for e in out
             if not (
                 e.type in _CLINIC_NUMBER_TYPES
-                and (_CLINIC_NUMBER_CUE.search(text[max(0, e.start - 40) : e.start]) or _CLINIC_CODE_PREFIX.match(e.text))
+                and not ((len(e.text) in (9, 17) or (len(e.text) == 11 and e.type is EntityType.ACCOUNT)) and re.sub(r"[ \-]", "", e.text).isdigit() and len(re.sub(r"[ \-]", "", e.text)) == 9 and _ROUTING_NUMBER.search(text[max(0, e.start - 40) : e.start]))
+                and (
+                    _CLINIC_NUMBER_CUE.search(text[max(0, e.start - 40) : e.start])
+                    or _CLINIC_CODE_PREFIX.match(e.text)
+                    # The digits after the prefix of a clinic code the other rules took whole: "TRK-90044172".
+                    or _CLINIC_CODE_PREFIX.search(text[max(0, e.start - 6) : e.start])
+                )
             )
         ]
 
@@ -1930,6 +2193,15 @@ def _dedupe(entities: list[Entity]) -> list[Entity]:
             drop.add(i)
         else:
             reach = max(reach, out[i].end)
+    # A shorter EMAIL or a NAME inside a longer EMAIL ("smith at gmail dot com" in "kelli dash smith at gmail dot com").
+    emails = [e for e in out if e.type is EntityType.EMAIL]
+    if len(emails) > 1 or (emails and any(e.type is EntityType.NAME for e in out)):
+        for i, e in enumerate(out):
+            if e.type in (EntityType.EMAIL, EntityType.NAME) and any(
+                o is not e and o.type is EntityType.EMAIL and o.start <= e.start and e.end <= o.end and (o.end - o.start) > (e.end - e.start)
+                for o in emails
+            ):
+                drop.add(i)
     return [e for i, e in enumerate(out) if i not in drop]
 
 
@@ -1959,7 +2231,9 @@ _CLINIC_NUMBER_CUE = re.compile(
 )
 
 # Codes that name their own kind: a helpdesk ticket, SOP, purchase order, quote or tracking number.
-_CLINIC_CODE_PREFIX = re.compile(r"(?:TKT|TICKET|SOP|PO|QUOTE|TRK|RMA)-", re.IGNORECASE)
+_CLINIC_CODE_PREFIX = re.compile(r"(?:TKT|TICKET|SOP|PO|QUOTE|TRK|RMA|LOTE?|BATCH)-", re.IGNORECASE)
+# A bank routing number (nine digits) is the patient's account detail, not the clinic's call routing.
+_ROUTING_NUMBER = re.compile(r"(?i:\b(?:routing|aba|rtn)\b[^\n\d]{0,25})$")
 
 _STREET_RE = re.compile(_STREET, re.IGNORECASE)
 _STREET_SUFFIX_AFTER = re.compile(rf"(?:[ \t]+[A-Za-z'’\-]+){{1,3}}[ \t]+(?:{_STREET_SUFFIX})\b", re.IGNORECASE)

@@ -14,6 +14,7 @@ text. A spoken street number is rewritten so the street-address rule can see it
 
 from __future__ import annotations
 
+import bisect
 import re
 from typing import Callable, Optional
 
@@ -32,6 +33,8 @@ _UNITS = {
     # pl
     "jeden": 1, "jedna": 1, "dwa": 2, "dwie": 2, "trzy": 3, "cztery": 4, "pięć": 5,
     "sześć": 6, "siedem": 7, "osiem": 8, "dziewięć": 9,
+    # vi
+    "không": 0, "một": 1, "hai": 2, "bốn": 4, "năm": 5, "sáu": 6, "bảy": 7, "tám": 8, "chín": 9,
     # he
     "אפס": 0, "אחת": 1, "אחד": 1, "שתיים": 2, "שניים": 2, "שתים": 2, "שלוש": 3, "שלושה": 3,
     "ארבע": 4, "ארבעה": 4, "חמש": 5, "חמישה": 5, "שש": 6, "שישה": 6, "שבע": 7, "שבעה": 7,
@@ -101,7 +104,7 @@ def _number_word(w: str) -> Optional[tuple[str, int]]:
     if w in _REPEAT:
         return "repeat", _REPEAT[w]
     if w.isdigit():
-        return "digits", int(w)
+        return "digits", 0  # the raw digits are kept; the value is never used
     if len(w) > 2 and _HE_PREFIX.match(w) and w[1:] in _UNITS:
         return "unit", _UNITS[w[1:]]
     return None
@@ -200,10 +203,29 @@ def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
     out = []
     run = _Run()
     joins = 0  # separator words since the last spoken character ("and then")
+    vi = 0  # Vietnamese digit words in the run
+    other = False  # a non-Vietnamese element in the run
+    arab = False  # an Arabic-digit token in the run
+    vi_comma = False  # a comma inside a run of Vietnamese digit words
 
     def close() -> None:
-        nonlocal run, joins
+        nonlocal run, joins, vi, other, arab, vi_comma
         chars = run.finish()
+        # Vietnamese digit words are also ordinary words ("năm nay", "hai"): a run made of them alone
+        # needs three, or a Vietnamese phone cue right before it.
+        # With a cue, a run of Vietnamese digit words alone still needs seven (a Vietnamese phone has 9-11
+        # digits): "số điện thoại không có, một hai ba ngày nữa" is a count of days.
+        if chars and vi and not other:
+            cue = bool(_VI_CUE.search(text[max(0, chars[0][1] - 24) : chars[0][1]]))
+            if (
+                vi < 3 and not cue
+                or (vi < 7 and not arab and run.spoken == vi)
+                # No phone cue: a count or a size list ("hai, ba, năm, sáu, bảy, tám, chín", "một hai ... bảy ngày
+                # sau") is not a phone; only a long unbroken run with no unit word after it is.
+                or (not cue and not arab and (vi < 9 or vi_comma or _VI_UNIT_AFTER.match(text, chars[-1][2])))
+            ):
+                chars = []
+        vi, other, arab, vi_comma = 0, False, False, False
         # Identifiers written in figures are the pattern rules' job, except digits
         # read one at a time.
         if chars and (run.spoken or (run.singles >= 3 and not run.multi)):
@@ -218,9 +240,12 @@ def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
         raw = m.group(0)
         w = raw.lower()
         s, e = m.span()
-        if text[prev_end:s].strip():
+        gap = text[prev_end:s]
+        if gap.strip():
             close()  # "9:30", "$350", "(": not a pause inside a spoken number
         prev_end = e
+        if raw == "," and vi and (run.chars or run.open):
+            vi_comma = True
         if raw in _PAUSES or (raw == "." and (run.chars or run.open)):
             run._flush()  # a pause ends a number group: "eight hundred, five five five"
             continue
@@ -229,7 +254,36 @@ def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
             continue
         parts = w.split("-") if "-" in w and w not in _NATO else [w]
         kinds = [_number_word(p) for p in parts]
+        if raw == "ba" and _vi_neighbour(tokens, i):
+            kinds = [("unit", 3)]  # Vietnamese "ba" (three); "BA" in a grade or lot code is not
+        if (
+            all(kinds)
+            and (run.chars or run.open)
+            and raw[:1].isupper()
+            and not raw.isupper()
+            and sum(c[0].isdigit() for c in run.chars) >= 7  # a whole number is already said
+            and (("\n" in gap) or (i and tokens[i - 1].group(0) == "." and gap[:1].isspace()))
+        ):
+            close()  # "416-555-0199. Two embryos": a capitalised number word after a full stop or line break starts a sentence
+        if all(kinds) and (run.chars or run.open) and (joins or "\n" in gap) and _before_unit(tokens, i):
+            close()  # "... 8 2 and then 3 vials", "... 8 2\n5 vials": a count or dose after the number, not part of it
         if all(kinds):
+            is_vi = parts == [w] and (w in _VI_DIGITS or raw == "ba")
+            # Vietnamese digit words join only each other: "604 555 0182 năm nay" is a phone and a year.
+            arabic = all(k[0] == "digits" for k in kinds)
+            if is_vi and raw != "ba" and not _vi_neighbour(tokens, i):
+                pair = False  # a lone Vietnamese digit word is an ordinary word ("năm", "hai")
+            else:
+                pair = True
+            if (run.chars or run.open) and (
+                (is_vi and (arab or (other and not pair))) or (arabic and vi) or (not is_vi and vi == 1 and not other)
+            ):
+                close()
+            if is_vi:
+                vi += 1
+            else:
+                other = True
+                arab = arab or arabic
             for (kind, v) in kinds:  # type: ignore[misc]
                 run.number(kind, v, s, e, raw if kind == "digits" else "")
                 # A lone "o" is a zero only beside other spoken numbers (OCR: "555-O188").
@@ -246,9 +300,15 @@ def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
         if i <= skip_to:
             continue
         if w in _NATO:
+            if vi:
+                close()
+            other = True
             run.letter(_NATO[w], s, e)
             run.spoken += 1
             joins = 0
+            continue
+        if w == "h" and run.chars and re.search(r"(?<![\d:.])\d{3,4}$", text[max(0, s - 5) : s]):
+            close()  # a military time ("0800h"), not a letter in a code
             continue
         if len(w) == 1 and w.isalpha() and w.isascii() and text[s - 1 : s] not in ("'", "’"):
             # A single letter belongs to a run only beside a number or another letter.
@@ -269,10 +329,15 @@ def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
             # joins only when more of the code follows: "We spoke. I think".
             prev = tokens[i - 1].group(0) if i else ""
             weak = not ahead and (prev == "." or w in ("y", "e", "u"))
+            if joins and not ahead:
+                weak = True  # "... 8 2 and I take 5 mg": a letter after a joiner needs more of the code behind it
             if not weak and (
                 (ahead and not (starts and raw in ("a", "i")))
                 or (not starts and (raw.isupper() or w not in ("i", "a")))
             ):
+                if vi:
+                    close()
+                other = True
                 run.letter(w, s, e)
                 joins = 0
                 continue
@@ -285,6 +350,41 @@ def _scan(text: str) -> list[tuple[list[tuple[str, int, int]], int, int, int]]:
         close()
     close()
     return out
+
+
+_UNIT_WORDS = frozenset(
+    "vial vials mg mcg ml cc iu unit units tablet tablets tab tabs pill pills capsule capsules dose doses day days week weeks "
+    "month months year years time times minute minutes min mins hour hours hr hrs kg lb lbs".split()
+)
+
+
+def _before_unit(tokens: list[re.Match[str]], i: int) -> bool:
+    """True when the token after tokens[i] is a unit or count noun ("3 vials", "5 mg")."""
+    for t in tokens[i + 1 : i + 3]:
+        if t.group(0) in _PAUSES:
+            continue
+        return t.group(0).lower() in _UNIT_WORDS
+    return False
+
+
+_VI_DIGITS = frozenset(w for w in _UNITS if w in ("không", "một", "hai", "bốn", "năm", "sáu", "bảy", "tám", "chín"))
+
+
+_VI_UNIT_AFTER = re.compile(
+    r"[\s,]*(?:ngày|tuần|tháng|năm\s+nay|tuổi|giờ|phút|lần|quả|nang|trứng|phôi|mg|ml|iu|ui|đơn\s+vị|viên|ống|mũi|cm|mm)(?!\w)", re.IGNORECASE
+)
+_VI_CUE = re.compile(r"(?:điện\s+thoại|sđt|đt|di\s+động|số)\W{0,6}(?:\w{1,4}\W{1,3}){0,3}$", re.IGNORECASE)
+
+
+def _vi_neighbour(tokens: list[re.Match[str]], i: int) -> bool:
+    """True when "ba" stands beside another Vietnamese digit word (pauses skipped)."""
+    for step in (-1, 1):
+        j = i + step
+        while 0 <= j < len(tokens) and tokens[j].group(0) in _PAUSES:
+            j += step
+        if 0 <= j < len(tokens) and tokens[j].group(0) in _VI_DIGITS:
+            return True
+    return False
 
 
 def _span(chars: list[tuple[str, int, int]]) -> tuple[int, int]:
@@ -367,10 +467,10 @@ _ASKED = [
         r"postal\s+code|\bzip\b|זיפ|code\s+postal|c[óo]digo\s+postal|kod\s+pocztowy|מיקוד", re.IGNORECASE)),
     (EntityType.PHONE, re.compile(
         r"phone|call\s*back|\bcell\b|reach\s+(?:you|me)|call\s+me\s+(?:at|on)|my\s+number|t[ée]l[ée]phone|mon\s+num[ée]ro|"
-        r"tel[ée]fono|celular|mi\s+n[úu]mero|telefon|kom[óo]rk|טלפון|נייד", re.IGNORECASE)),
+        r"tel[ée]fono|celular|mi\s+n[úu]mero|telefon|kom[óo]rk|טלפון|נייד|điện\s+thoại|전화", re.IGNORECASE)),
     (EntityType.ID, re.compile(
         r"health\s+(?:card\s+)?number|member\s+(?:id|number)|rx\s+number|prescription\s+number|"
-        r"social\s+(?:security|insurance)|\bsin\b|\bssn\b|s[ée]curit[ée]\s+sociale|seguro\s+social|"
+        r"social\s+(?:security|insurance)|(?-i:\bSIN\b)|\bsin\s+(?:number|no\b)|\bssn\b|s[ée]curit[ée]\s+sociale|seguro\s+social|"
         r"\bpesel\b|תעודת\s+זהות|ת\.ז|מספר\s+חבר|account|policy|claim|chart\s+number|\bmrn\b|medical\s+record|record\s+number|"
         r"group\s+(?:number|no\b|id)|\bgrup[ao]\b|\bgroupe\b|קבוצה|"
         r"num[ée]ro\s+de\s+dossier|n[úu]mero\s+de\s+(?:expediente|tarjeta|socio)|numer\s+(?:karty|polisy)", re.IGNORECASE)),
@@ -398,21 +498,33 @@ _DATE_LEAD = re.compile(
 )
 
 
+_ASKED_CACHE: list = [None, [], []]  # text, match ends (sorted), (start, type) by end
+
+
+def _asked_matches(text: str) -> tuple[list[int], list[tuple[int, EntityType]]]:
+    """Every "asked for" cue in the text, found once (so a long line stays linear), by end."""
+    if _ASKED_CACHE[0] is not text:
+        found = sorted((m.end(), m.start(), t) for t, pat in _ASKED for m in pat.finditer(text))
+        _ASKED_CACHE[:] = [text, [f[0] for f in found], [(f[1], f[2]) for f in found]]
+    return _ASKED_CACHE[1], _ASKED_CACHE[2]
+
+
 def _asked(text: str, pos: int) -> Optional[EntityType]:
     """The identifier asked for in the last three lines before ``pos``, if any."""
+    floor = max(0, pos - 3000)  # bounded so one long line stays linear
     start = pos
     for _ in range(4):
-        start = text.rfind("\n", 0, max(start - 1, 0))
+        start = text.rfind("\n", floor, max(start - 1, floor))
         if start < 0:
-            start = 0
+            start = floor
             break
-    window = text[start:pos]
-    best: Optional[tuple[int, EntityType]] = None
-    for t, pat in _ASKED:
-        for m in pat.finditer(window):
-            if best is None or m.end() > best[0]:
-                best = (m.end(), t)
-    return best[1] if best else None
+    ends, info = _asked_matches(text)
+    k = bisect.bisect_right(ends, pos) - 1
+    while k >= 0 and ends[k] > start:
+        if info[k][0] >= start:
+            return info[k][1]
+        k -= 1
+    return None
 
 
 def detect(text: str) -> list[Entity]:
@@ -450,7 +562,7 @@ def detect(text: str) -> list[Entity]:
                 continue
             if (
                 _TIME_AFTER.match(text[end:])
-                or _TIME_BEFORE.search(text[:start])
+                or _TIME_BEFORE.search(text[max(0, start - 200) : start])
                 or (time_end >= 0 and _TIME_LINK.match(text[time_end:start]))
             ):
                 time_end = end
@@ -460,7 +572,7 @@ def detect(text: str) -> list[Entity]:
             if t is None or digits < (2 if t is EntityType.POSTAL_CODE and len(s) >= 3 else 3):
                 continue
             if t is EntityType.DATE and (
-                re.fullmatch(r"(?:19|20)\d\d", s) or re.search(r"(?:mil|mille|thousand|tysi[ąa]c)\s*$", text[:start], re.I)
+                re.fullmatch(r"(?:19|20)\d\d", s) or re.search(r"(?:mil|mille|thousand|tysi[ąa]c)\s*$", text[max(0, start - 200) : start], re.I)
             ):
                 continue  # a year alone ("mil novecientos ochenta y siete") is not a date element
             if t is EntityType.DATE:

@@ -1,0 +1,68 @@
+{"id": "v11-en-sms-004", "action": "add", "type": "NAME", "surface": "MacIsaac", "occurrence": 1, "reason": "surname of labelled first name"}
+{"id": "v11-en-sms-007", "action": "add", "type": "NAME", "surface": "Joaquin", "occurrence": 1, "reason": "patient first name"}
+{"id": "v11-en-sms-014", "action": "add", "type": "NAME", "surface": "Ines", "occurrence": 1, "reason": "wife's name"}
+{"id": "v11-en-sms-019", "action": "add", "type": "NAME", "surface": "Ngozi O", "occurrence": 1, "reason": "patient name as shown on Zelle"}
+{"id": "v11-en-chat-049", "action": "add", "type": "NAME", "surface": "Tyrone Gaines", "occurrence": 1, "reason": "patient states own name"}
+{"id": "v11-en-chat-056", "action": "add", "type": "NAME", "surface": "Gwen", "occurrence": 2, "reason": "greeting of patient"}
+{"id": "v11-en-chat-056", "action": "add", "type": "NAME", "surface": "Gwen", "occurrence": 4, "reason": "quoted greeting of patient"}
+{"id": "v11-en-chat-063", "action": "add", "type": "DATE", "surface": "June", "occurrence": 1, "reason": "DOB month"}
+{"id": "v11-en-chat-063", "action": "add", "type": "DATE", "surface": "June", "occurrence": 2, "reason": "DOB month"}
+{"id": "v11-en-chat-063", "action": "add", "type": "DATE", "surface": "12th", "occurrence": 1, "reason": "patient appointment day"}
+{"id": "v11-en-chat-077", "action": "add", "type": "NAME", "surface": "Szczepanski", "occurrence": 1, "reason": "patient surname before spelling"}
+{"id": "v11-en-chat-083", "action": "add", "type": "ADDRESS", "surface": "Truro", "occurrence": 1, "reason": "town where person lives"}
+{"id": "v11-en-chat-089", "action": "add", "type": "ACCOUNT", "surface": "PA-90214477", "occurrence": 2, "reason": "quoted prior auth"}
+{"id": "v11-en-call-101", "action": "add", "type": "DATE", "surface": "March ninth, nineteen eighty-seven", "occurrence": 1, "reason": "spoken DOB"}
+{"id": "v11-en-call-101", "action": "add", "type": "PHONE", "surface": "404-555-0182", "occurrence": 1, "reason": "patient phone read back"}
+{"id": "v11-en-call-101", "action": "add", "type": "PHONE", "surface": "404-555-0128", "occurrence": 1, "reason": "patient phone read back"}
+{"id": "v11-en-call-101", "action": "add", "type": "PHONE", "surface": "Zero one two eight", "occurrence": 1, "reason": "spoken phone digits"}
+{"id": "v11-en-call-105", "action": "add", "type": "NAME", "surface": "P, A, U, L", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v11-en-call-105", "action": "add", "type": "HEALTH_CARD", "surface": "one two three four, five six seven, eight nine zero", "occurrence": 1, "reason": "spoken health card"}
+{"id": "v11-en-call-110", "action": "add", "type": "EMAIL", "surface": "k, e, l, l, i, s, o, n, eight eight, at example dot com", "occurrence": 1, "reason": "spelled email"}
+{"id": "v11-en-call-111", "action": "add", "type": "ADDRESS", "surface": "Decatur", "occurrence": 1, "reason": "city where caller lives"}
+{"id": "v11-en-call-114", "action": "add", "type": "ADDRESS", "surface": "the blue house past the Circle K on Hwy 20, and then the second gravel drive on the left", "occurrence": 1, "reason": "directions to home"}
+{"id": "v11-en-call-122", "action": "add", "type": "ACCOUNT", "surface": "INV-30871", "occurrence": 1, "reason": "invoice tied to person"}
+{"id": "v11-en-call-138", "action": "add", "type": "NAME", "surface": "A, C, H, E, B, E", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v11-en-email-141", "action": "add", "type": "ADDRESS", "surface": "Sandy Springs", "occurrence": 1, "reason": "city where patient lives"}
+{"id": "v11-en-email-141", "action": "add", "type": "DATE", "surface": "Nov 14", "occurrence": 1, "reason": "beta date tied to patient"}
+{"id": "v11-en-email-145", "action": "add", "type": "ACCOUNT", "surface": "INV-30119", "occurrence": 1, "reason": "invoice tied to person"}
+{"id": "v11-en-note-193", "action": "add", "type": "ID", "surface": "tmbeki_2231", "occurrence": 2, "reason": "username repeat"}
+{"id": "v11-en-note-193", "action": "add", "type": "ID", "surface": "tmbeki_2231", "occurrence": 3, "reason": "username repeat"}
+{"id": "v11-en-note-193", "action": "add", "type": "ID", "surface": "tmbeki_2231", "occurrence": 4, "reason": "username repeat"}
+{"id": "v11-en-note-193", "action": "add", "type": "ID", "surface": "tmbeki_2231", "occurrence": 5, "reason": "username repeat"}
+{"id": "v11-en-note-193", "action": "add", "type": "IP_ADDRESS", "surface": "198.51.100.120", "occurrence": 2, "reason": "IP repeat"}
+{"id": "v11-en-note-193", "action": "add", "type": "MRN", "surface": "0071882", "occurrence": 1, "reason": "chart number"}
+{"id": "v11-en-note-196", "action": "add", "type": "NAME", "surface": "Fadi", "occurrence": 2, "reason": "spouse first name"}
+{"id": "v11-es-email-005", "action": "add", "type": "NAME", "surface": "Fernanda Treviño", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-es-email-005", "action": "add", "type": "NAME", "surface": "Fernanda T.", "occurrence": 1, "reason": "signature"}
+{"id": "v11-es-email-005", "action": "add", "type": "ADDRESS", "surface": "Monterrey", "occurrence": 1, "reason": "city she writes from"}
+{"id": "v11-es-call-008", "action": "add", "type": "NAME", "surface": "a-l-t-a-g-r-a-c-i-a", "occurrence": 1, "reason": "name spelled letter by letter"}
+{"id": "v11-es-call-013", "action": "add", "type": "ADDRESS", "surface": "Valencia", "occurrence": 1, "reason": "city caller is calling from"}
+{"id": "v11-es-email-015", "action": "add", "type": "ADDRESS", "surface": "Medellín", "occurrence": 1, "reason": "city of origin"}
+{"id": "v11-es-chat-017", "action": "add", "type": "ADDRESS", "surface": "Santo Domingo", "occurrence": 1, "reason": "city patient is from"}
+{"id": "v11-es-call-018", "action": "add", "type": "ADDRESS", "surface": "Guadalajara", "occurrence": 1, "reason": "where patient is staying"}
+{"id": "v11-es-chat-022", "action": "add", "type": "DATE", "surface": "julio", "occurrence": 1, "reason": "birth month given in parts"}
+{"id": "v11-es-email-025", "action": "add", "type": "NAME", "surface": "Sofía Valderrama", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-es-email-025", "action": "add", "type": "ADDRESS", "surface": "Bogotá", "occurrence": 1, "reason": "city patient is from"}
+{"id": "v11-es-email-029", "action": "add", "type": "NAME", "surface": "AB", "occurrence": 1, "reason": "patient initials in subject"}
+{"id": "v11-es-call-033", "action": "add", "type": "ADDRESS", "surface": "Ciudad de México", "occurrence": 1, "reason": "city where caller lives"}
+{"id": "v11-es-email-039", "action": "add", "type": "NAME", "surface": "Ernesto Villalobos", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-es-sms-046", "action": "add", "type": "ADDRESS", "surface": "santiago", "occurrence": 1, "reason": "city patient is from"}
+{"id": "v11-es-email-055", "action": "add", "type": "ADDRESS", "surface": "Valencia", "occurrence": 1, "reason": "city patient is from"}
+{"id": "v11-es-email-059", "action": "add", "type": "NAME", "surface": "Camila Duque", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-fr-email-005", "action": "add", "type": "NAME", "surface": "Nadine Haddad-Khoury", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-fr-email-005", "action": "add", "type": "ADDRESS", "surface": "Beyrouth", "occurrence": 1, "reason": "city of origin"}
+{"id": "v11-fr-call-008", "action": "add", "type": "ADDRESS", "surface": "Casablanca", "occurrence": 1, "reason": "city of origin"}
+{"id": "v11-fr-email-015", "action": "add", "type": "NAME", "surface": "Sophie Marchetti", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-fr-email-015", "action": "add", "type": "ADDRESS", "surface": "Lyon", "occurrence": 1, "reason": "city where patient lives"}
+{"id": "v11-fr-call-018", "action": "add", "type": "ADDRESS", "surface": "Québec", "occurrence": 1, "reason": "city patient comes from"}
+{"id": "v11-fr-call-023", "action": "add", "type": "ADDRESS", "surface": "Beyrouth", "occurrence": 1, "reason": "city of origin"}
+{"id": "v11-fr-sms-026", "action": "add", "type": "ADDRESS", "surface": "route 11", "occurrence": 1, "reason": "directions to home"}
+{"id": "v11-fr-chat-027", "action": "add", "type": "ADDRESS", "surface": "Kinshasa", "occurrence": 1, "reason": "city of origin"}
+{"id": "v11-fr-email-039", "action": "add", "type": "NAME", "surface": "Nathalie Pellerin", "occurrence": 1, "reason": "From display name"}
+{"id": "v11-es-note-054", "action": "remove", "type": "ADDRESS", "surface": "Orlando", "occurrence": 1, "reason": "weekend travel destination, not residence"}
+{"id": "v11-fr-note-040", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Luc Doucet", "occurrence": 1, "reason": "pharmacist"}
+{"id": "v11-mixed-email-027", "action": "add", "type": "NAME", "surface": "Isabelle", "occurrence": 2, "reason": "patient first name in signature"}
+{"id": "v11-mixed-email-030", "action": "add", "type": "NAME", "surface": "Sandrine", "occurrence": 2, "reason": "sender first name in signature"}
+{"id": "v11-mixed-email-031", "action": "add", "type": "NAME", "surface": "Rania", "occurrence": 2, "reason": "patient first name in signature"}
+{"id": "v11-mixed-email-034", "action": "add", "type": "DATE", "surface": "11/12", "occurrence": 1, "reason": "charge date tied to patient payment"}
+{"id": "v11-mixed-email-034", "action": "add", "type": "DATE", "surface": "11/14", "occurrence": 1, "reason": "charge date tied to patient payment"}

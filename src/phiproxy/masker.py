@@ -195,9 +195,33 @@ _FIELD_LABEL = re.compile(
 _INITIAL_BEFORE = re.compile(r"(?<![\w.])[A-ZÀ-Þ]\.[ \t]?$")
 _FILE_INITIAL = re.compile(r"_[A-ZÀ-Þ](?![^\W_])")
 # Words that name a person once but are ordinary words elsewhere.
+_HANDLE_STEM = re.compile(r"[@$]?([A-Za-z]{4,14})[-_.]?\d{2,4}(?![A-Za-z\d])")
+_PL_TITLE_FORM = re.compile(r"\b(?i:pan|pana|panu|panem|panie|pani|pani[ąa])[ \t]+(?P<w>[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)\b")
+_PL_ENDINGS = frozenset({"a", "owi", "em", "u", "e", "ie", "ą", "iem"})
+_PL_ADJ_SURNAME = re.compile(r"(?:sk|ck|dzk|zk)[ia]$")
+_PL_ADJ_ENDINGS = ("i", "a", "iego", "iemu", "im", "ą", "iej")
+# A personal handle that can come back bare: "@kellison88", "luna_cycle_88" (four letters in a row, and an
+# at-sign, an underscore or trailing digits that make it a handle rather than a word).
+_HANDLE_FULL = re.compile(r"@?(?=[A-Za-z0-9._\-]*[A-Za-z]{4})[A-Za-z][A-Za-z0-9._\-]{4,38}[A-Za-z0-9]")
+# Titles the courtesy-title rules read; a surname after one comes back in its own case only (the vault keeps
+# one value per lower-case name, so a case variant would not restore).
+_NEW_TITLE_BEFORE = re.compile(r"(?i:\b(?:se[\u00f1n]or(?:a|ita)?|do[\u00f1n]a|madame)\.?)[ \t]*$")
+# Ordinary and clinical words that are also handle stems ("estradiol88@", "@eggs-2026"): never a name echo.
+_HANDLE_STEM_COMMON = frozenset(
+    """estradiol egg eggs embryo embryos ivf iui icsi fertility baby babies mom mommy mama momma dad daddy love loves hope
+    hopes hopeful faith grace joy angel blessed blessing miracle miracles wish wishes dream dreams sunshine rainbow stork
+    cycle cycles trying ttc journey warrior sperm sperms donor follicle follicles uterus ovary ovaries pregnant pregnancy
+    transfer retrieval frozen fresh blast blasts test tester testing patient mother father family clinic doctor nurse health
+    healthy happy lucky pray prayer prayers birth born little twin twins bump bean sprout
+    pcos endo endometriosis ovulation ovulating period periods bloodwork blood labs lab scan scans ultrasound beta betas hcg amh
+    fsh progesterone estrogen trigger triggers needle needles shots meds infertility infertile ttc ttcing tww bfp bfn
+    pregnancy pregnant mama mum mummy mamma papa wife husband""".split()
+)
+
+
 _ECHO_SKIP = (
-    _names.STOP_WORDS | _names._NOT_NAME_EXTRA | _names._ORG_NAME_WORDS | _names._ORG_TAIL_WORDS | COMMON_WORD_NAMES
-    | {"dr", "mr", "mrs", "ms", "miss", "mme", "baby"}
+    (_names.STOP_WORDS - _names._LATE_STOP) | _names._NOT_NAME_EXTRA | _names._ORG_NAME_WORDS | _names._ORG_TAIL_WORDS | COMMON_WORD_NAMES
+    | {"dr", "mr", "mrs", "ms", "miss", "mme", "baby", "madame", "monsieur", "señor", "señora", "senor", "senora", "doña"}
 )
 
 # Last words of a facility, organisation, holiday or document title ("Ross Memorial Hospital",
@@ -390,6 +414,7 @@ class Masker:
                 or not (
                     (_covered(e, allowed) and not (e.type is EntityType.ADDRESS and _UNIT_AFTER.match(text, e.end)))
                     or self._allowed_spoken_phone(e)
+                    or self._allowed_plus_phone(e)
                 )
             ]
             found = found + [e for e in patient_place if e not in found]
@@ -413,7 +438,7 @@ class Masker:
 
     def _own_site(self, e: Entity) -> bool:
         """A scheme-less site after a visit/website cue whose host is the clinic's: a domain on the
-        allow list, or the domain of an email on it ("info@mfc.ca" allows "portal.mfc.ca")."""
+        allow list, or the domain of an email on it ("info@maple-fertility.example" allows "portal.maple-fertility.example")."""
         if e.type is not EntityType.URL or e.source != "regex" or "://" in e.text or re.search(r"[?#@]", e.text):
             return False
         host = e.text.split("/", 1)[0].lower().removeprefix("www.")
@@ -521,6 +546,10 @@ class Masker:
         initialed: set[str] = set()  # surnames found with a file initial: "Lopez_M"
         surnames: set[str] = set()  # last words of a multi-word name that are never its first word
         firsts: set[str] = set()
+        title_lw: set[str] = set()  # surnames found after a señora / doña / madame title
+        other_lw: set[str] = set()  # words found in any other way
+        title_ref: dict[str, str] = {}
+        handle_lw: set[str] = set()  # words that exist only as the stem of a handle
         for e in found:
             if e.type is EntityType.NAME and e.source in ("regex", "known"):
                 initialed.update(x.lower() for x in re.findall(r"([^\W\d_]+)_[A-Z](?![^\W_])", e.text))
@@ -530,12 +559,52 @@ class Masker:
                     firsts.update(x.lower() for x in toks[:-1])
                     surnames.add(toks[-1].lower())
                 for w in toks:
+                    (title_lw if _NEW_TITLE_BEFORE.search(text, max(0, e.start - 12), e.start) and w == toks[-1] else other_lw).add(w.lower())
+                    if _NEW_TITLE_BEFORE.search(text, max(0, e.start - 12), e.start) and w == toks[-1]:
+                        title_ref.setdefault(w.lower(), w)
                     if len(w) >= (4 if w[0].islower() else 3) and not (w.isupper() and len(w) <= 4) and w.lower() not in _ECHO_SKIP and not _ROLE_WORD.fullmatch(w):
                         words.setdefault(w.lower(), w)
-        if not words:
+                # Polish genitive: "Oli Szymanskiej" is Ola Szymanska; the first name returns as "Ola".
+                if len(toks) >= 2 and re.search(r"(?:iej|ej)$", toks[-1].lower()):
+                    for t in toks[:-1]:
+                        v = t[:-1] + "a"
+                        if len(t) >= 3 and t.endswith("i") and v[0].isupper() and v.lower() not in _ECHO_SKIP:
+                            words.setdefault(v.lower(), v)
+            elif (e.type in (EntityType.EMAIL, EntityType.ACCOUNT) or (e.type is EntityType.ID and e.text[:1] == "@")) and e.source in ("regex", "known"):
+                # A personal handle is built from a name: "jtran-1985", "kellison88@" -> the name returns in
+                # file names and spelled back ("Kellison").
+                hm = _HANDLE_STEM.match(e.text)
+                if (
+                    hm and hm.group(1).lower() not in _ECHO_SKIP and hm.group(1).lower() not in _HANDLE_STEM_COMMON and hm.group(1).upper() not in _names.CLINICAL_ABBREVIATIONS
+                    and hm.group(1).lower() not in _names._FILE_WORDS and not _ROLE_WORD.fullmatch(hm.group(1))
+                ):
+                    if hm.group(1).lower() not in words:
+                        handle_lw.add(hm.group(1).lower())
+                    words.setdefault(hm.group(1).lower(), hm.group(1))
+        handles: dict[str, Entity] = {}  # bare handle (lower case) -> the found handle it repeats
+        for e in found:
+            if e.type in (EntityType.ID, EntityType.ACCOUNT) and e.source in ("regex", "known") and _HANDLE_FULL.fullmatch(e.text):
+                bare = e.text.lstrip("@")
+                if e.text.startswith("@") or "_" in bare or re.search(r"[A-Za-z]{4}[._\-]?\d{2,}$", bare):
+                    handles.setdefault(bare.lower(), e)
+                # The first word of an underscore handle is a name when it comes back capitalised: "Luna".
+                head = bare.split("_")[0]
+                if "_" in bare and head.isalpha() and len(head) >= 4 and head.lower() not in _ECHO_SKIP and head.lower() not in _HANDLE_STEM_COMMON and head.upper() not in _names.CLINICAL_ABBREVIATIONS and not _ROLE_WORD.fullmatch(head):
+                    words.setdefault(head.lower(), head)
+        if not words and not handles:
             return []
         surnames -= firsts
         taken = [(e.start, e.end) for e in found]
+        # A bare repeat of a handle that was found once ("@kellison88 ... kellison88"): masked too, with
+        # its own placeholder, so each placeholder restores exactly the text it replaced.
+        hout: list[Entity] = []
+        for hl, he in handles.items():
+            for m in re.finditer(r"(?<![\w@.\-])" + re.escape(hl) + r"(?![\w@\-]|\.\w)", text, re.IGNORECASE):
+                a, b = m.span()
+                if any(x < b and a < y for x, y in taken + [(o.start, o.end) for o in hout]) or any(x <= a and b <= y for x, y in allowed):
+                    continue
+                hout.append(Entity(he.type, a, b, m.group(0), "regex"))
+        taken = taken + [(o.start, o.end) for o in hout]
         # A lowercase use of the word counts as "an ordinary word" only when nothing ties it to a
         # person: not "thanks sarah", not next to another word of the name ("sarah cohen").
         lower: set[str] = set()
@@ -543,7 +612,7 @@ class Masker:
             lw = lm.group(0)
             if lw.islower() and lw in words and not self._name_like_lower(text, lm, words):
                 lower.add(lw)
-        out = []
+        out = list(hout)
         for m in re.finditer(r"(?<![^\W_])[^\W\d_](?:[^\W\d_]|['’](?=[^\W\d_]))*(?![^\W_])", text):
             w = m.group(0)
             possessive = False
@@ -586,6 +655,54 @@ class Masker:
             if self._staff and self._staff.on_roster(e):
                 continue
             out.append(e)
+        # Polish cases of a surname after "pan/pani": "Roman Gil" ... "pana Gila".
+        bases = [w for w in words if len(w) >= 3]
+        if bases:
+            # Adjective surnames (Kowalski, Kowalska) decline in every case: any capitalised form counts.
+            forms: dict[str, str] = {}
+            for bw in bases:
+                if len(bw) >= 5 and _PL_ADJ_SURNAME.search(bw):
+                    for end in _PL_ADJ_ENDINGS:
+                        forms.setdefault(bw[:-1] + end, bw)
+            if forms:
+                for m in re.finditer(r"(?<![^\W_])[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(?![^\W_])", text):
+                    w = m.group(0)
+                    lw = w.lower()
+                    if lw in words or lw not in forms:
+                        continue
+                    a, b2 = m.span()
+                    if any(x < b2 and a < y for x, y in taken + [(o.start, o.end) for o in out]) or any(x <= a and b2 <= y for x, y in allowed):
+                        continue
+                    e = Entity(EntityType.NAME, a, b2, w, "regex")
+                    if self._staff and self._staff.on_roster(e):
+                        continue
+                    out.append(e)
+            for m in _PL_TITLE_FORM.finditer(text):
+                w = m.group("w")
+                lw = w.lower()
+                base = next((b for b in bases if lw != b and lw.startswith(b) and lw[len(b):] in _PL_ENDINGS), None)
+                if base is None or lw in words:
+                    continue
+                a, b2 = m.span("w")
+                if any(x < b2 and a < y for x, y in taken + [(o.start, o.end) for o in out]) or any(x <= a and b2 <= y for x, y in allowed):
+                    continue
+                e = Entity(EntityType.NAME, a, b2, w, "regex")
+                if self._staff and self._staff.on_roster(e):
+                    continue
+                out.append(e)
+        # A word that exists only as a title surname or a handle stem keeps one spelling: a case variant
+        # would share its placeholder and come back in the other case.
+        fresh = (title_lw - other_lw) | (handle_lw - other_lw)
+        if fresh:
+            ref = dict(title_ref)
+            kept: list[Entity] = []
+            for e in sorted(out, key=lambda x: x.start):
+                lw = e.text.lower()
+                if e.type is EntityType.NAME and lw in fresh:
+                    if ref.setdefault(lw, e.text) != e.text:
+                        continue
+                kept.append(e)
+            out = kept
         return out
 
     @staticmethod
@@ -683,6 +800,18 @@ class Masker:
             return False
         d = _spoken.digits(e.text)
         return len(d) >= 7 and d[-10:] in self._allow_phones
+
+    _PLUS_PHONE = re.compile(r"(?i)(?:plus|m[áa]s|\+)[ \t]*(\d{1,3})(?:[ \t.\-()]*\d)+")
+
+    def _allowed_plus_phone(self, e: Entity) -> bool:
+        """The clinic's own number written with a leading plus word or sign and a country code:
+        "plus 1 613 555 0100", "+1 613 555 0100", "más 1 ...". The last ten digits must be the allowed number."""
+        if e.type is not EntityType.PHONE or not self._allow_phones:
+            return False
+        if not self._PLUS_PHONE.fullmatch(e.text.strip()):
+            return False
+        d = re.sub(r"\D", "", e.text)
+        return 11 <= len(d) <= 13 and d[-10:] in self._allow_phones
 
     def _staff_at_clinic(self, text: str, e: Entity, allowed: list[tuple[int, int]]) -> bool:
         """A staff name followed by the clinic's own name: "Aaliyah here from Bluebonnet"."""
