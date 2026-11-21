@@ -244,7 +244,16 @@ _AGE_SUBJECT_NOT = re.compile(
 )
 
 
-_AGE_LIFE = re.compile(r"\b(?:died|passed|alive|lived|death|deceased|muri[óo]|d[ée]c[ée]d[ée]e?|zmar[łl]a?)\b|נפטר", re.IGNORECASE)
+_AGE_LIFE = re.compile(
+    r"\b(?:died|passed|alive|living|lived|death|deceased|muri[óo]|d[ée]c[ée]d[ée]e?|zmar[łl]a?|умерла?|помер|померла)\b|"
+    r"(?<![\w.])d\.|נפטר",
+    re.IGNORECASE,
+)
+
+
+def _not_street_after(m: re.Match[str]) -> bool:
+    """The number is not a street number ("died at 95 Elm St")."""
+    return not _STREET_SUFFIX_AFTER.match(m.string, m.end())
 
 
 def _relative_before(m: re.Match[str]) -> bool:
@@ -462,6 +471,79 @@ _ACRONYMS_3 = {
     "ERA", "FET", "OHS", "STD", "STI", "HIV", "HPV", "PRP", "CBC", "ECG", "EKG", "MRI", "TTC",
     "OBGYN", "NIPT", "PGS", "DHEA", "GYN", "ENT", "ICU", "ER", "OTC", "FDA", "HIPAA",
 }
+
+
+_PIN_ADDR_CUE = re.compile(
+    r"(?i)\b(?:address|addr|street|st\.|road|rd\.?|lane|sector|nagar|colony|marg|flat|house|apt|apartment|plot|dist\.?|district|"
+    r"city|agency|office|ship(?:ping)?|deliver\w*|post(?:al)?)\b"
+)
+_PIN_SECRET_BEFORE = re.compile(
+    r"(?i)\b(?:portal|reset|login|log-in|bank|atm|card|phone|sim|voicemail|account|app|secret|security|verification|"
+    r"your|my|the|new|old|temporary|temp|change|enter)\W+(?:\w+\W+){0,2}$"
+)
+_PIN_AFTER_PLACE = re.compile(r"(?:[A-Z][\w'’\-]+|(?i:dist\.?))[ \t]*[,\-\u2013][ \t]*$")
+
+
+_UK_POSTAL_CUE = re.compile(
+    r"(?i)(?:post(?:al)?[ \t]*code|postcode|zip(?:[ \t]*code)?|pin[ \t]*code|pincode)[ \t:=#\-]*(?:is|no\.?|number)?[ \t:=#\-]*$"
+)
+_UK_CODE_CUE = re.compile(
+    r"(?i)\b(?:code|pin|otp|passcode|password|token|pnr|booking|reservation|confirmation|itinerary|locator)\b[ \t:=#\-]*"
+    r"(?:is|no\.?|number|ref(?:erence)?)?[ \t:=#\-]*$"
+)
+
+
+def _uk_postcode_check(m: re.Match[str]) -> bool:
+    """A letter-digit value right after a login, access, security, promo or booking cue is that code, not a
+    postcode; only a postal, zip, postcode or pin code cue (or no cue at all) lets it be one."""
+    text = m.string
+    line_start = text.rfind("\n", 0, m.start()) + 1
+    before = text[max(line_start, m.start() - 60) : m.start()]
+    if _UK_POSTAL_CUE.search(before):
+        return True
+    return not _UK_CODE_CUE.search(before)
+
+
+_PH_ADDR_WORD = re.compile(r"(?i)\b(?:barangay|brgy|subdivision|subd|village|phase|heights|homes)\b")
+_PH_ADDR_CUE = re.compile(
+    r"(?i)\b(?:address|addr|residence|resid\w*|lives?|living|home|ship\w*|deliver\w*|located|street|brgy|barangay)\b[^\n]{0,40}$"
+)
+_PH_PLACE_COMMA = re.compile(r"[A-Z][\w'’\-]+[ \t]*,[ \t]*[A-Z]")
+
+
+def _ph_lot_block_check(m: re.Match[str]) -> bool:
+    """A lot-and-block pair is an address only with an address context: a barangay, subdivision, village, phase,
+    heights or homes word after it, a place name and a comma and a city, or an address cue before it."""
+    tail = m.string[m.end("core") : m.end()]
+    if _PH_ADDR_WORD.search(tail) or _PH_PLACE_COMMA.search(tail):
+        return True
+    line_start = m.string.rfind("\n", 0, m.start()) + 1
+    return bool(_PH_ADDR_CUE.search(m.string[max(line_start, m.start() - 60) : m.start()]))
+
+
+def _pin_postcode_check(m: re.Match[str]) -> bool:
+    """"PIN 411001" is a postcode only in an address: right after a place name and a comma or dash, or with an
+    address word earlier on the line. A portal, phone or bank PIN ("your portal PIN 123456") is a secret code."""
+    text = m.string
+    line_start = text.rfind("\n", 0, m.start()) + 1
+    before = text[max(line_start, m.start() - 100) : m.start()]
+    if _PIN_AFTER_PLACE.search(before):
+        return True
+    if _PIN_SECRET_BEFORE.search(before[-40:]):
+        return False
+    if m.group("cue").lower() != "pin":
+        return True
+    return bool(_PIN_ADDR_CUE.search(before))
+
+
+def _zip_not_postal_check(m: re.Match[str]) -> bool:
+    """The postal-code rule already types a number that directly follows its cue; the looser rule is only for
+    a number said a few words (or a line) later."""
+    prefix = m.string[m.start() : m.start(1)]
+    return not re.fullmatch(
+        r"(?is)(?:c[óo]digo\s+postal|code\s+postal|postal\s+code|kod\s+pocztowy)[^\S\n]*(?:is|es|est|:|-|no\.?|number|#)?[^\S\n]*",
+        prefix,
+    )
 
 
 def _org_check(m: re.Match[str]) -> bool:
@@ -787,6 +869,24 @@ def _place_check(m: re.Match[str]) -> bool:
     return not names.get(place.lower(), False) or place[0].isupper()
 
 
+# Provinces, states and countries a person names after a residence cue ("we live in Ontario"): the
+# generic residence rule below leaves them. It only filters that rule's own matches, so a place
+# that another rule or a known list masks stays masked.
+_REGION_WORDS = frozenset(
+    """
+    ontario quebec québec alberta manitoba saskatchewan nunavut yukon canada usa america mexico méxico
+    england scotland wales ireland france spain españa poland polska israel india china ukraine philippines
+    washington oregon california texas florida nevada idaho montana colorado arizona utah ohio georgia
+    """.split()
+)
+
+
+def _resident_place_check(m: re.Match[str]) -> bool:
+    words = re.findall(r"[^\W\d_][\w'’\-]*", m.group("place"))
+    first = words[0].lower() if words else ""
+    return bool(words) and first not in _NOT_NAMES and m.group("place").lower() not in _REGION_WORDS
+
+
 # Two-letter words that are not a health card's version code ("1234 567 890 if you need it").
 _SHORT_WORDS = (
     "if|is|in|it|or|on|at|to|of|so|my|me|we|no|ok|as|by|do|go|he|up|us|am|an|be|et|en|es|la|le|el|de|du|un|ou|"
@@ -941,6 +1041,106 @@ def _build_rules() -> list[_Rule]:
         group="v",
         check=_doc_number_check,
     )
+    # Travel booking codes after their cue: "booking ref QXR7TM", "PNR 6KD4TZ", "localizador XK4P9T",
+    # "kod rezerwacji 6QXT4K", "reservation QX7R9T". Five to eight capitals and digits with a digit and
+    # two letters in them, so "confirmation code sent" and "booking 2 nights" are not codes.
+    add(
+        EntityType.ID,
+        r"(?:\b(?:booking|reservation|confirmation|itinerary|locator|record\s+locator|localizador|reserva|r[ée]servation|r[ée]f[ée]rence|rezerwacji)\b|"
+        r"(?<![א-ת])(?:קוד|מספר)\s+הזמנה(?![א-ת]))"
+        r"(?:[ \t]*(?:ref(?:erence)?\.?|code|number|no\.?|#|id|locator|c[óo]digo|code|num[ée]ro|n[úu]mero|numer|kod|de|du|is|es|est|to|jest|:|=)){0,3}[ \t:#]*"
+        r"(?<![A-Za-z0-9\-])((?-i:(?=[A-Z0-9]*\d)(?=(?:[A-Z0-9]*[A-Z]){2})[A-Z0-9]{5,8}))(?![A-Za-z0-9\-])",
+        I,
+        group=1,
+    )
+    # Booking, passport and reservation numbers in Japanese, Chinese and Korean text: "パスポート番号はTK1234567"
+    # (a Latin letter or digit run after a cue; \b does not work between CJK and Latin letters).
+    add(
+        EntityType.ID,
+        r"(?:パスポート|旅券|予約|確認番号|航空券|チケット|护照|護照|護照|订位|訂位|预订|預訂|订单|訂單|여권|예약)[^\n\dA-Za-z]{0,16}"
+        r"(?<![A-Za-z0-9\-])((?=[A-Z0-9\-]*\d)[A-Z0-9][A-Z0-9\-]{4,20})(?![A-Za-z0-9\-])",
+        group=1,
+    )
+    # Electronic ticket numbers (13 digits, often 3 + 10) after a ticket cue: "e-ticket 131-2845590127",
+    # "bilet elektroniczny 080 2214 5567 18".
+    add(
+        EntityType.ID,
+        r"(?:\be-?[ \t]?tickets?\b|\belectronic\s+tickets?\b|\bticket\s+(?:number|no\.?|#)|\betkt\b|\bbillet\s+[ée]lectronique\b|"
+        r"\bbilet\s+elektroniczn\w*|\bboleto\s+electr[óo]nico\b|(?<![א-ת])כרטיס\s+אלקטרוני)"
+        r"[^\n\d]{0,20}?(?<![\d\-])(\d{3}(?:[ \-]?\d{4}[ \-]?\d{4}[ \-]?\d{2}|[ \-]\d{10}))(?![\d\-])",
+        I,
+        group=1,
+    )
+    # National ID numbers after their name: Aadhaar (12 digits), PhilSys (16), Nigerian NIN (11).
+    add(
+        EntityType.ID,
+        r"(?:\b(?:aadhaar|aadhar|uidai|philsys|psn|national\s+(?:id|identity)(?:\s+(?:number|no\.?|card))?)\b|\b(?-i:NIN)\b)"
+        r"[^\n\d]{0,25}?(?<![\d\-])(\d[\d \-]{9,20}\d)(?![\d\-])",
+        I,
+        group=1,
+        check=lambda m: sum(c.isdigit() for c in m.group(1)) in (11, 12, 16),
+    )
+    # Belgian national register number: "85.07.14-123.45" (year, month, day, serial, check digits).
+    add(EntityType.ID, r"(?<![\d.\-])\d{2}\.(?:0\d|1[0-2]|[23]\d)\.(?:0\d|[12]\d|3[01])-\d{3}\.\d{2}(?![\d\-]|\.\d)")
+    # Lawyers' bar numbers and notary commission numbers after their cue: "WSBA No. 41877", "BAR 55821",
+    # "numéro de membre du Barreau est le 288412-5", "commission no. NP 201445".
+    add(
+        EntityType.ID,
+        r"(?:\bWSBA\b|\b(?:state\s+)?bar\s+(?:number|no\.?|#|id|card)|\b(?-i:BAR)\b|\bbarreau\b|\bizbie\b|\bcommission\s+(?:no\.?|number|#)|"
+        r"\bnotary\s+(?:id|number|no\.?|licen[cs]e|registration)(?:\s+(?:number|no\.?))?)"
+        r"[^\n\d]{0,30}?(?<![\w\-])((?:(?-i:[A-Z]{1,3})[ \-]?)?\d{5,10}(?:-\d{1,2})?)(?![\w\-])",
+        I,
+        group=1,
+    )
+    # A health card in Hebrew text, with the province code between: "כרטיס בריאות SK: 612 345 789".
+    add(
+        EntityType.HEALTH_CARD,
+        r"(?<![א-ת])כרטיס\s+בריאות(?![א-ת])[^\n\d]{0,15}(\d{3,4}[ \-]\d{3,4}[ \-]\d{2,4})(?![\d\-])",
+        group=1,
+    )
+    # The acronym stays part of the value when it sits right against it ("PNR 6KD4TZ", "WSBA 41872"):
+    # the code is meaningless without it and one span reads better in the masked text.
+    add(
+        EntityType.ID,
+        r"\b(?:(?-i:PNR)[ \t]+(?-i:(?=[A-Z0-9]*\d)(?=(?:[A-Z0-9]*[A-Z]){2})[A-Z0-9]{5,8})|WSBA[ \t]+\d{5,10})(?![A-Za-z0-9\-])",
+        I,
+    )
+    # "PNR is XK29QZ", "PNR: XK29QZ": the same code after a separator, the value alone.
+    add(
+        EntityType.ID,
+        r"\b(?-i:PNR)[ \t]*(?:is|:|=|#)[ \t]*(?-i:(?=[A-Z0-9]*\d)(?=(?:[A-Z0-9]*[A-Z]){2})([A-Z0-9]{5,8}))(?![A-Za-z0-9\-])",
+        I,
+        group=1,
+    )
+    # A band, treaty or status number: "band number is 0412-7788".
+    add(
+        EntityType.ID,
+        r"\b(?:band|treaty|indian\s+status|status\s+card)\s+(?:number|no\.?|#|num[ée]ro)[^\n\d]{0,12}(\d{4}[ \-]?\d{3,6}(?:[ \-]\d{1,4})?)(?![\d\-])",
+        I,
+        group=1,
+    )
+    # A scanned PESEL after its name, with letters read as digits: "PESEL: 8S0217O4531".
+    add(
+        EntityType.ID,
+        r"\b(?:pesel|numer\s+pesel)\b[^\n\d]{0,25}?(?<![A-Za-z0-9])([0-9OSIlBZ]{11})(?![A-Za-z0-9])",
+        I,
+        group=1,
+        check=lambda m: sum(c.isdigit() for c in m.group(1)) >= 6,
+    )
+    # Washington superior court cause numbers (year, case type, serial, check digit, county code):
+    # "26-3-04418-1 SEA". A court file number of letters, year and serial: "FAM-2024/1187".
+    add(EntityType.ID, r"(?<![\d\-/.])\d{2}-\d-\d{5}-\d{1,2}(?:[ \t]+[A-Z]{3}\b)?(?![\d\-/]|\.\d)")
+    add(EntityType.ID, r"\b[A-Z]{2,5}-(?:19|20)\d{2}/\d{3,7}\b")
+    # Insurance member numbers in letter and digit groups after a member or insurance cue:
+    # "insurance card number WXA 4410 2287", "member ID OH 9921 4420 7", "מספר חבר WAX 2241 8830".
+    add(
+        EntityType.HEALTH_CARD,
+        r"(?:\b(?:member|subscriber|insurance|insurer|health\s+plan)\b|(?<![א-ת])חבר(?![א-ת]))[^\n\d]{0,30}?(?<![A-Za-z])"
+        rf"((?!(?-i:{_SHORT_WORDS})\b)(?-i:[A-Z]{{2,4}})[ \-]\d{{3,5}}(?:[ \-]\d{{1,5}}){{1,3}})(?![\w\-])",
+        I,
+        group=1,
+        check=lambda m: sum(c.isdigit() for c in m.group(1)) >= 7,
+    )
     # Court and agency file numbers: "2026-FAM-00418", "500-17-123456-261", Colorado "2026DR30418",
     # "24-DR-1183", Polish "II C 1184/26" and "XVI RC 902/25", Israeli "12456-03-26".
     add(EntityType.ID, r"\b(?:19|20)\d{2}-[A-Z]{2,5}-\d{3,}\b")
@@ -955,7 +1155,7 @@ def _build_rules() -> list[_Rule]:
     # A file number named as one: "Case no. 26-D-1183", "Index No. 12345/2026", "caso 0412-B".
     add(
         EntityType.ID,
-        r"\b(?:case|index|docket|caso|expediente|dossier|sprawa|sygn\.?(?:\s+akt)?)\s*(?:no\.?|number|#|n[úu]m(?:ero)?\.?|nr\.?)?\s*:?\s*"
+        r"\b(?:case|index|docket|caso|expediente|dossier|sprawa|sygn\.?(?:\s+akt)?)\s*(?:no\.?|number|#|n[úu]m(?:ero)?\.?|nr\.?)?\s*:?\s*(?:(?:is|was|es|est|to|jest)\s+)?"
         r"(?<![\w\-])((?=[A-Z0-9\-/]*\d)[A-Z0-9][A-Z0-9\-/]{3,20}[A-Z0-9])\b",
         re.IGNORECASE,
         group=1,
@@ -1261,6 +1461,31 @@ def _build_rules() -> list[_Rule]:
         group=1,
         check=lambda m: sum(c.isdigit() for c in m.group(1)) in (10, 11),
     )
+    # UK mobiles ("07911 123456", "07911 123 456") and Mexican "(55) 1234-5678" numbers, only after a phone cue
+    # (a bare number of this shape could be anything).
+    _pcue = (
+        r"(?:phone|cell(?:ular)?|mobile|tel\.?|call\s+me|text\s+me|reach\s+me|contact\s+me|landline|whatsapp|my\s+number|number|"
+        r"n[úu]mero|t[ée]l[ée]phone|tel[ée]fono|celular|m[óo]vil|whats)"
+    )
+    add(
+        EntityType.PHONE,
+        rf"\b{_pcue}\b[^\n\d]{{0,25}}?(?<![\d+\-])(07\d{{3}}[ ]?\d{{3}}[ ]?\d{{3}}|07\d{{3}}[ ]?\d{{6}}|\(\d{{2,3}}\)[ ]?\d{{4}}[ \-]?\d{{4}})(?![\d\-]|[ ]\d)",
+        I,
+        group=1,
+    )
+    # An NHS number or a Japanese "My Number" keeps its own type, not a phone: "NHS number 943 476 5919".
+    add(
+        EntityType.HEALTH_CARD,
+        r"\bNHS(?:[ \t]+(?:number|no\.?|#))?[ \t]*(?:(?:is|:|-|#)[ \t]*)?(?<![\d+\-])(\d{3}[ \-]?\d{3}[ \-]?\d{4})(?![\d\-]|[ ]\d)",
+        I,
+        group=1,
+    )
+    add(
+        EntityType.ID,
+        r"(?:(?-i:\bMy[ \t]+Number)|\bmy[ \t]+number[ \t]+card|マイナンバー)[^\n\d]{0,12}?(?<![\d+\-])(\d{4}[ \-]?\d{4}[ \-]?\d{4})(?![\d\-]|[ ]\d)",
+        I,
+        group=1,
+    )
     # Emails written to dodge filters: "ana [at] example [dot] org", "m_t88(at)example(dot)com", "x (at) example . com".
     # The at-word must sit in brackets, so a plain "at" never triggers this.
     # A plain dot takes no space after it unless it also has one before (" . "), and never a line
@@ -1381,6 +1606,13 @@ def _build_rules() -> list[_Rule]:
     )
     add(EntityType.NAME, _names.SPELLED, check=_not_alphabet_run)
     add(EntityType.NAME, _names.SPELLED_ES, I, check=_spelled_es_check)
+    # Letter names said as words, separated by spaces: "ve i ele a ele o ve o ese", "ele e effe ère a ène cé".
+    add(
+        EntityType.NAME,
+        _names.SPELLED_LETTER_NAMES,
+        I,
+        check=lambda m: _names.spelled_letter_names_ok(m, _SPELL_CUE_BEFORE),
+    )
     # Letters each given a key word ("c comme Charles o comme Oscar h comme Hotel", "A as in Alpha N as in
     # November"): three of them, or two after a spelling cue. The word must start with its letter.
     _kw = r"[A-Za-z][ \t]+(?:as[ \t]+in|comme|como|for|de)[ \t]+[^\W\d_]+"
@@ -1475,7 +1707,10 @@ def _build_rules() -> list[_Rule]:
         r"sty|lut|kwi|cze|lip|sie|wrz|pa[źz]|lis|gru)[a-zé]{0,6}\.?[\s\-/.]+(?:19|20)\d{2}\b",
         I,
     )
-    add(EntityType.DATE, r"(?:\b|(?<=[בלמהו]))\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})\b")
+    add(
+        EntityType.DATE,
+        r"(?:\b|(?<=[בלמהו]))\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})\b",
+    )
     add(
         EntityType.DATE,
         rf"\b(?:(?:{_WEEKDAY}|{_WEEKDAY_ML}),?\s+)?(?P<month>{_MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?"
@@ -1514,6 +1749,13 @@ def _build_rules() -> list[_Rule]:
     )
     add(EntityType.DATE, rf"\bthe\s+{_day_alone}", I)
     add(EntityType.DATE, rf"(?:^|\n|:)[^\S\n]*({_day_alone})", I | re.M, group=1)
+    # Russian and Ukrainian: a day number and a month name in the genitive ("14 декабря", "14 грудня 2026").
+    add(
+        EntityType.DATE,
+        r"(?<![\w.])\d{1,2}(?:-?(?:го|е))?\s+(?:січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня|"
+        r"января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)(?:,?\s+\d{4})?(?!\w)",
+        I,
+    )
     # French, Spanish, Polish, Hebrew: "le 12 mai 1990", "1er décembre", "jueves 6 de noviembre".
     add(
         EntityType.DATE,
@@ -1797,6 +2039,50 @@ def _build_rules() -> list[_Rule]:
         group="n",
         check=_relative_before,
     )
+    # An age over 89 a few words after a death word, a date or year between them allowed: "passed away in 2015 at the
+    # age of 94", "died in 2015 aged 92", "zmarła mając 92 lata". No relative needed (a deceased person's age).
+    add(
+        EntityType.AGE,
+        rf"\b(?:died|dying|passed(?:[^\S\n]+away)?|deceased|zmar[łl]\w*|umar[łl]\w*)\b[^\n.!?;]{{0,40}}?"
+        rf"\b(?:at(?:[^\S\n]+the[^\S\n]+age[^\S\n]+of)?|aged?|maj[ąa]c|w[^\S\n]+wieku)[^\S\n]+(?P<n>{_AGE_OLD})(?![\w\-]){_AGE_NOT_UNIT}",
+        I,
+        group="n",
+        check=_not_street_after,
+    )
+    # Pedigree lines: "d. at 92", "alive, 93, diabetes". The number follows a life-status word
+    # and a relative is named earlier on the line.
+    add(
+        EntityType.AGE,
+        rf"(?<![\w.])(?:alive|living|deceased|died|d\.|vivant[e]?|vivo|viva|[żz]yje|жива|живий)(?:[ \t]*,[ \t]*|[ \t]+)(?:at[ \t]+)?(?P<n>{_AGE_OLD})"
+        rf"(?![\w\-]){_AGE_NOT_UNIT}(?=\s*(?:[,;)\n]|$))",
+        I,
+        group="n",
+        check=_relative_before,
+    )
+    # "Mom is still alive, 93." "He is alive, 93.": an age right after "alive" and a comma, closing the clause.
+    add(
+        EntityType.AGE,
+        rf"(?<![\w.])alive[^\S\n]*,[^\S\n]*(?P<n>{_AGE_OLD})(?![\w\-]){_AGE_NOT_UNIT}(?=[^\S\n]*(?:[,;)!?\n]|\.(?!\d)|$))",
+        I,
+        group="n",
+    )
+    # "maternal grandmother, 91, alive", "mother Anna (91)": the age sits in commas or brackets right
+    # after the relative (and an optional name); a bare number after a name is not taken.
+    add(
+        EntityType.AGE,
+        rf"\b(?:grand(?:mother|ma|mom|father|pa|dad|parents?)|great[\s\-]grand\w*|granny|nana|mother|mom|mum|father|dad|"
+        rf"aunt|uncle|abuel[ao]s?|madre|padre|t[ií][ao]|m[èe]re|p[èe]re|tante|oncle|babci[aąęe]|dziad(?:ek|ka)|"
+        rf"matka|ojciec|ciotka|wuj(?:ek)?|бабуся|бабушка|мати|мама|батько|отец|мать)"
+        rf"(?:\s+[A-ZÀ-ÝА-Я][\w'\-]+){{0,3}}(?:[^\S\n]*(?:,[^\S\n]*|\([^\S\n]*)|"
+        rf"[^\S\n]*,[^\S\n]*(?-i:[A-ZÀ-ÝА-Я][\w'\-]+(?:[^\S\n]+[A-ZÀ-ÝА-Я][\w'\-]+){{0,2}})[^\S\n]*,[^\S\n]*|"
+        rf"[^\S\n]*\([^\S\n]*(?-i:[A-ZÀ-ÝА-Я][\w'\-]+(?:[^\S\n]+[A-ZÀ-ÝА-Я][\w'\-]+){{0,2}})[^\S\n]*,[^\S\n]*|"
+        rf"[^\S\n]*\([^\S\n]*(?-i:[A-ZÀ-ÝА-Я][\w'\-]+(?:[^\S\n]+[A-ZÀ-ÝА-Я][\w'\-]+){{0,2}})[^\S\n]*\)[^\S\n]*,[^\S\n]*)(?P<n>{_AGE_OLD})"
+        rf"(?![\w\-]){_AGE_NOT_UNIT}(?=[^\S\n]*[,;)\n]|[^\S\n]*$)",
+        I,
+        group="n",
+    )
+    # Russian and Ukrainian: "умерла в 93 года", "93 роки".
+    add(EntityType.AGE, r"(?<![\w.])(?:9\d|1[01]\d)\s*(?:лет|года|роки|років|рік)(?!\w)", I)
     add(
         EntityType.AGE,
         r"(?<![א-ת])(?:בת|בן|בגיל|גיל)\s+(?P<n>9\d|1[01]\d|תשעים(?:\s+ו[א-ת]+)?)(?!\d)",
@@ -1812,8 +2098,14 @@ def _build_rules() -> list[_Rule]:
         EntityType.ADDRESS,
         r"(?<!\w)(?:\d{1,5}[,\s]+)?(?i:rue|boulevard|boul\.|chemin|calle|avenida|av\.|avda\.?|carrera|paseo|ul\.|ulica|ulicy|"
         r"ulic[ęe]|aleja|al\.)[^\S\n]+(?:(?i:de\s+la|des|du|de|del|la|le)\s+)?(?:[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+|\d{1,3}\b)"
-        r"(?:[^\S\n]+[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+){0,2}(?:[^\S\n]*,?[^\S\n]*(?:\d{1,5}(?:/\d{1,4})?[A-Za-z]?|#\s*\d+-\d+)\b"
+        # "Calle 5 de Mayo 77": a name with "de" inside
+        r"(?:[^\S\n]+(?i:de|del|de[^\S\n]+la)[^\S\n]+[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+)?"
+        r"(?:[^\S\n]+[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+){0,2}"
+        # the number, after a direction or "au"/"no." ("rue Main nord, au 305")
+        r"(?:[^\S\n]*,?[^\S\n]*(?:(?i:nord|sud|est|ouest)\b[^\S\n]*,?[^\S\n]*)?(?:(?i:au|no\.?|n°|num\.?)[^\S\n]*)?"
+        r"(?:\d{1,5}(?:/\d{1,4})?[A-Za-z]?|#\s*\d+-\d+)\b"
         rf"|[^\S\n]+(?i:(?:{_PL_NUM})(?:[^\S\n]+(?:{_PL_NUM})){{0,3}})(?![\w'’]))?"
+        r"(?:,[^\S\n]*\d{1,2}[º°ª](?:[^\S\n]*[A-Z]\b)?)?"  # Spanish floor and door: "3º B"
         r"(?:,[^\S\n]*(?i:apt|apto|apartment|unit|suite|ste|piso|m\.|lok\.|mieszkanie|lokal|apartamento|departamento|appartement|appt|app|depto)\.?\s*[\w\-]+(?:[^\S\n][A-Za-z]\b)?)?(?:,[^\S\n]*(?!(?i:apt|apto|unit|suite|ste)\b)[A-ZÀ-ÝŁŚŻŹĆ][\w'\-]+(?:[^\S\n][A-ZÀ-Ý][\w'\-]+)?)?",
     )
     # The house number may be digits or words, then the flat: "ברחוב הרצל 14 דירה 7",
@@ -1916,6 +2208,117 @@ def _build_rules() -> list[_Rule]:
         group=1,
     )
 
+    # Postal codes after their own cue, in local formats: "pin 411001", "PIN code 560001", "postcode 2000".
+    # A bare "pin" takes six digits only (a four-digit PIN is a secret code, not a place).
+    # A "PIN" is a postcode only inside an address (see _pin_postcode_check): a portal or phone PIN is a secret.
+    add(
+        EntityType.POSTAL_CODE,
+        r"\b(?P<cue>pin[^\S\n]*code|pincode|pin)[^\S\n]*(?:(?:is|:|-|no\.?|number|#)[^\S\n]*)?(?P<v>\d{6})(?![\d\-])",
+        I,
+        group="v",
+        check=_pin_postcode_check,
+    )
+    add(
+        EntityType.POSTAL_CODE,
+        r"\b(?:post(?:al)?[^\S\n]*code|postcode|c[óo]digo[^\S\n]+postal|code[^\S\n]+postal|kod[^\S\n]+pocztowy)"
+        r"[^\S\n]*(?:(?:is|es|est|:|-|no\.?|number|#)[^\S\n]*)?(\d{4,6})(?![\d\-])",
+        I,
+        group=1,
+    )
+    # A postal code said a few words after its cue, even on the next speaker line ("¿Y el código postal?
+    # ... creo. No, espere, 98951"): the first five-digit number after the cue.
+    add(
+        EntityType.ZIP,
+        r"\b(?:c[óo]digo[^\S\n]+postal|code[^\S\n]+postal|postal[^\S\n]+code|zip[^\S\n]*code|kod[^\S\n]+pocztowy)\b[^\n\d]{0,80}"
+        r"(?:\n(?:\[[\d:]+\][^\n:]{0,20}:|[^\n:\d]{1,20}:)?[^\n\d]{0,80}?(?:,[^\S\n]*)?)?(?<![\d\-])(\d{5})(?![\d\-])",
+        I,
+        group=1,
+        check=_zip_not_postal_check,
+    )
+    # A short number closing an address line, after an address cue and the place name: "address in X:
+    # Lot 5, Y Heights, Cebu City, 6000." The cue and the comma-separated place keep it from a year or count.
+    add(
+        EntityType.POSTAL_CODE,
+        r"\b(?:address|adresse|direcci[óo]n|domicili\w+|domicile|adres|reside\w*|residing|live[sd]?|living|vivo|viven|vive)\b"
+        r"(?:[^\n.!?;]|(?:(?<=\b\w)|(?<=\b\w\w)|(?<=\b\w\w\w))\.(?=[^\S\n]))"
+        r"{0,100}?,[^\S\n]*(?!(?:19|20)\d\d\b)(\d{4,6})(?![\d\-])(?=[^\S\n]*(?:[.,;:)(]|\n|$))",
+        I,
+        group=1,
+    )
+    # The same cue with the code right after a capitalised town and no comma: "Dirección: Av. X 12, Guadalajara 44100."
+    add(
+        EntityType.POSTAL_CODE,
+        r"\b(?:address|adresse|direcci[óo]n|domicili\w+|domicile|adres)\b"
+        r"(?:[^\n.!?;]|(?:(?<=\b\w)|(?<=\b\w\w)|(?<=\b\w\w\w))\.(?=[^\S\n]))"
+        r"{0,100}?(?-i:[A-ZÀ-Ý][\wà-ÿ'’\-]+)[^\S\n]+(?!(?:19|20)\d\d\b)(\d{5})(?![\d\-])(?=[^\S\n]*(?:[.,;:)(]|\n|$))",
+        I,
+        group=1,
+    )
+    # A full British postcode ("LS8 2PQ", "HG1 5XQ"): capital letters and digits in that fixed shape.
+    add(EntityType.POSTAL_CODE, r"(?<![\w\-])[A-Z]{1,2}\d[A-Z\d]?[^\S\n]?\d[A-Z]{2}(?![\w\-])", check=_uk_postcode_check)
+    # A Philippine lot-and-block address, with its phase, subdivision and city: "Lot 5 Block 12 Pine Heights, Davao City",
+    # "Lot 5 Blk 3 Phase 2 Greenfields, Cavite". Only with an address context (see _ph_lot_block_check): a lot and
+    # block number alone is a drug lot or a trial block.
+    add(
+        EntityType.ADDRESS,
+        r"\b(?P<core>(?i:(?:lot|lt\.?)[^\S\n]*\d{1,4}[A-Za-z]?,?[^\S\n]+(?:block|blk\.?)[^\S\n]*\d{1,4}[A-Za-z]?|(?:block|blk\.?)[^\S\n]*\d{1,4}[A-Za-z]?,?[^\S\n]+(?:lot|lt\.?)[^\S\n]*\d{1,4}[A-Za-z]?))"
+        r"(?:,?[^\S\n]+(?i:phase|ph\.?)[^\S\n]*\d{1,2}[A-Za-z]?(?!\w))?"
+        r"(?:,?[^\S\n]+(?:[A-Z][\w'’\-]+|(?i:of|de|del|ng))){0,5}"
+        r"(?:,[^\S\n]*[A-Z][\w'’\-]+(?:[^\S\n]+[A-Z][\w'’\-]+){0,2}(?:[^\S\n]+\d{4}(?!\d))?)?",
+        check=_ph_lot_block_check,
+    )
+    # An Indian address with house or flat, sector or road, city and six-digit PIN: "House no 45, Sector 21, Gurgaon 122001",
+    # "Flat 301, Sunrise Apts, MG Road, Bangalore - 560001". The whole shape is required.
+    add(
+        EntityType.ADDRESS,
+        r"\b(?i:house|flat|plot|h\.?[^\S\n]*no\.?)[^\S\n]*(?i:no\.?|number|#)?[^\S\n]*\d{1,4}[A-Za-z]?(?:/\d{1,3})?,[^\S\n]*"
+        r"(?=[^\n]{0,120}\b(?i:sector|road|rd|marg|nagar|colony|lane|street|apts?|apartments?|society|phase|block)\b)"
+        r"(?:[^\n,]{1,40},[^\S\n]*){1,4}?[A-Z][\w'’\-]+(?:[^\S\n]+[A-Z][\w'’\-]+)?[^\S\n]*[,\-\u2013]?[^\S\n]*[1-9]\d{5}(?![\d\-])",
+    )
+    # A Philippine barangay address: "Blk 5 Lot 7 Brgy. San Antonio, Quezon City".
+    add(
+        EntityType.ADDRESS,
+        r"\b(?i:(?:block|blk)\.?[^\S\n]*\d{1,4}[A-Za-z]?,?[^\S\n]+(?:lot|lt)\.?[^\S\n]*\d{1,4}[A-Za-z]?,?[^\S\n]+(?:brgy|barangay)\.?)"
+        r"[^\S\n]+[A-Z][\w'’\-]+(?:[^\S\n]+[A-Z][\w'’\-]+){0,2}(?:,[^\S\n]*[A-Z][\w'’\-]+(?:[^\S\n]+[A-Z][\w'’\-]+){0,2})?",
+    )
+    # A British-style street with a house number and a capitalised name: "14 Oakwood Rise, Harrogate".
+    add(
+        EntityType.ADDRESS,
+        r"\b\d{1,4}[A-Za-z]?[^\S\n]+(?:[A-Z][\w'’\-]+[^\S\n]+){1,3}(?:Rise|Mews|Gardens|Walk|Parade|Vale|Hill|Close)\b"
+        r"(?:,[^\S\n]*[A-Z][\w'’\-]+(?:[^\S\n]+[A-Z][\w'’\-]+)?)?",
+    )
+    # A town abroad that a person comes from, named after "from": "we're from Pune", "I moved to Regina in March from Cebu". Only "from" (not "in"/"to": "moved to Recovery"), a
+    # capitalised word with no hyphen or digit after it (a drug "moved from Gonal-f", "Menopur 75").
+    _cap = r"[A-ZÀ-ÝŁŚŻŹĆ][\w'’]+"
+    add(
+        EntityType.ADDRESS,
+        r"\b(?:(?:live[sd]?|living|resid(?:e|es|ed|ing)|grew[^\S\n]+up|born|raised|i['’]?m|we['’]?re|i[^\S\n]+am|we[^\S\n]+are|"
+        r"she['’]?s|he['’]?s|they['’]?re|came|comes)[^\S\n]+from"
+        r"|moved[^\S\n]+(?:to|in|into)[^\S\n]+[\w'’]+(?:[^\S\n]+[\w'’]+){0,3}?[^\S\n]+from)[^\S\n]+"
+        rf"(?P<place>(?-i:{_cap}(?:[^\S\n]+{_cap}){{0,2}}))(?![\w\-]|[^\S\n]*\d)",
+        I,
+        group="place",
+        check=_resident_place_check,
+    )
+    # "Our home is Obolon, Kyiv": a neighbourhood and a city after "home is".
+    add(
+        EntityType.ADDRESS,
+        r"\b(?:our|my|his|her|their)[^\S\n]+(?:home|house|hometown|home[^\S\n]+town)[^\S\n]+(?:is|are|was)[^\S\n]+(?:in[^\S\n]+)?"
+        rf"(?P<place>(?-i:{_cap}(?:[^\S\n]+{_cap}){{0,2}}(?:,[^\S\n]*{_cap}(?:[^\S\n]+{_cap})?)?))",
+        I,
+        group="place",
+        check=_resident_place_check,
+    )
+    # A reserve or settlement named after the word: "the reserve near Muskoday", "a village called Tilo".
+    add(
+        EntityType.ADDRESS,
+        r"\b(?:reserves?|reservation|hamlet|settlement|village|first[^\S\n]+nation)[^\S\n]+(?:of|near|at|in|called|named|outside(?:[^\S\n]+of)?)[^\S\n]+"
+        rf"(?:the[^\S\n]+)?(?P<place>(?-i:{_cap}(?:[^\S\n]+{_cap}){{0,2}}))",
+        I,
+        group="place",
+        check=_resident_place_check,
+    )
+
     # A named workplace or school after a cue: "I'm a grad student at Gulfstream State University",
     # "My contract at Lakeview Memorial", "employer is Hamilton Steel Workers Local 1005",
     # "Trabajo en Colegio Santa Clara", "je travaille chez Desjardins", "עובדת בחברת נטע טק".
@@ -1973,10 +2376,48 @@ def _build_rules() -> list[_Rule]:
     )
     add(
         EntityType.EMPLOYER,
-        r"(?<![א-ת])(?:עובדת|עובד|עובדים|לומדת|לומד|מועסקת|מועסק|בעבודה|המנהל|המנהלת|מנהל|מנהלת|הבוס|הבוסית|המעסיק|המעסיקה|עובדי)\s+ב(?P<org>"
+        r"(?<![א-ת])(?:עובדת|עובד|עובדים|לומדת|לומד|מלמדת|מלמד|מרצה|מורה|מועסקת|מועסק|בעבודה|המנהל|המנהלת|מנהל|מנהלת|הבוס|הבוסית|המעסיק|המעסיקה|עובדי)\s+ב(?P<org>"
         r"(?:חברת|מכללת|אוניברסיטת|ישיבת|בית\s+החולים|בית\s+הספר|בנק|קיבוץ|מפעלי|מפעל|תעשיות|אחזקות|קבוצת|רשת|עיריית|מכון|"
         r"משרד\s+עורכי\s+הדין|סטודיו|מסעדת)"
         r"(?:[^\S\n]+(?!ו|(?:לא|את|של|עם|על|כי|אבל|גם|שלי|שלה|אני|הוא|היא|אותי|אותה)(?![א-ת]))[א-ת][א-ת\"״'׳\-]*){1,2})",
+        group="org",
+        check=_org_check,
+    )
+    # A school named after "school": "בית הספר: תיכון ליד האוניברסיטה", "בית הספר היה תיכון הרצל".
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:בית\s+הספר|ביה[\"״]ס)(?:[^\S\n]+(?:הוא|היה|היא|שלו|שלה|שלי))?[^\S\n]*:?[^\S\n]+(?P<org>(?:תיכון|בית\s+ספר|גימנסיה|אולפנה|ישיבת|מכללת|אוניברסיטת|מכינת)"
+        r"(?:[^\S\n]+(?!ו|(?:לא|את|של|עם|על|כי|אבל|גם|שלי|שלה|אני|הוא|היא|אותי|אותה)(?![א-ת]))[א-ת][א-ת\"״'׳\-]*)(?:[^\S\n]+(?!ו|(?:לא|את|של|עם|על|כי|אבל|גם|שלי|שלה|אני|הוא|היא|אותי|אותה)(?![א-ת])|[בל][א-ת]{3,}(?![א-ת])|ליד(?![א-ת]))[א-ת][א-ת\"״'׳\-]*){0,2})",
+        group="org",
+        check=_org_check,
+    )
+    # A Polish school or university after a school cue: "chodzi do szkoły Liceum Ogólnokształcącego im. Kopernika",
+    # "studiuje na Uniwersytecie ...". The institution word starts it, the rest is capitalised or "im.".
+    # A proper name must follow the institution word ("Szpital Wojewódzki" alone or "Liceum" alone is a generic word).
+    _pl_generic = r"(?i:og[óo]lnokszta[łl]c\w*|podstawow\w*|dzieci[ęe]c\w*|specjalist\w*|wojew[óo]dzk\w*|miejsk\w*|publiczn\w*|prywatn\w*)(?![\w'’\-])"
+    _name_word = rf"(?!{_pl_generic})[A-ZŁŚŻŹĆ][\w'’\-]+"
+    _pl_head = r"(?:Liceum|Technikum|Szko[łl][aąy]|Zesp[óo][łl]|Gimnazjum|Uniwersyte(?:t|cie|tu)|Politechnik\w+|Akademi\w+|Collegium|Szpital\w*)"
+    add(
+        EntityType.EMPLOYER,
+        r"\b(?:szko[łl]\w*|uczelni\w*|chodzi|chodz[ęe]|ucz[ęy][^\S\n]+si[ęe]|studiuj\w+|pracuj\w+|studiuje[^\S\n]+na|jest[^\S\n]+uczniem|uczy[^\S\n]+si[ęe][^\S\n]+w)"
+        r"(?:[^\S\n]+(?:do|w|we|na|:))*[^\S\n]*:?[^\S\n]*"
+        rf"(?P<org>(?-i:{_pl_head}(?=(?:[^\S\n]+{_pl_generic})*[^\S\n]+(?:im\.|nr\.?|\d|{_name_word}))(?:[^\S\n]+(?:im\.|nr\.?|\d{{1,3}}|[A-ZŁŚŻŹĆ][\w'’\-]+|(?i:og[óo]lnokszta[łl]c\w+|dzieci[ęe]c\w+|specjalist\w+|wojew[óo]dzk\w+))){{0,6}}))",
+        I,
+        group="org",
+        check=_org_check,
+    )
+    # A Spanish or French school or hospital after a work or study cue ("trabaja en Hospital Infantil Monte
+    # Rainier", "elle étudie à l'Université de ..."): the institution word starts the name, small words
+    # that belong to such names ("pour", "enfants", "infantil") may sit inside it.
+    # The name part: a capitalised word that is not a generic descriptor ("Clinique de fertilité", "Hospital General").
+    _fr_es_name = r"(?!(?i:general|regional|infantil|infantile|enfants|universitari[oa]|fertilit\w+|fertilidad|publique|p[úu]blic[ao]|priv[ée]e?|privad[ao])\b)[A-ZÀ-ÝŁŚŻŹĆ][\w'’\-]+"
+    _fr_es_head = r"(?:Hospital|H[ôo]pital|Colegio|Escuela|Instituto|Universidad|Universit[ée]|[ÉE]cole|Lyc[ée]e|Coll[èe]ge|Cl[ií]nica|Clinique)"
+    add(
+        EntityType.EMPLOYER,
+        r"\b(?:trabaj\w+|estudi\w+|ense[ñn]\w+|travaill\w+|[ée]tudi\w+|etudi\w+|enseign\w+|escuela|colegio|[ée]cole|lyc[ée]e|empleador\w*|employeur)"
+        r"(?:[^\S\n]+(?:en|a|al|à|au|aux|chez|de|d['’]|dans|:))*[^\S\n]*:?[^\S\n]*(?:la[^\S\n]+|el[^\S\n]+|l['’])?"
+        rf"(?P<org>(?-i:{_fr_es_head}(?:[^\S\n]+(?:(?i:pour|y|et|de|del|des|du|la|las|los|le|les|d['’]\w+)[^\S\n]+)*{_fr_es_name}){{1,6}}))",
+        I,
         group="org",
         check=_org_check,
     )
@@ -2011,7 +2452,7 @@ def _build_rules() -> list[_Rule]:
 
     # Names introduced by context (see _names.py). The local model or the
     # known-entity list catch names with no cue.
-    for pat, flags, check in [*_names.rules(_NOT_NAMES), *_names.courtesy_rules(_NOT_NAMES), *_names.initial_rules(_NOT_NAMES)]:
+    for pat, flags, check in [*_names.rules(_NOT_NAMES), *_names.courtesy_rules(_NOT_NAMES), *_names.initial_rules(_NOT_NAMES), *_names.script_rules(_NOT_NAMES)]:
         add(EntityType.NAME, pat, flags, check=check)
     # A person who gives a title as their own name and says they are a patient ("my name is Dr. Sarah
     # Cohen", "patient Dr. Sarah Cohen", "I'm Dr. Sarah Cohen and I'm a patient") is a patient, not a
@@ -2221,7 +2662,7 @@ _CLINIC_NUMBER_TYPES = {
     EntityType.ID, EntityType.ACCOUNT, EntityType.ZIP, EntityType.SIN, EntityType.MRN, EntityType.POSTAL_CODE,
 }
 _CLINIC_NUMBER_CUE = re.compile(
-    r"(?:\b(?:ticket|tkt|(?<!straw\s)lot|lote|batch|routing|badge|zg[łl]oszeni[ae])\b(?:no\.|[^\n\d?!.]){0,25}"
+    r"(?:\b(?:(?<!\be-)(?<!\be\s)ticket|tkt|(?<!straw\s)lot|lote|batch|routing|badge|zg[łl]oszeni[ae])\b(?:no\.|[^\n\d?!.]){0,25}"
     r"|\binterpr[eè]t(?:er|e)\b(?:no\.|[^\n\d?!.]){0,25}"
     # Order-like words count only when the number follows them directly ("PO 4471", "quote #88"):
     # a patient's own ID later in the sentence ("per the quote my member ID: ...") stays masked.

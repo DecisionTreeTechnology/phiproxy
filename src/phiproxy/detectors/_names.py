@@ -178,6 +178,7 @@ _RELATIONS = (
     r"(?:mother|father|sister|brother)[ \-]in[ \-]law|little[ \t]+(?:girl|boy|one)|baby|"
     r"donor|surrogate|gestational\s+carrier|carrier|gc|ips|intended\s+parents?|"
     r"emergency\s+contact|agency\s+contact|interpreter|translator|boss|coworker|colleague|"
+    r"neighbou?r|voisine?|vecin[ao]|babysitter|nanny|caregiver|carer|guardian|foster\s+(?:parent|mother|father|mom|dad|carer)|case\s*worker|"
     r"lawyer|attorney|policy\s*holder|subscriber|insured|guarantor|"
     # French
     r"mari|[ée]poux|[ée]pouse|femme|conjoint|conjointe|chum|blonde|copain|copine|fils|fille|"
@@ -242,6 +243,8 @@ _LABELS = (
     r"m[ąa][żz]|[żz]ona"
 )
 _HE_LABELS = r"מטופלת|מטופל|שם(?:\s+(?:משפחה|פרטי|המטופלת|המטופל|מלא))?|בן\s+זוג|בת\s+זוג|הפניה"
+# A transcript line may start with its time: "[00:00:58] Caller: ...".
+_TS = r"(?:\[[\d:.]{4,12}\][ \t]*)?"
 # Transcript speaker labels that belong to the patient side.
 _SPEAKER = (
     r"(?i:caller|user|visitor|guest|patient|client|customer|parent|partner|husband|wife|mom|dad|"
@@ -276,6 +279,7 @@ _NOT_NAME_EXTRA = frozenset(
     mme mlle me m sr sra srta pan pani panią panu mr mrs ms miss mx dr dre dra
     click sign tap stop start wait come right over live work born staying sit look
     write call text email reply book everyone nobody someone anyone
+    philippines aadhaar métis metis embryology andrology logistics agency cryo shipping procurement purchasing
     services service billing team office care support reception nursing lab laboratory
     department centre center clinic admin administration accounts finance intake scheduling
     booking portal results education records pharmacy front desk unit room boardroom
@@ -349,6 +353,7 @@ def _org_like_tail(words: list[str]) -> bool:
     return tails >= 2 or (len(words) <= 2 and tails == 1 and words[-1] in _ORG_TAIL_WORDS) or words[-1] in {"dept", "department"}
 
 
+_TAB_ROW_NEXT = re.compile(r"\n[ \t]*[^\t\n]*\d[^\t\n]*(?:\t[^\t\n]*\d[^\t\n]*)+[ \t]*(?:\n|$)")
 _NAME_LIKE_STOP = frozenset({"will", "may", "ty", "said", "pat", "ma"})
 
 
@@ -438,6 +443,10 @@ def make_checks(not_names: frozenset[str] | set[str]):
         words = [re.sub(r"^[ld]['’]", "", w.lower()).strip(".,'’") for w in name.split()]
         if words[0] in _ORG_NAME_WORDS or _org_like_tail(words):
             return False  # "Clínica Fertilidad", "Recursos Humanos", "Minnesota Medical Assistance"
+        if "\t" in name and (start == 0 or text[start - 1] == "\n") and text[end : end + 1] == "\n" and _TAB_ROW_NEXT.match(text, end):
+            # A table header line ("Straw<TAB>Cane<TAB>Tank") above a row whose every cell has a digit: column
+            # titles. A person's name is never followed by a line of digit cells, so no patient row matches.
+            return False
         if name in _ARTICLES:
             return False  # "soy el asistente": an article, not a name
         if _PET_BEFORE.search(text[max(0, start - 40) : start]):
@@ -518,10 +527,10 @@ def rules(
         # "hi its jess", "caller: hi its bill", "hola, soy Paty", "היי זאת שירה".
         (rf"(?i:(?:\b|(?<=\s)|^)(?:{_GREETING}))(?:[\s,!.—\-]+(?i:{_FILLER}))*[\s,!.—\-]*(?i:(?:{_INTRO}))[ \t]+(?P<name>{ANY_NAME})", 0, check_intro),
         # Speaker line opening with an introduction: "caller: c'est mathieu".
-        (rf"(?m:^)[ \t]*{_SPEAKER}[ \t]*:(?:[ \t]*(?i:{_FILLER}|{_GREETING})[ \t,]*)*[ \t]*(?i:(?:{_INTRO}))[ \t]+(?P<name>{ANY_NAME})", 0, check),
+        (rf"(?m:^)[ \t]*{_TS}{_SPEAKER}[ \t]*:(?:[ \t]*(?i:{_FILLER}|{_GREETING})[ \t,]*)*[ \t]*(?i:(?:{_INTRO}))[ \t]+(?P<name>{ANY_NAME})", 0, check),
         # "hi i'm marcus henry i can't...", "i'm beth": lowercase only when the clause ends there.
         (
-            rf"(?i:(?:(?:{_GREETING})[\s,]+|(?m:^)[ \t]*{_SPEAKER}[ \t]*:[ \t]*)(?:(?:{_FILLER})[\s,]+)*(?:i'?m|i’m|i\s+am))"
+            rf"(?i:(?:(?:{_GREETING})[\s,]+|(?m:^)[ \t]*{_TS}{_SPEAKER}[ \t]*:[ \t]*)(?:(?:{_FILLER})[\s,]+)*(?:i'?m|i’m|i\s+am))"
             rf"[ \t]+(?P<name>{_LWORD}(?:{_SP}{_LWORD})?)(?=[ \t]*(?:[,.!?\n]|$)|[ \t]+(?i:i|and|calling|from|here|again){_END})",
             0,
             check,
@@ -530,7 +539,7 @@ def rules(
         (rf"(?i:\b(?:conjointe?|mari|femme|chum|blonde|marido|esposo|esposa|pareja)[ \t]+(?:de|del|d'))[ \t]*(?P<name>{LOWER_NAME})", 0, check),
         # An answer to a question about a name: "may i have your name\ncaller: leah cohen katz".
         (
-            rf"(?i:\b(?:{_NAME_WORDS})\b)[^\n]{{0,60}}\n[ \t]*{_SPEAKER}[ \t]*:[ \t]*"
+            rf"(?i:\b(?:{_NAME_WORDS})\b)[^\n]{{0,60}}\n[ \t]*{_TS}{_SPEAKER}[ \t]*:[ \t]*"
             rf"(?:(?i:um|uh|yes|yeah|sure|ok|oui|s[íi]|tak|כן)[\s,]+)*(?P<name>{ANY_NAME})",
             0,
             check_caps,
@@ -629,7 +638,7 @@ def rules(
         # A relative or contact: "Husband Imran", "Partner: Kevin Nguyen",
         # "surrogate is Tiffany Rhodes", "mi esposo Jorge", "Mój mąż Piotr".
         (
-            rf"(?i:\b(?:{_RELATIONS})(?:'s)?(?:[ \t]+(?:name[ \t]+is|is|are|est|sont|es|son|jest|to|de|del|d'|of))?)[ \t]*[:,]?[ \t]*"
+            rf"(?i:\b(?:{_RELATIONS})(?:'s)?(?:[ \t]*\([IVX]{{1,4}}[-–]\d{{1,2}}\))?(?:[ \t]+(?:name[ \t]+is|is|are|est|sont|es|son|jest|to|de|del|d'|of))?)[ \t]*[:,]?[ \t]*"
             rf"(?P<name>{LAST_FIRST}|{NAMES})",
             0,
             check,
@@ -696,7 +705,7 @@ _MISS_NOT_NAME_AFTER = frozenset(
     work school class classes appointment appointments period periods dose doses shot shots call calls any some more
     all one another each every home flight bus train meeting meetings visit visits deadline days time
     text texts message messages email it's no not too so very much many anything something everything someone
-    again about because but if when while as of off up""".split()
+    again about because but if when while as of off up weeks months years hours minutes nights""".split()
 )
 
 
@@ -982,3 +991,115 @@ def initial_rules(
 SPELLED_ES = (
     r"(?<![\w\-'’])[A-Za-z](?:,[^\S\n]*(?:(?![yY][^\S\n]+[^\W\d_])[A-Za-z]|e[ñn]e|ene|ese|erre|ele|eme|equis|hache|jota|zeta|uve|doble[^\S\n]+ve|i[^\S\n]+griega)(?![\w])){3,}(?![\w\-])"
 )
+
+
+# Letters of a name read out by the names of the letters in Spanish and French ("ve i ele a ele o ve o ese",
+# "ele e effe ère a ène cé o i esse"), separated by spaces. Several words are also ordinary words ("de", "te",
+# "ve", "ce", "ese"), so the run must have at least five words, three of them letter names of two or more
+# letters, and a spelling or "it is" cue right before it.
+_LN_STRONG = (
+    r"doble[ \t]+ve|double[ \t]+v[ée]|i[ \t]+gri(?:ega|ec)|"
+    r"effe|efe|elle|ele|emme|eme|enne|ène|ene|e[ñn]e|erre|ère|ere|esse|ese|equis|iks|hache|ache|jota|ji|ka|"
+    r"zeta|z[èe]de|uve|be|b[ée]|ce|c[ée]|de|d[ée]|ge|g[ée]|pe|p[ée]|te|t[ée]|ve|v[ée]|cu|qu"
+)
+SPELLED_LETTER_NAMES = (
+    rf"(?<![\w\-'’])(?:(?:{_LN_STRONG})|[aeiouy])(?:[ \t]+(?:(?:{_LN_STRONG})|[aeiouy])){{4,19}}(?![\w\-'’])"
+)
+_LN_CUE_BEFORE = re.compile(
+    r"(?i:(?:s['’][ée]crit|se[ \t]+escribe|\bes|\best|\bis|it['’]?s|c['’]est|[çc]a)[ \t:,\-–]{0,4})$"
+)
+
+
+def spelled_letter_names_ok(m: re.Match[str], spell_cue: re.Pattern[str]) -> bool:
+    """Five or more letter-name words, three of them unambiguous, after a spelling or "it is" cue."""
+    text = m.string[max(0, m.start() - 40) : m.start()]
+    if not (spell_cue.search(text) or _LN_CUE_BEFORE.search(text)):
+        return False
+    words = m.group(0).lower().split()
+    return sum(len(w) >= 2 and w not in ("doble", "double", "gri") for w in words) >= 3 and len(words) >= 5
+
+
+_CY_U = "А-ЯЁІЇЄҐ"
+_CY_L = "а-яёіїєґ"
+_CY_W = rf"[{_CY_U}][{_CY_L}'’ʼ]+(?:-[{_CY_U}][{_CY_L}'’ʼ]+)?"
+_CY_NAME = rf"{_CY_W}(?:[ \t]{_CY_W}){{0,2}}"
+_CY_END = rf"(?![{_CY_U}{_CY_L}'’ʼ\-])"
+# Capitalized Cyrillic words that follow a cue without being a name: polite "you", titles, "everyone".
+_CY_NOT_NAMES = frozenset(
+    """
+    вы вам вас вами ваш ваша ваше ваши ви вам вас вами ваш ваша ваше ваші всем всім всех всіх
+    доктор доктору врач лікар лікарю пан пані господин госпожа клиника клініка команда команді
+    команде центр центру спасибо дякую дякуємо
+    """.split()
+)
+_CY_VOCATIVE = (
+    r"спасибо|спасибі|дякуємо|дякую|благодарю|благодарим|здравствуйте|здрастуйте|добрый\s+день|добрий\s+день|"
+    r"доброго\s+дня|добрый\s+вечер|добрий\s+вечір|привет|привіт|вітаю|вітаємо|до\s+свидания|до\s+побачення"
+)
+_CY_RELATIONS = (
+    r"жена|жену|жены|муж|мужа|мама|мать|мати|матір|папа|отец|тато|батько|сестра|сестру|брат|дочь|дочка|"
+    r"сын|сына|партн[ёе]р|чоловік|чоловіка|дружина|дружини|донька|доньки|син|опекун|опікун"
+)
+_CY_LABELS = (
+    r"мене\s+звати|мене\s+звуть|меня\s+зовут|мо[єё]\s+ім['’ʼ]?я|мо[ёе]\s+имя|ім['’ʼ]я|имя|прізвище|фамилия|піб|фио|"
+    r"пацієнтк[аи]|пацієнт|пациентка|пациент"
+)
+_CY_INTRO = r"это|це"
+
+_K = "\u4e00-\u9fff々"  # kanji
+_KATA = "\u30a1-\u30fa\u30fc"
+_JP_NAME = rf"[{_K}{_KATA}]{{1,4}}[ \u3000][{_K}]{{1,4}}(?![{_K}])"
+_JP_RELATIONS = (
+    r"夫|妻|息子|娘|母|父|パートナー|配偶者|旦那|主人|姉|妹|兄|弟|祖母|祖父|友人|緊急連絡先|保護者|患者"
+)
+_HE_AGE_RELATIONS = r"אמא|אימא|אבא|סבתא|סבא|דודה|דוד|אחות|אח|בעלי|אשתי|הבת|הבן"
+# Present tense only: "Joanna said we can do the thaw" is clinic staff reporting, "Hiro says we should call" is
+# family advice, but the tense is all the text gives.
+_SAYS = r"says|thinks|insists|suggests"
+
+
+def script_rules(
+    not_names: frozenset[str] | set[str],
+) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
+    """NAME rules for names in Cyrillic, Japanese and Hebrew and a few cues for a single first name.
+
+    Every rule needs a cue: a name label, an introduction, a relation, a greeting or thanks before the name
+    (the vocative), a Japanese humble "と申します" after it, or an age after a relative's first name."""
+    check, *_ = make_checks(not_names)
+
+    def check_cyr(m: re.Match[str]) -> bool:
+        return m.group("name").split()[0].lower() not in _CY_NOT_NAMES
+
+    return [
+        # "Мене звати Оксана Мельник", "Фамилия: Громова", "Пацієнтка: Ірина Коваленко".
+        (rf"(?<![\w])(?i:{_CY_LABELS})[ \t]*[:\-—]?[ \t]*(?P<name>{_CY_NAME}){_CY_END}", 0, check_cyr),
+        # "Это Наталья Громова", "Це Ірина".
+        (rf"(?<![\w])(?i:{_CY_INTRO})[ \t]+(?P<name>{_CY_NAME}){_CY_END}", 0, check_cyr),
+        # "жена Сергея Мельника", "Мати, Ірина Коваленко".
+        (rf"(?<![\w])(?i:{_CY_RELATIONS})[ \t]*[,:]?[ \t]*(?P<name>{_CY_NAME}){_CY_END}", 0, check_cyr),
+        # A name in the vocative after thanks or a greeting: "Дякуємо, Оксано,", "Спасибо, Мария."
+        (
+            rf"(?<![\w])(?i:{_CY_VOCATIVE})[ \t]*,[ \t]*(?P<name>{_CY_W})(?=[ \t]*(?:[,.!?;]|$|\n)){_CY_END}",
+            re.MULTILINE,
+            check_cyr,
+        ),
+        # A Japanese name, family and given name apart, after a relation or a label: "夫の山田 太郎と", "氏名：山田 太郎".
+        (rf"(?:{_JP_RELATIONS}|氏名|お名前|名前|患者名|姓名)(?:の|は|[:：])?[ \t]*(?P<name>{_JP_NAME})", 0, None),
+        # "氏名：山田太郎": a label with a colon, then kanji alone.
+        (rf"(?:氏名|お名前|名前|患者名|姓名)[ \t]*[:：][ \t\u3000]*(?P<name>[{_K}]{{2,5}})(?![{_K}])", 0, None),
+        # The humble introduction: "山田 花子と申します", "山田花子と申します", "田中 美咲です".
+        (rf"(?<![{_K}])(?P<name>[{_K}]{{1,4}}[ \u3000]?[{_K}]{{1,4}})(?=と申します|と言います|といいます)", 0, None),
+        (rf"(?<![{_K}])(?P<name>[{_K}]{{1,4}}[ \u3000][{_K}]{{1,4}})(?=です(?![{_K}\u3041-\u3096]))", 0, None),
+        # A relative's first name before the age: "אמא טובה בת 62", "אבא דוד בן 70".
+        (
+            rf"(?<![{_HE}])[ולבשמ]?(?:{_HE_AGE_RELATIONS})[ \t]+(?P<name>{_HWORD})[ \t]+(?:בת|בן)[ \t]*\d{{1,3}}(?!\d)",
+            0,
+            check,
+        ),
+        # "Hiro says we should call the clinic": a first name saying what the writer should do.
+        (rf"(?<![\w'’\-])(?P<name>{_CW})[ \t]+(?i:{_SAYS})[ \t]+(?i:that[ \t]+)?(?i:we|i|you)[ \t]+(?i:should|need|must|ought)\b", 0, check),
+        # "We named her Zara after my grandmother", "named our baby Zara".
+        (rf"(?i:\bnamed)[ \t]+(?i:her|him|them|the[ \t]+baby|our[ \t]+(?:baby|daughter|son))[ \t]+(?P<name>{_CW})", 0, check),
+        # Tagalog: "ako po si Jocelyn", "ang asawa ko, si Ramon".
+        (rf"(?i:\b(?:ako[ \t]+(?:po[ \t]+)?|ang[ \t]+(?:asawa|anak|nanay|tatay|kapatid)[ \t]+(?:ko|niya|namin)[ \t]*,?[ \t]*)si)[ \t]+(?P<name>{_CW})", 0, check),
+    ]

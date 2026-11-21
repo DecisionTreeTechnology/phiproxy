@@ -1,0 +1,70 @@
+{"id": "v12-en-sms-022", "action": "add", "type": "ADDRESS", "surface": "Mexico City", "occurrence": 1, "reason": "city where the patient lives"}
+{"id": "v12-en-chat-068", "action": "add", "type": "ADDRESS", "surface": "Osaka", "occurrence": 1, "reason": "city the patient comes from"}
+{"id": "v12-en-chat-090", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Ruth Sampson", "occurrence": 1, "reason": "referring outside clinic nurse"}
+{"id": "v12-en-chat-092", "action": "add", "type": "NAME", "surface": "A-C-H-T-E-R-B-E-R-G", "occurrence": 1, "reason": "patient surname spelled letter by letter"}
+{"id": "v12-en-chat-092", "action": "add", "type": "NAME", "surface": "D-E-K-K-A", "occurrence": 1, "reason": "ex-partner surname spelled letter by letter"}
+{"id": "v12-en-call-101", "action": "add", "type": "NAME", "surface": "Priya", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-104", "action": "add", "type": "HEALTH_CARD", "surface": "W 2 4 8 1 9 3 5 0 6 7", "occurrence": 1, "reason": "spoken form of health/member number"}
+{"id": "v12-en-call-104", "action": "add", "type": "HEALTH_CARD", "surface": "W 2 4 8 1 9 3 5 0 6 7", "occurrence": 2, "reason": "spoken form of health/member number"}
+{"id": "v12-en-call-105", "action": "add", "type": "NAME", "surface": "Rosemary Ng", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-105", "action": "add", "type": "NAME", "surface": "rose marry", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-105", "action": "add", "type": "NAME", "surface": "en gee", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-105", "action": "add", "type": "NAME", "surface": "N G", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-105", "action": "add", "type": "NAME", "surface": "D E V", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-107", "action": "add", "type": "DATE", "surface": "sixteenth", "occurrence": 1, "reason": "person-tied date"}
+{"id": "v12-en-call-107", "action": "add", "type": "ID", "surface": "five two three zero zero nine one four four", "occurrence": 1, "reason": "spoken identifier"}
+{"id": "v12-en-call-107", "action": "add", "type": "NAME", "surface": "Imogen", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-107", "action": "add", "type": "ADDRESS", "surface": "London", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-108", "action": "add", "type": "HEALTH_CARD", "surface": "one two three, four five six, seven eight nine", "occurrence": 1, "reason": "spoken form of health/member number"}
+{"id": "v12-en-call-110", "action": "add", "type": "PHONE", "surface": "four two five, then five five five, zero one nine four", "occurrence": 1, "reason": "spoken phone number"}
+{"id": "v12-en-call-112", "action": "add", "type": "ADDRESS", "surface": "Pune", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-117", "action": "add", "type": "SIN", "surface": "Four one two, seven six three, nine zero five", "occurrence": 1, "reason": "spoken SIN"}
+{"id": "v12-en-call-118", "action": "add", "type": "NAME", "surface": "Marta", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-118", "action": "add", "type": "ADDRESS", "surface": "Kyiv", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-120", "action": "add", "type": "ADDRESS", "surface": "Manila", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-122", "action": "add", "type": "NAME", "surface": "Shauna", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-123", "action": "add", "type": "ADDRESS", "surface": "Kyiv", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-123", "action": "add", "type": "NAME", "surface": "K O V A L E N K O", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-125", "action": "add", "type": "ADDRESS", "surface": "Lagos", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-126", "action": "add", "type": "ADDRESS", "surface": "Monterrey", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-call-126", "action": "add", "type": "ID", "surface": "G A R M nine zero zero five one two", "occurrence": 1, "reason": "spoken identifier"}
+{"id": "v12-en-call-126", "action": "add", "type": "NAME", "surface": "Marisol", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-132", "action": "add", "type": "NAME", "surface": "M A Y A, S U T T E R", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-132", "action": "add", "type": "NAME", "surface": "Sutter", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-call-140", "action": "add", "type": "NAME", "surface": "Kovalchuck", "occurrence": 1, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-141", "action": "add", "type": "NAME", "surface": "Mitch", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-141", "action": "add", "type": "NAME", "surface": "Laura", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-141", "action": "add", "type": "NAME", "surface": "Laura Whitfield", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-144", "action": "add", "type": "NAME", "surface": "Ellen", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-146", "action": "add", "type": "DATE", "surface": "Nov 24", "occurrence": 1, "reason": "person-tied date"}
+{"id": "v12-en-email-148", "action": "add", "type": "NAME", "surface": "Fiona Pemberton", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-149", "action": "add", "type": "NAME", "surface": "Ethan", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-156", "action": "add", "type": "NAME", "surface": "Ingrid", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-159", "action": "add", "type": "NAME", "surface": "Daichi", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-160", "action": "add", "type": "NAME", "surface": "Simran", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-163", "action": "add", "type": "NAME", "surface": "Rowena", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-163", "action": "add", "type": "ADDRESS", "surface": "Cebu", "occurrence": 1, "reason": "city where person lives or comes from"}
+{"id": "v12-en-email-164", "action": "add", "type": "NAME", "surface": "Nadiia", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-168", "action": "add", "type": "NAME", "surface": "Tasha", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-171", "action": "add", "type": "NAME", "surface": "Fernanda", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-email-172", "action": "add", "type": "NAME", "surface": "Ladan", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-note-178", "action": "add", "type": "NAME", "surface": "Tremblay", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-note-188", "action": "add", "type": "NAME", "surface": "Cheryl Whitecalf", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-note-194", "action": "add", "type": "NAME", "surface": "Jade", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-en-note-194", "action": "add", "type": "NAME", "surface": "Jade", "occurrence": 3, "reason": "unlabelled name mention"}
+{"id": "v12-en-note-194", "action": "add", "type": "NAME", "surface": "Loretta", "occurrence": 2, "reason": "unlabelled name mention"}
+{"id": "v12-es-sms-001", "action": "add", "type": "ADDRESS", "surface": "Guadalajara", "occurrence": 1, "reason": "city the patient comes from"}
+{"id": "v12-es-sms-009", "action": "add", "type": "ADDRESS", "surface": "Buenos Aires", "occurrence": 1, "reason": "city the patient comes from"}
+{"id": "v12-es-sms-009", "action": "add", "type": "DATE", "surface": "febrero", "occurrence": 1, "reason": "month tied to patient's transfer trip, like marzo"}
+{"id": "v12-es-call-027", "action": "add", "type": "PHONE", "surface": "dos cero seis, cinco cinco cinco, cero uno tres uno", "occurrence": 1, "reason": "spoken caller phone number"}
+{"id": "v12-es-email-048", "action": "add", "type": "DATE", "surface": "3 de diciembre", "occurrence": 1, "reason": "patient follow-up appointment date"}
+{"id": "v12-es-note-052", "action": "remove", "type": "DATE", "surface": "2009", "occurrence": 1, "reason": "bare year"}
+{"id": "v12-fr-sms-008", "action": "add", "type": "DATE", "surface": "septembre", "occurrence": 1, "reason": "month patient arrived, tied to person"}
+{"id": "v12-fr-email-034", "action": "add", "type": "DATE", "surface": "3 décembre", "occurrence": 1, "reason": "patient follow-up appointment date"}
+{"id": "v12-pl-chat-010", "action": "add", "type": "ADDRESS", "surface": "Krakowa", "occurrence": 1, "reason": "city the patient travels from"}
+{"id": "v12-pl-call-014", "action": "add", "type": "PHONE", "surface": "trzy zero sześć pięć pięć pięć", "occurrence": 1, "reason": "spoken first digits of callback number"}
+{"id": "v12-pl-email-022", "action": "add", "type": "NAME", "surface": "Oliwia", "occurrence": 1, "reason": "patient first name unlabelled"}
+{"id": "v12-he-chat-010", "action": "add", "type": "ADDRESS", "surface": "תל אביב", "occurrence": 1, "reason": "city the patient comes from; prefix outside"}
+{"id": "v12-mixed-sms-007", "action": "add", "type": "NAME", "surface": "Cheyenne", "occurrence": 1, "reason": "patient first name self-introduction"}
+{"id": "v12-mixed-call-024", "action": "add", "type": "DATE", "surface": "August fifteenth", "occurrence": 1, "reason": "spoken DOB repeat"}
+{"id": "v12-mixed-call-026", "action": "add", "type": "NAME", "surface": "G-O-L-A-N", "occurrence": 1, "reason": "surname spelled letter by letter"}

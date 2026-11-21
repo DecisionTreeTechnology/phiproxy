@@ -1340,3 +1340,118 @@ def test_v11_final6_ordinary_text_kept(text):
     for w in ("PCOS", "Endo", "Doctora Lee", "GA", "ANA", "$northside", "December 24"):
         if w in text:
             assert w in out, (text, out)
+
+
+def _v12_masked(text: str) -> str:
+    return Masker(detectors=[RegexDetector()]).mask(text, "s").text
+
+
+def test_v12_spelled_letter_names_spanish_french():
+    assert "[NAME_1]" in _v12_masked("Me llamo Ana, ese es ve i ele a ele o ve o ese.")
+    assert "ve i ele" not in _v12_masked("Me llamo Ana, ese es ve i ele a ele o ve o ese.")
+    assert "ele e effe" not in _v12_masked("Ça s'écrit ele e effe ère a ène cé o i esse.")
+    assert "ge a ere" not in _v12_masked("Es ge a ere ce i a, perdón.")
+    # No cue, too short, or too few real letter names: stays.
+    assert _v12_masked("ve i ele a ele o ve o ese") == "ve i ele a ele o ve o ese"
+    assert _v12_masked("Es de te a ve") == "Es de te a ve"
+
+
+def test_v12_cyrillic_names_after_cues():
+    out = _v12_masked("Мене звати Оксана Мельник. Дякуємо, Оксано, ми передали.")
+    assert "Оксана" not in out and "Мельник" not in out and "Оксано" not in out
+    out = _v12_masked("Здравствуйте, это Ирина, жена Сергея Мельника.")
+    assert "Ирина" not in out and "Мельника" not in out
+    # Polite "you", ordinary capitalised words and a bare name with no cue stay.
+    assert _v12_masked("Спасибо, Вам за ответ.") == "Спасибо, Вам за ответ."
+    assert _v12_masked("Приём в Москве, Клиника работает.") == "Приём в Москве, Клиника работает."
+    assert _v12_masked("Оксана пришла вчера.") == "Оксана пришла вчера."
+
+
+def test_v12_japanese_names_after_cues():
+    out = _v12_masked("山田 花子と申します。夫の山田 太郎と来月伺います。")
+    assert "山田" not in out and "花子" not in out and "太郎" not in out
+    assert "田中" not in _v12_masked("予約をお願いします。田中 美咲です。")
+    # Ordinary words with the same particles stay.
+    assert _v12_masked("患者様です。夫の仕事と来月") == "患者様です。夫の仕事と来月"
+
+
+def test_v12_hebrew_relative_before_age_and_pedigree_marker():
+    assert "טובה" not in _v12_masked("אמא טובה בת 62 ולא עשתה בדיקות")
+    assert _v12_masked("הרופאה בת 62 ולא עשתה בדיקות") == "הרופאה בת 62 ולא עשתה בדיקות"
+    out = _v12_masked("- Hermano (II-3): Tomás, 34, portador\n- Frère (II-3): Martin, 35 ans")
+    assert "Tomás" not in out and "Martin" not in out
+
+
+def test_v12_single_first_name_cues():
+    assert "Hiro" not in _v12_masked("Notes: 'tired, Hiro says we should call the clinic'")
+    assert "Zara" not in _v12_masked("We named her Zara after my grandmother.")
+    assert "Jocelyn" not in _v12_masked("Hello, ako po si Jocelyn, 34.")
+    # Staff reporting in the past tense and a generic subject stay.
+    assert _v12_masked("Joanna said we can do the thaw.") == "Joanna said we can do the thaw."
+    assert _v12_masked("Everyone says we should go.") == "Everyone says we should go."
+    assert _v12_masked("We named the project Falcon.") == "We named the project Falcon."
+    assert "Dev" not in _v12_masked("[00:00:52] Agent: And your partner's name?\n[00:00:58] Caller: Dev.")
+    assert "Loretta" not in _v12_masked("Kinship caregiver Loretta Beaulieu came with her.")
+
+
+def test_v12_department_signoffs_and_place_words_not_names():
+    assert _v12_masked("Thanks,\nEmbryology") == "Thanks,\nEmbryology"
+    assert _v12_masked("Regards,\nCryo Supply Billing") == "Regards,\nCryo Supply Billing"
+    assert _v12_masked("We are from the Philippines.") == "We are from the Philippines."
+    assert _v12_masked("I'm Métis, from the north.") == "I'm Métis, from the north."
+    assert _v12_masked("She will miss weeks of school.") == "She will miss weeks of school."
+    table = "Straw\tCane\tTank\n2-A\t5\t6\t4AB"
+    assert _v12_masked(table) == table
+    # A name in a table row is still a name.
+    assert "Okafor" not in _v12_masked("Patient: Ngozi\tOkafor\t1990-03-04")
+
+
+def test_v12_resident_city_is_masked_though_clinic_city():
+    pol = Policy(allow=["Larkspur Fertility Group", "2240 Albert Street, Suite 305, Regina, SK S4P 3T8", "Regina"])
+    m = Masker(policy=pol)
+    assert "Regina" not in m.mask("I moved to Regina in March and my cell is 306 555 0138.", "s").text
+    assert "Regina" not in m.mask("Zofia is staying with us in Regina and asks", "s").text
+    # The clinic's own city stays when no residence cue stands before it.
+    assert "Regina" in m.mask("Is the Regina office open on Saturday?", "s").text
+    assert "Regina" in m.mask("Our clinic in Regina opens at 8.", "s").text
+
+
+def test_v12_review1_clinic_domain_urls_stay_masked():
+    m = Masker(policy=Policy(allow=["https://larkspur-fg.example.org", "portal.clinic.example.org"], staff=["Dr. Sarah Lee"]))
+    for path in ("/patients/maria-gonzalez", "/mrn/48271", "/dob/1985", "/m/ABC123", "/r/xk9aq2mp7zt",
+                 "/u/jsmith1985", "/jennifer-okafor-ivf-journey", "/reset/4fz9"):
+        for host in ("https://larkspur-fg.example.org", "https://portal.clinic.example.org"):
+            out = m.mask(f"See {host}{path} ok", "s").text
+            assert "[URL_" in out and path not in out, out
+
+
+def test_v12_review1_cjk_booking_code_only():
+    for t, code in (("予約番号：AB12345です", "AB12345"), ("예약번호 AB12345 확인", "AB12345"),
+                    ("预订号码是AB12345好的", "AB12345"), ("パスポート番号はTK1234567", "TK1234567")):
+        ents = [e for e in RegexDetector().detect(t) if e.type.name == "ID"]
+        assert [e.text for e in ents] == [code], (t, ents)
+
+
+def test_v12_review1_pnr_single_span():
+    for t, code in (("PNR 6KD4TZ today", "PNR 6KD4TZ"), ("booking ref QXR7TM ok", "QXR7TM")):
+        ents = [e for e in RegexDetector().detect(t) if e.type.name == "ID"]
+        assert [e.text for e in ents] == [code], ents
+    assert "6KD4TZ" not in Masker(detectors=[RegexDetector()]).mask("PNR 6KD4TZ today", "s").text
+
+
+def test_v12_review1_polish_school_nr_and_patron():
+    for t, school in (("Przedszkole i szkoła: Szkoła Podstawowa nr 5 im. Kopernika w Łodzi", "Szkoła Podstawowa nr 5 im. Kopernika"),
+                      ("chodzi do Liceum Ogólnokształcącego nr 12 im. Mickiewicza w Poznaniu", "Liceum Ogólnokształcącego nr 12 im. Mickiewicza"),
+                      ("uczy się w Szkoła Podstawowa nr 7 w Gdyni", None)):
+        ents = [e for e in RegexDetector().detect(t) if e.type.name == "EMPLOYER"]
+        if school:
+            assert [e.text for e in ents] == [school], (t, ents)
+        else:
+            assert ents and all(" w Gdyni" not in e.text for e in ents), ents
+
+
+def test_v12_review1_hebrew_school_stops_at_locative():
+    ents = [e for e in RegexDetector().detect("בית הספר היה תיכון הרצל בחיפה") if e.type.name == "EMPLOYER"]
+    assert [e.text for e in ents] == ["תיכון הרצל"], ents
+    ents = [e for e in RegexDetector().detect("בית הספר: תיכון בן גוריון לבנות") if e.type.name == "EMPLOYER"]
+    assert [e.text for e in ents] == ["תיכון בן גוריון"], ents

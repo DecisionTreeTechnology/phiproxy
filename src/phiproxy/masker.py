@@ -189,6 +189,13 @@ _LOCALITY_AFTER = re.compile(
     r"(?:[\s,]{0,4}(?P<zip>\d{5}(?:-\d{4})?|[A-Z]\d[A-Z][ \t]?\d[A-Z]\d))?"
 )
 _LOCALITY_TYPES = {EntityType.ADDRESS, EntityType.ZIP, EntityType.POSTAL_CODE}
+# A residence cue right before a city: "I moved to X", "we live in X", "staying with us in X", "my home
+# is X". A patient's own town stays masked though it is the clinic's city; "our clinic in X" or "the
+# appointment in X" has no such cue.
+_RESIDENCE_BEFORE = re.compile(
+    r"(?i:\b(?:live[sd]?|living|resid(?:e|es|ed|ing)|moved|relocated|grew[^\S\n]+up|"
+    r"stay(?:s|ed|ing)?[^\S\n]+with[^\S\n]+\w+|home[^\S\n]+is)(?:[^\S\n]+[\w'’]+){0,2}?[^\S\n]+(?:in|to|near|at)[^\S\n]+(?:the[^\S\n]+)?)$"
+)
 _FIELD_LABEL = re.compile(
     r"[^\S\n]*(?i:city|town|zip(?:\s*code)?|postal\s*code|ville|code\s+postal|ciudad|c[óo]digo\s+postal|miasto|kod)[^\S\n]*[:=][^\S\n]*"
 )
@@ -495,9 +502,14 @@ class Masker:
             e for e in found
             if e.type is EntityType.ADDRESS and _STREETISH.search(e.text) and not _covered(e, allowed)
         ]
+        resident = [
+            e for e in found
+            if e.type is EntityType.ADDRESS and not _STREETISH.search(e.text) and _covered(e, allowed)
+            and _RESIDENCE_BEFORE.search(text[max(0, e.start - 60) : e.start])
+        ]
         if not streets:
-            return []
-        out = []
+            return resident
+        out = list(resident)
         for e in found:
             if e.type not in _LOCALITY_TYPES or not _covered(e, allowed) or (e.type is EntityType.ADDRESS and _STREETISH.search(e.text)):
                 continue  # a clinic street is never a patient locality
