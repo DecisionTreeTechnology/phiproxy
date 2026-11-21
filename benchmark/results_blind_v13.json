@@ -1,0 +1,182 @@
+{
+  "regex": {
+    "recall": 0.8834870075440067,
+    "precision": 0.9213286713286714,
+    "spans": 1193,
+    "missed": 139,
+    "leaked_char_rate": 0.11140381282495668,
+    "by_type": {
+      "ACCOUNT": 1.0,
+      "ADDRESS": 0.7126436781609196,
+      "AGE": 1.0,
+      "DATE": 1.0,
+      "DONOR_ID": 1.0,
+      "EMAIL": 1.0,
+      "EMPLOYER": 0.6111111111111112,
+      "HEALTH_CARD": 1.0,
+      "ID": 1.0,
+      "IP_ADDRESS": 1.0,
+      "MRN": 0.9655172413793104,
+      "NAME": 0.7933194154488518,
+      "PHONE": 1.0,
+      "POSTAL_CODE": 1.0,
+      "SIN": 1.0,
+      "SSN": 1.0,
+      "URL": 1.0,
+      "ZIP": 1.0
+    },
+    "by_channel": {
+      "call": 0.8909090909090909,
+      "chat": 0.8291457286432161,
+      "email": 0.9046153846153846,
+      "note": 0.9128787878787878,
+      "sms": 0.8384615384615385
+    },
+    "by_lang": {
+      "en": 0.9278499278499278,
+      "es": 0.8571428571428571,
+      "fr": 0.8333333333333334,
+      "he": 0.7213114754098361,
+      "mixed": 0.7710843373493976,
+      "pl": 0.8688524590163934
+    },
+    "clean_messages": 118,
+    "clean_masked_rate": 0.2457627118644068,
+    "false_positives": 90
+  },
+  "regex+known": {
+    "recall": 0.9270746018440905,
+    "precision": 0.9244186046511628,
+    "spans": 1193,
+    "missed": 87,
+    "leaked_char_rate": 0.07258232235701906,
+    "by_type": {
+      "ACCOUNT": 1.0,
+      "ADDRESS": 0.7126436781609196,
+      "AGE": 1.0,
+      "DATE": 1.0,
+      "DONOR_ID": 1.0,
+      "EMAIL": 1.0,
+      "EMPLOYER": 0.6111111111111112,
+      "HEALTH_CARD": 1.0,
+      "ID": 1.0,
+      "IP_ADDRESS": 1.0,
+      "MRN": 1.0,
+      "NAME": 0.8997912317327766,
+      "PHONE": 1.0,
+      "POSTAL_CODE": 1.0,
+      "SIN": 1.0,
+      "SSN": 1.0,
+      "URL": 1.0,
+      "ZIP": 1.0
+    },
+    "by_channel": {
+      "call": 0.9418181818181818,
+      "chat": 0.8994974874371859,
+      "email": 0.9261538461538461,
+      "note": 0.9393939393939394,
+      "sms": 0.9153846153846154
+    },
+    "by_lang": {
+      "en": 0.9581529581529582,
+      "es": 0.8914285714285715,
+      "fr": 0.9,
+      "he": 0.819672131147541,
+      "mixed": 0.8554216867469879,
+      "pl": 0.9344262295081968
+    },
+    "clean_messages": 118,
+    "clean_masked_rate": 0.2457627118644068,
+    "false_positives": 91
+  },
+  "regex+gliner": {
+    "recall": 0.9958088851634534,
+    "precision": 0.8600148920327625,
+    "spans": 1193,
+    "missed": 5,
+    "leaked_char_rate": 0.0027729636048526864,
+    "by_type": {
+      "ACCOUNT": 1.0,
+      "ADDRESS": 1.0,
+      "AGE": 1.0,
+      "DATE": 1.0,
+      "DONOR_ID": 1.0,
+      "EMAIL": 1.0,
+      "EMPLOYER": 1.0,
+      "HEALTH_CARD": 1.0,
+      "ID": 1.0,
+      "IP_ADDRESS": 1.0,
+      "MRN": 0.9655172413793104,
+      "NAME": 0.9916492693110647,
+      "PHONE": 1.0,
+      "POSTAL_CODE": 1.0,
+      "SIN": 1.0,
+      "SSN": 1.0,
+      "URL": 1.0,
+      "ZIP": 1.0
+    },
+    "by_channel": {
+      "call": 0.9890909090909091,
+      "chat": 0.9899497487437185,
+      "email": 1.0,
+      "note": 1.0,
+      "sms": 1.0
+    },
+    "by_lang": {
+      "en": 0.9971139971139971,
+      "es": 0.9942857142857143,
+      "fr": 0.9916666666666667,
+      "he": 1.0,
+      "mixed": 1.0,
+      "pl": 0.9836065573770492
+    },
+    "clean_messages": 118,
+    "clean_masked_rate": 0.4322033898305085,
+    "false_positives": 188
+  },
+  "regex+known+gliner": {
+    "recall": 1.0,
+    "precision": 0.859896219421794,
+    "spans": 1193,
+    "missed": 0,
+    "leaked_char_rate": 0.0006239168110918545,
+    "by_type": {
+      "ACCOUNT": 1.0,
+      "ADDRESS": 1.0,
+      "AGE": 1.0,
+      "DATE": 1.0,
+      "DONOR_ID": 1.0,
+      "EMAIL": 1.0,
+      "EMPLOYER": 1.0,
+      "HEALTH_CARD": 1.0,
+      "ID": 1.0,
+      "IP_ADDRESS": 1.0,
+      "MRN": 1.0,
+      "NAME": 1.0,
+      "PHONE": 1.0,
+      "POSTAL_CODE": 1.0,
+      "SIN": 1.0,
+      "SSN": 1.0,
+      "URL": 1.0,
+      "ZIP": 1.0
+    },
+    "by_channel": {
+      "call": 1.0,
+      "chat": 1.0,
+      "email": 1.0,
+      "note": 1.0,
+      "sms": 1.0
+    },
+    "by_lang": {
+      "en": 1.0,
+      "es": 1.0,
+      "fr": 1.0,
+      "he": 1.0,
+      "mixed": 1.0,
+      "pl": 1.0
+    },
+    "clean_messages": 118,
+    "clean_masked_rate": 0.4322033898305085,
+    "false_positives": 189
+  }
+}

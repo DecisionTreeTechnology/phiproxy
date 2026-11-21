@@ -1,0 +1,58 @@
+{"id": "v13-en-sms-003", "action": "add", "type": "NAME", "surface": "Kim", "occurrence": 1, "reason": "patient first name alone"}
+{"id": "v13-en-sms-021", "action": "add", "type": "NAME", "surface": "Hernández", "occurrence": 1, "reason": "patient surname alone"}
+{"id": "v13-en-sms-006", "action": "add", "type": "NAME", "surface": "Marguerite", "occurrence": 1, "reason": "patient first name in greeting"}
+{"id": "v13-en-chat-076", "action": "add", "type": "DATE", "surface": "09 30 1988", "occurrence": 1, "reason": "spoken-form date of birth"}
+{"id": "v13-en-chat-079", "action": "add", "type": "NAME", "surface": "Hawa", "occurrence": 2, "reason": "repeat mention of patient name"}
+{"id": "v13-en-chat-079", "action": "add", "type": "NAME", "surface": "Hawa", "occurrence": 3, "reason": "repeat mention of patient name"}
+{"id": "v13-en-sms-008", "action": "add", "type": "NAME", "surface": "Y-O-L-A-N-D-A", "occurrence": 1, "reason": "first name spelled letter by letter"}
+{"id": "v13-en-chat-055", "action": "add", "type": "NAME", "surface": "K O W A L C Z Y K", "occurrence": 1, "reason": "surname spelled letter by letter"}
+{"id": "v13-en-sms-018", "action": "remove", "type": "ADDRESS", "surface": "Nashville", "occurrence": 1, "reason": "clinic's own city"}
+{"id": "v13-en-chat-059", "action": "remove", "type": "ADDRESS", "surface": "Ottawa", "occurrence": 1, "reason": "clinic's own city"}
+{"id": "v13-en-chat-095", "action": "remove", "type": "ADDRESS", "surface": "Nashville", "occurrence": 1, "reason": "clinic's own city"}
+{"id": "v13-en-chat-100", "action": "remove", "type": "ADDRESS", "surface": "Ottawa", "occurrence": 2, "reason": "clinic's own city"}
+{"id": "v13-en-call-105", "action": "add", "type": "NAME", "surface": "Marguerite", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-call-109", "action": "add", "type": "NAME", "surface": "Tamika", "occurrence": 2, "reason": "insurer rep name repeated"}
+{"id": "v13-en-call-110", "action": "retype", "from": "NAME", "type": "PROVIDER", "surface": "Jorge", "occurrence": 1, "reason": "pharmacist"}
+{"id": "v13-en-call-117", "action": "add", "type": "NAME", "surface": "Helen", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-call-117", "action": "add", "type": "NAME", "surface": "Helen", "occurrence": 3, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-call-121", "action": "add", "type": "NAME", "surface": "Kayla", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-call-121", "action": "add", "type": "NAME", "surface": "Kayla", "occurrence": 3, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-141", "action": "add", "type": "NAME", "surface": "Tessa", "occurrence": 2, "reason": "patient name in signature"}
+{"id": "v13-en-email-147", "action": "retype", "from": "NAME", "type": "ID", "surface": "sunflower_mom82", "occurrence": 1, "reason": "username"}
+{"id": "v13-en-email-147", "action": "retype", "from": "NAME", "type": "ID", "surface": "TTC_in_TN", "occurrence": 1, "reason": "username"}
+{"id": "v13-en-email-145", "action": "add", "type": "NAME", "surface": "Samira", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-145", "action": "add", "type": "NAME", "surface": "Karim", "occurrence": 2, "reason": "signature"}
+{"id": "v13-en-email-146", "action": "add", "type": "NAME", "surface": "Tyrell", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-153", "action": "add", "type": "NAME", "surface": "Chantal", "occurrence": 2, "reason": "signature"}
+{"id": "v13-en-email-154", "action": "add", "type": "NAME", "surface": "Hannah", "occurrence": 2, "reason": "signature"}
+{"id": "v13-en-email-156", "action": "add", "type": "NAME", "surface": "Kayla", "occurrence": 3, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-156", "action": "add", "type": "NAME", "surface": "Kayla", "occurrence": 4, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-161", "action": "add", "type": "NAME", "surface": "Beshoy", "occurrence": 2, "reason": "signature"}
+{"id": "v13-en-email-163", "action": "add", "type": "NAME", "surface": "Priya", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-164", "action": "add", "type": "NAME", "surface": "Alma", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-167", "action": "add", "type": "NAME", "surface": "Ivy", "occurrence": 2, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-email-167", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "EMB-5532-1", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-email-167", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "EMB-5532-2", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-email-167", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "EMB-5532-3", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-email-169", "action": "add", "type": "NAME", "surface": "Eduardo", "occurrence": 2, "reason": "signature"}
+{"id": "v13-en-email-171", "action": "add", "type": "NAME", "surface": "Jean-Marc", "occurrence": 2, "reason": "signature"}
+{"id": "v13-en-email-172", "action": "add", "type": "NAME", "surface": "Bimala", "occurrence": 3, "reason": "unlabelled repeat of patient/relative name"}
+{"id": "v13-en-note-176", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "E49913-1", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-note-176", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "E49913-2", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-note-176", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "E49913-3", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-note-176", "action": "retype", "from": "DONOR_ID", "type": "ID", "surface": "E49913-4", "occurrence": 1, "reason": "embryo ID is not donor ID"}
+{"id": "v13-en-note-191", "action": "retype", "from": "NAME", "type": "ID", "surface": "nashville_nana_74", "occurrence": 1, "reason": "username"}
+{"id": "v13-en-note-191", "action": "retype", "from": "NAME", "type": "ID", "surface": "nashville_nana_74", "occurrence": 2, "reason": "username"}
+{"id": "v13-en-note-191", "action": "retype", "from": "NAME", "type": "ID", "surface": "BlueberryBabyDust", "occurrence": 1, "reason": "username"}
+{"id": "v13-en-note-193", "action": "retype", "from": "NAME", "type": "ID", "surface": "@kiki_and_the_baby", "occurrence": 1, "reason": "social handle"}
+{"id": "v13-en-note-193", "action": "retype", "from": "NAME", "type": "ID", "surface": "@kiki_and_the_baby", "occurrence": 2, "reason": "social handle"}
+{"id": "v13-en-note-193", "action": "retype", "from": "NAME", "type": "ID", "surface": "@kiki_and_the_baby", "occurrence": 3, "reason": "social handle"}
+{"id": "v13-en-note-193", "action": "retype", "from": "NAME", "type": "ID", "surface": "jasmine.t", "occurrence": 1, "reason": "social handle"}
+{"id": "v13-en-note-193", "action": "retype", "from": "NAME", "type": "ID", "surface": "jasmine.t", "occurrence": 2, "reason": "social handle"}
+{"id": "v13-en-call-118", "action": "add", "type": "NAME", "surface": "Bree", "occurrence": 2, "reason": "patient first name repeat"}
+{"id": "v13-es-chat-019", "action": "remove", "type": "ADDRESS", "surface": "Nashville", "occurrence": 1, "reason": "clinic's own city is excluded by the rules"}
+{"id": "v13-es-chat-036", "action": "remove", "type": "ADDRESS", "surface": "Nashville", "occurrence": 1, "reason": "clinic's own city is excluded by the rules"}
+{"id": "v13-es-note-053", "action": "remove", "type": "ADDRESS", "surface": "Nashville", "occurrence": 1, "reason": "clinic's own city is excluded by the rules"}
+{"id": "v13-pl-sms-002", "action": "add", "type": "NAME", "surface": "Kowalczyk", "occurrence": 1, "reason": "patient surname given as the whole message"}
+{"id": "v13-pl-email-021", "action": "add", "type": "NAME", "surface": "Justyna", "occurrence": 2, "reason": "patient first name in signature"}
+{"id": "v13-he-chat-010", "action": "add", "type": "PHONE", "surface": "615 555 0142", "occurrence": 1, "reason": "patient phone number"}

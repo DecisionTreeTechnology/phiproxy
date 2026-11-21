@@ -552,6 +552,36 @@ def _org_check(m: re.Match[str]) -> bool:
     return len(org) >= 3 and not _ORG_NOT.match(org) and not re.match(r"(?i)(?:dr|dre|doctor|mr|mrs|ms)\b", org)
 
 
+# v13: Hebrew workplace/school answers that are not a name: "none", time words, generic types.
+_HE_ORG_STOP_FIRST = frozenset(
+    "לילות בלילות בקרים ערבים סופ\"ש סופש ימי חגי חג חגים סתיו אביב קיץ חורף ללא אין לא כלום אפס רלוונטי רלבנטי שעות שעה משמרת משמרות לילה הלילה בוקר הבוקר ערב הערב צהריים הצהריים היום השבוע "
+    "אתמול מחר חצי מלאה מלא משרה משרות שבת שישי חמישי רביעי שלישי שני ראשון סוף סופי ימים יום חודש שנה שנים עבודה "
+    "עכשיו כרגע מרחוק זום פרילנס עצמאי עצמאית לחץ קושי קשה עם".split()
+)
+# A generic noun alone ("a bank", "a hospital", "the municipality", "the home") is a type, not a name.
+_HE_ORG_GENERIC_NOUN = frozenset(
+    "בית הבית חו\"ל חוץ הארץ ישראל תחום תחומי עיר העיר שם כאן הייטק חינוך הוראה בריאות רפואה בנייה תעשייה צבא מסעדה חנות "
+    "חברה קליניקה מרפאה בנק משרד מפעל עירייה עיריה עיריית אוניברסיטה מכללה תיכון גן גנים ספר חולים רשת מקום מקצוע שכר קופה "
+    "טלפון מחשב עצמי מפעלי חברת מכון סטודיו קיבוץ ישיבת מכללת אוניברסיטת מרפאת קליניקת אחזקות קבוצת מסעדת".split()
+)
+_HE_ORG_GENERIC_WORD = frozenset(
+    "יסודי יסודית תיכון תיכונית ממלכתי ממלכתית פרטי פרטית דתי דתית מקומי מקומית שכונתי שכונתית ציבורי ציבורית עירוני עירונית "
+    "לילדים לבנות לבנים חדש חדשה ישן ישנה גדול גדולה קטן קטנה שלי שלה שלו שלנו הקרוב הקרובה כללי כללית רפואי רפואית "
+    "ילדים עורכי דין הדין החולים הספר חולים ספר בית משרד".split()
+)
+
+
+def _he_org_check(m: re.Match[str]) -> bool:
+    """A Hebrew workplace or school that is a name, not "none", a time word or a generic type."""
+    org = m.group("org").strip(" .,'’")
+    words = org.split()
+    if not words or len(org) < 3 or words[0] in _HE_ORG_STOP_FIRST:
+        return False
+    if len(words) == 1 and (words[0] in _HE_ORG_GENERIC_NOUN or words[0].lstrip("ה") in _HE_ORG_STOP_FIRST):
+        return False
+    return not all(w in _HE_ORG_GENERIC_WORD or w in _HE_ORG_GENERIC_NOUN for w in words)
+
+
 _BIRTH_CUE_BEFORE = re.compile(
     r"(?i:\b(?:dob|d\.o\.b\.?|date\s+of\s+birth|birth\s*date|birthday|b-?day|born)(?:\s+(?:is|was|on|:))?)[\s:.,\-]{0,4}$"
 )
@@ -915,6 +945,170 @@ def _username_check(m: re.Match[str]) -> bool:
     return not (cue.lstrip().startswith("usuario") and ":" in cue)
 
 
+# v13: short document, file and policy numbers after their cue. The shape has separators or a letter prefix
+# ("428-1190", "CM 0045 8871", "G 77412"), five digits or more, and is not a date or a year.
+_SHORT_ID_VALUE = (
+    r"(?<![\w\-/.])(?P<v>(?:(?-i:[A-Z]{1,3})[ \-])?\d{2,6}(?:[ \-]\d{2,6}){1,2}|(?-i:[A-Z]{1,3})[ \-]\d{4,8})(?![\w\-]|[.,]\d)"
+)
+
+
+def _short_id_check(m: re.Match[str]) -> bool:
+    v = m.group("v")
+    if sum(c.isdigit() for c in v) < 5:
+        return False
+    if re.fullmatch(r"(?:19|20)\d\d(?:[\-/.]\d{1,2}){0,2}|\d{1,2}[\-/.]\d{1,2}[\-/.]\d{2,4}", v):
+        return False
+    return not all(re.fullmatch(r"(?:19|20)\d\d", g) for g in re.split(r"[ \-]", v))
+
+
+_NATIONAL_ID_NOUN = (
+    r"(?:social[ \t]{1,3}security(?:[ \t]{1,3}(?:number|no\.?))?|ssn|sin|social|nas|nir|nss|pesel|dni|ohip|health[ \t]{1,3}card|"
+    r"seguro[ \t]{1,3}social|n[úu]mero[ \t]{1,3}de[ \t]{1,3}seguro[ \t]{1,3}social|"
+    r"num[ée]ro[ \t]{1,3}d['’]assurance[ \t]{1,3}sociale|assurance[ \t]{1,3}sociale)"
+)
+
+# A forum or chat handle: an underscore, two or more digits after letters, or three capitalised words run together.
+_FORUM_HANDLE = (
+    r"(?-i:(?=[A-Za-z0-9_]*[A-Za-z])(?:[A-Za-z][A-Za-z0-9]{0,20}(?:_[A-Za-z0-9]{1,20}){1,6}|[A-Za-z]{3,20}\d{2,6}|"
+    r"[A-Z][a-z]{1,15}(?:[A-Z][a-z]{1,15}){2,4}))"
+)
+
+
+_PLATE_WORD = re.compile(r"(?i)\b(?:licen[cs]e[ \t]plate|number[ \t]plate|plates?|placas?|plaque|tablic\w*|matr[íi]cula)\b")
+
+
+def _plate_context(m: re.Match[str]) -> bool:
+    """A state-prefixed plate token counts only when a plate word came shortly before, in the same sentence."""
+    before = m.string[max(0, m.start() - 120) : m.start()]
+    w = None
+    for w in _PLATE_WORD.finditer(before):
+        pass
+    if w is None:
+        return False
+    if re.search(r"[\n.!?;]", before[w.end() :]):
+        return False
+    return sum(c.isalnum() for c in m.group(1)) >= 6
+
+
+_PASSPORT_WORD = re.compile(r"(?i:passport|pasaporte|passeport|paszport)|דרכון")
+
+
+def _passport_before(m: re.Match[str]) -> bool:
+    """A second passport number in the next clause after a passport was named ("Passport is C0482917. Husband's is P7731884K")."""
+    return bool(_PASSPORT_WORD.search(m.string[max(0, m.start() - 150) : m.start()]))
+
+
+_LAST4_LIST_BEFORE = re.compile(
+    r"(?i:(?:\b(?:last|final)[ \t]{1,3}(?:4|four)(?:[ \t]{1,3}(?:digits|numbers))?"
+    r"(?:[ \t]{1,3}of[ \t]{1,3}(?:(?:my|the|your|her|his|their)[ \t]{1,3})?[A-Za-z]{2,12}(?:[ \t]{1,3}(?:number|card))?)?"
+    r"|(?:les[ \t]{1,3})?(?:(?:4|quatre)[ \t]{1,3}derniers|derniers[ \t]{1,3}(?:4|quatre))(?:[ \t]{1,3}(?:chiffres|num[ée]ros))?"
+    r"(?:[ \t]{1,3}(?:de|du|des)(?:[ \t]{1,3}(?:mon|ma|ton|votre|le|la))?[ \t]{1,3}[A-Za-z]{2,12})?"
+    r"|(?:los[ \t]{1,3})?[úu]ltimos[ \t]{1,3}(?:4|cuatro)(?:[ \t]{1,3}(?:d[íi]gitos|n[úu]meros|cifras))?"
+    r"|ostatnie[ \t]{1,3}(?:4|cztery)[ \t]{1,3}cyfry)"
+    r"(?:[ \t]{1,3}(?:are|is|was|es|son|est|sont|to)\b)?[ \t]{0,3}[:?,\-]?[ \t]{0,3}"
+    r"(?:\d{4}[ \t]{0,3}(?:,|;|&|/|and|or|et|ou|y|o|i|lub|und|ו-?)[ \t]{0,3}){1,6})$"
+)
+
+
+def _last4_list_context(m: re.Match[str]) -> bool:
+    """A 4-digit group after a list connector counts when only 4-digit groups sit between it and a last-four cue."""
+    return bool(_LAST4_LIST_BEFORE.search(m.string[max(0, m.start(1) - 160) : m.start(1)]))
+
+
+def _second_passport_ok(m: re.Match[str]) -> bool:
+    """A passport-shaped token (three or more digits) when a passport word and a first number came earlier in the
+    same sentence, with nothing but filler between."""
+    v = m.group("v")
+    if sum(c.isdigit() for c in v) < 3:
+        return False
+    before = m.string[max(0, m.start() - 150) : m.start()]
+    w = None
+    for w in _PASSPORT_WORD.finditer(before):
+        pass
+    if w is None:
+        return False
+    tail = before[w.end() :]
+    return not re.search(r"[\n!?;]|\.(?:\s|$)", tail) and any(c.isdigit() for c in tail)
+
+
+_TAX_CUE = re.compile(
+    r"(?i)\bitin\b|\bTIN\b|\btax[ \t]{1,3}(?:id|identification)\b|\btaxpayer[ \t]{1,3}(?:id|identification)\b|"
+    r"\bssn\b|\bsocial[ \t]{1,3}security\b|\bsocial\b"
+)
+
+
+def _tax_list_context(m: re.Match[str]) -> bool:
+    """A tax number after a list connector counts when an SSN/ITIN/TIN cue came earlier in the same sentence."""
+    before = m.string[max(0, m.start() - 150) : m.start()]
+    w = None
+    for w in _TAX_CUE.finditer(before):
+        pass
+    return w is not None and not re.search(r"[\n!?]|\.(?:\s|$)", before[w.end() :])
+
+
+def _plain_emp_check(m: re.Match[str]) -> bool:
+    """A year-shaped value ("the employee 2024 2025 review") needs a number marker between cue and digits."""
+    v = m.group(1)
+    if not re.fullmatch(r"(?:19|20)\d\d", v):
+        return True
+    between = m.group(0)[: m.start(1) - m.start(0)]
+    return bool(re.search(r"(?i)[#:=]|\b(?:number|num|no|nr|is|es|est|jest|to)\b|n[°º]", between))
+
+
+def _builder_page_check(m: re.Match[str]) -> bool:
+    host = m.group(1).split("/", 1)[0].lower()
+    return host != "www" and not host.startswith("www.")
+
+
+def _personal_cue_site_check(m: re.Match[str]) -> bool:
+    labels = m.group(1).lower().split("/")[0].split(".")
+    if labels[0] == "www":
+        labels = labels[1:]
+    return not (_INSTITUTION_LABELS.intersection(labels) or ".".join(labels) in _BARE_PLATFORMS)
+
+
+def _handle_speakers(m: re.Match[str]) -> bool:
+    """A chat label like "jasmine.t:" only in a transcript that already has "@handle:" speaker lines."""
+    return bool(re.search(r"(?m)^[ \t]{0,3}@[\w.]{3,30}:", m.string))
+
+
+_PERSONAL_WORDS = frozenset(
+    "i i'm i've i'll me my mine our ours her his their she he they husband wife partner spouse daughter son baby due "
+    "transfer transfers retrieval retrievals cycle cycles surgery operation procedure wedding trip vacation honeymoon "
+    "appointment born birth start starting stim stims stimulation period ivf iui icsi fet test tests scan ultrasound "
+    "biopsy insemination expecting expect conceive conception treatment medication protocol "
+    "mon ma mes notre nos elle ils elles mari épouse epouse femme bébé bebe grossesse enceinte terme transfert ponction "
+    "fiv iac opération chirurgie mariage voyage rendez naissance j'ai traitement attendons attends attend".split()
+)
+_PERSONAL_PREFIXES = ("pregnan", "miscarr", "consult", "deliver", "embryo", "accouch")
+_PERSONAL_OWNER_WORDS = frozenset(
+    "i i'm me my mon ma mes j'ai her his their husband wife baby bébé bebe".split()
+)
+_BUSINESS_WORDS = frozenset("clinic office pharmacy bureau clínica clinica cabinet renovation renovations".split())
+_WORD = re.compile(r"[\w'’]+")
+
+
+def _personal_month_check(m: re.Match[str]) -> bool:
+    """A month alone ("in May", "pour juillet") is a date only in a personal event sentence:
+    a person (I, my, her, husband, ...) or an event word (transfer, due, baby, appointment, ...) in the same sentence.
+    A clinic notice ("We are closed in May for renovations", "Le bureau est fermé pour juillet") has none."""
+    text = m.string
+    pre = text[max(0, m.start() - 120) : m.start()]
+    cut = max(pre.rfind("."), pre.rfind("!"), pre.rfind("?"), pre.rfind("\n"))
+    pre = pre[cut + 1 :]
+    post = text[m.end() : m.end() + 80]
+    ends = [i for i in (post.find("."), post.find("!"), post.find("?"), post.find("\n")) if i >= 0]
+    if ends:
+        post = post[: min(ends)]
+    toks = [t.lower().replace("’", "'") for t in _WORD.findall(pre + " " + post)]
+    if not any(t in _PERSONAL_WORDS or t.startswith(_PERSONAL_PREFIXES) for t in toks):
+        return False
+    # A business word with no first-person or patient owner stays a notice ("our clinic is closed for July").
+    if any(t in _BUSINESS_WORDS for t in toks) and not any(t in _PERSONAL_OWNER_WORDS for t in toks):
+        return False
+    return True
+
+
 def _build_rules() -> list[_Rule]:
     I = re.IGNORECASE
     R: list[_Rule] = []
@@ -1036,7 +1230,7 @@ def _build_rules() -> list[_Rule]:
         r"work\s+permit|licen[cs]e|licencia|dbn|sponsor\s+id|tracking|c[ée]dula|(?:employee|student)\s+(?:id|number|no\.?)|"
         r"dow[óo]d(?:\s+osobist\w*)?)\b|"
         r"(?<![א-ת])דרכון(?![א-ת]))[^\n\d]{0,40}?"
-        r"(?<![\w\-])(?P<v>(?:(?-i:[A-Z]{1,3})[ \-])?[A-Z0-9]{0,12}\d[A-Z0-9]{0,20}(?:[ \-][A-Z0-9]{0,12}\d[A-Z0-9]{0,12}){0,5})\b",
+        r"(?<![\w\-])(?P<v>(?:(?:(?-i:[A-Z]{1,3})|[A-Za-z](?=[ \-]\d{6}))[ \-])?[A-Z0-9]{0,12}\d[A-Z0-9]{0,20}(?:[ \-][A-Z0-9]{0,12}\d[A-Z0-9]{0,12}){0,5})\b",
         I,
         group="v",
         check=_doc_number_check,
@@ -1204,12 +1398,26 @@ def _build_rules() -> list[_Rule]:
         group=1,
         check=_bare_site_check,
     )
+    # v13 review: link-in-bio and site-builder pages written without a scheme: "linktr.ee/janedoe", "janedoe.carrd.co",
+    # "sites.google.com/view/janedoe", "janedoe.github.io". A page on the host needs a path or a subdomain of its own.
+    add(
+        EntityType.URL,
+        r"(?<![\w@.\-/])((?:(?:linktr\.ee|beacons\.ai|bio\.link|lnk\.bio|campsite\.bio|stan\.store|solo\.to|taplink\.cc|"
+        r"sites\.google\.com/view|about\.me|linkin\.bio|withkoji\.com|ko-fi\.com|linkedin\.com/in)/"
+        rf"[A-Za-z0-9][\w.\-]{{0,60}}(?:/{_U})?)|"
+        r"(?:[a-z0-9][a-z0-9\-]{0,60}\.(?:carrd\.co|github\.io|gitlab\.io|wixsite\.com|wordpress\.com|blogspot\.com|"
+        r"weebly\.com|substack\.com|netlify\.app|vercel\.app|webflow\.io|notion\.site|squarespace\.com|tumblr\.com|"
+        rf"myportfolio\.com|journoportfolio\.com|mystrikingly\.com|site123\.me|jimdosite\.com)(?:/{_U}|/)?))(?![\w@\-]|\.\w)",
+        I,
+        group=1,
+        check=_builder_page_check,
+    )
     # Vehicle plates after their name: "my plate is QXE-J45", "placa ABC 1234".
     add(
         EntityType.ID,
         r"(?i:\b(?:licen[cs]e\s+plate|plate\s+(?:number|no\.?|#)|(?:my|his|her|our|their|car|vehicle)\s+plate|plate\s+is|plate(?=\s*:)|"
         r"placas?|plaque(?:\s+d['’]immatriculation)?|tablic\w*\s+rejestracyjn\w*|numer\s+rejestracyjny|matr[íi]cula|immatriculation)\b)"
-        r"[^\n\d]{0,12}?(?<![\w\-])((?=[A-Z0-9\- ]*\d)(?=[A-Z0-9\- ]*[A-Z])[A-Z0-9]{1,4}[\- ]?[A-Z0-9]{1,5}|"
+        r"[^\n\d]{0,12}?(?<![\w\-])((?=[A-Z0-9\- ]*\d)(?=[A-Z0-9\- ]*[A-Z])[A-Z0-9]{1,4}[\- ]?[A-Z0-9]{1,5}(?:-[A-Z0-9]{1,3})?|"
         r"(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{5,8})\b",
         group=1,
         check=lambda m: len(m.group(1).replace(" ", "").replace("-", "")) >= 5,
@@ -1233,6 +1441,16 @@ def _build_rules() -> list[_Rule]:
     add(
         EntityType.HEALTH_CARD,
         rf"\b(?:member|miembro|membre|cz[łl]onk\w*|identificaci[oó]n|id)\b[^\n\d]{{0,25}}?\b((?!(?-i:{_SHORT_WORDS})\b)[A-Z]{{2,4}}(?:[ \-]\d{{2,5}}){{3,4}})\b",
+        I,
+        group=1,
+    )
+    # v13 final review: a plain numeric member number after a Polish or Hebrew member cue: "numer członkowski: 123456",
+    # "nr członkowski 1234567", "ID członka 123456", "מספר חבר: 123456", "מס' חבר 1234567".
+    add(
+        EntityType.ID,
+        r"(?:\b(?:numer|nr\.?)[ \t]{1,3}cz[łl]onkowsk\w{0,3}|\bnumer[ \t]{1,3}cz[łl]onka|\bid[ \t]{1,3}cz[łl]onk\w{1,3}|"
+        r"(?<![א-ת])(?:מספר|מס(?:['’׳\"״]|\.)?)[ \t]{1,3}ה?חבר(?![א-ת]))"
+        r"[ \t]{0,3}[:#=\-]?[ \t]{0,3}(?:(?i:to|jest)[ \t]{1,3}|הוא[ \t]{1,3})?(?<![\d\-/.])(\d{5,12})(?![\d\-/]|[.,]\d)",
         I,
         group=1,
     )
@@ -1328,7 +1546,8 @@ def _build_rules() -> list[_Rule]:
     )
     _last_of = (
         r"(?:last\s?(?:4|four|3|three)(?:\s+(?:digits|numbers))?(?:\s+of)?\s+(?:(?:my|the|your|her|his)\s+)?"
-        r"|(?:les\s+)?(?:4|quatre|3|trois)\s+derniers\s+(?:chiffres\s+)?(?:de\s+)?(?:mon\s+|ma\s+|le\s+|la\s+)?)"
+        r"|(?:les\s+)?(?:4|quatre|3|trois)\s+derniers\s+(?:chiffres\s+)?(?:de\s+)?(?:mon\s+|ma\s+|le\s+|la\s+)?"
+        r"|(?:les\s+)?derniers\s+(?:4|quatre|3|trois)\s+(?:chiffres\s+)?(?:de\s+)?(?:mon\s+|ma\s+|le\s+|la\s+)?)"
     )
     add(
         EntityType.SSN,
@@ -1613,6 +1832,13 @@ def _build_rules() -> list[_Rule]:
         I,
         check=lambda m: _names.spelled_letter_names_ok(m, _SPELL_CUE_BEFORE),
     )
+    add(
+        EntityType.NAME,
+        _names.SPELLED_LETTER_NAMES_EN,
+        I,
+        check=lambda m: _names.spelled_letter_names_en_ok(m, _SPELL_CUE_BEFORE),
+    )
+    add(EntityType.NAME, _names.SPELLED_LETTER_NAMES_EN_CUED, I, check=_names.spelled_letter_names_en_cued_ok)
     # Letters each given a key word ("c comme Charles o comme Oscar h comme Hotel", "A as in Alpha N as in
     # November"): three of them, or two after a spelling cue. The word must start with its letter.
     _kw = r"[A-Za-z][ \t]+(?:as[ \t]+in|comme|como|for|de)[ \t]+[^\W\d_]+"
@@ -2002,6 +2228,102 @@ def _build_rules() -> list[_Rule]:
     )
     add(EntityType.DATE, rf"(?<!\w)tháng\s+{_vi_mon}\s+năm\s+{_vi_year}(?!\w)", I)
 
+    # v13 dates. Arabic, with digits in either script: "١٢ ديسمبر", "12 كانون الأول 1990".
+    _ar_mon = (
+        "يناير|فبراير|مارس|أبريل|ابريل|مايو|يونيو|يوليو|أغسطس|اغسطس|سبتمبر|أكتوبر|اكتوبر|نوفمبر|ديسمبر|"
+        "كانون\\s+(?:الثاني|الأول)|شباط|آذار|نيسان|أيار|حزيران|تموز|آب|أيلول|تشرين\\s+(?:الأول|الثاني)"
+    )
+    add(
+        EntityType.DATE,
+        rf"(?<![\d.٠-٩])\d{{1,2}}\s+(?:{_ar_mon})(?![؀-ۿ])(?:\s+\d{{4}}(?!\d))?",
+    )
+    # Persian (solar and Gregorian names) and Hindi/Nepali months after a day number in any digit script: "۱۲ اسفند ۱۳۶۳",
+    # "१२ मार्च १९८५", "१२ बैशाख २०४२".
+    _fa_mon = (
+        "فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند|ژانویه|ژانویهٔ|فوریه|مارس|آوریل|اپریل|مه|"
+        "می|ژوئن|ژوئیه|جولای|اوت|آگوست|سپتامبر|اکتبر|نوامبر|دسامبر"
+    )
+    add(
+        EntityType.DATE,
+        rf"(?<![\d.٠-٩])\d{{1,2}}[ \t]{{1,2}}(?:{_fa_mon})(?![؀-ۿ])(?:[ \t]{{1,2}}\d{{4}}(?!\d))?",
+    )
+    _hi_mon = (
+        "जनवरी|फ़रवरी|फरवरी|मार्च|अप्रैल|अप्रेल|मई|जून|जुलाई|अगस्त|सितंबर|सितम्बर|अक्टूबर|अक्तूबर|नवंबर|नवम्बर|दिसंबर|दिसम्बर|"
+        "बैशाख|बैसाख|वैशाख|जेठ|जेष्ठ|असार|आषाढ|साउन|श्रावण|भदौ|भाद्र|असोज|आश्विन|कार्तिक|मंसिर|मङ्सिर|पौष|पुष|माघ|फागुन|फाल्गुन|चैत्र|चैत"
+    )
+    add(
+        EntityType.DATE,
+        rf"(?<![\d.०-९])\d{{1,2}}[ \t]{{1,2}}(?:{_hi_mon})(?![ऀ-ॿ])(?:[ \t]{{1,2}}\d{{4}}(?!\d))?",
+    )
+    # Somali, a day number said or written before the month: "labaatan iyo shan Maajo 1989", "25 Maajo".
+    _so_unit = "kow|labo|saddex|afar|shan|lix|todobo|toddobo|siddeed|sideed|sagaal"
+    _so_num = (
+        rf"(?:(?:kowda|labada|saddexda|afarta|shanta|lixda|todobada|toddobada|siddeedda|sagaalka|tobanka)|"
+        rf"(?:labaatan|soddon)(?:\s+iyo\s+(?:{_so_unit}))?|(?:{_so_unit})\s+iyo\s+toban|toban|{_so_unit}|\d{{1,2}}(?:-?ka)?)"
+    )
+    _so_mon = (
+        "jan+aayo|febr?aayo|febrayo|maarso|abriil|maajo|juun(?:yo)?|luuliyo|juulaay|a?goosto|ogosto|sebte?embar|"
+        "oktoobar|nofe?embar|dise?embar"
+    )
+    add(EntityType.DATE, rf"(?<![\w.]){_so_num}\s+(?:{_so_mon})(?!\w)(?:\s+(?:19|20)\d{{2}}(?!\d))?", I)
+    # A weekday and a spoken day of the month from 13 on, no month: "martes veintisiete", "jeudi vingt-sept".
+    _fr_es_wd = (
+        "lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo"
+    )
+    _day_hi = (
+        r"(?:vingt|trente)(?:[\s\-](?:et[\s\-])?(?:un|deux|trois|quatre|cinq|six|sept|huit|neuf))?|"
+        r"treize|quatorze|quinze|seize|dix[\s\-](?:sept|huit|neuf)|"
+        r"trece|catorce|quince|dieci(?:s[ée]is|siete|ocho|nueve)|veinte|veinti\w{3,6}|treinta(?:\s+y\s+uno)?"
+    )
+    add(
+        EntityType.DATE,
+        rf"(?<!\w)(?:{_fr_es_wd})\s+(?:(?:le|el)\s+)?(?:{_day_hi})(?![\w\-])(?!\s+(?:citas?|pacientes?|personas?|veces|patients?|personnes|fois|rendez))",
+        I,
+    )
+    # A date of birth typed with spaces after the cue, also on the line after a question: "date of birth?\nVisitor: 09 30 1988",
+    # "DOB 9 30 88", "nací el 12  03  1990", "date de naissance 30 09 1988", "תאריך לידה 30 09 88".
+    add(
+        EntityType.DATE,
+        r"(?<![\w])(?:date\s+of\s+birth|birth\s*date|birthday|d\.?o\.?b\.?|born(?:\s+on)?|fecha\s+de\s+nacimiento|"
+        r"nac[ií]\s+el|nacid[oa]\s+el|date\s+de\s+naissance|n[ée]e?\s+le|data\s+urodzenia|urodzon[ay]|תאריך\s+לידה|"
+        r"נולדתי|נולדה|נולד)(?!\w)"
+        # The date must follow the cue directly: spaces, an optional "is/was/es/est", ":" or "-", or a line break after
+        # a question ending with the cue. Any other word between the cue and the numbers means it is not a DOB answer.
+        r"(?:[ \t]{1,3}(?:(?:is|was|es|est)[ \t]{1,3})?"
+        r"|[ \t]{0,3}(?:(?:is|was|es|est)[ \t]{0,3})?[:\-][ \t]{0,3}"
+        r"|\?[ \t]{1,3}"
+        r"|[ \t]{0,3}[?.]?[ \t]{0,3}\n[^:\n]{1,20}:[ \t]*)"
+        r"(\d{1,2}[ \t]{1,2}\d{1,2}[ \t]{1,2}(?:(?:19|20)\d{2}|\d{2})|(?:19|20)\d{2}[ \t]{1,2}\d{1,2}[ \t]{1,2}\d{1,2})(?!\d)",
+        I,
+        group=1,
+    )
+    # A day of the month said as an ordinal, with a relative month: "the third of last month".
+    add(EntityType.DATE, rf"\b(?:{_ORDINAL_WORDS})\s+of\s+(?:last|this|next|that)\s+month\b", I)
+    # A month alone after a cue that ties it to an event: "planned for January", "next March". "May" needs
+    # a capital and no capitalized word, digit or possessive after it (a first name).
+    add(
+        EntityType.DATE,
+        r"\b(?i:for|around|about|next|this)[\s\-]+"
+        r"(January|February|March|April|June|July|August|September|October|November|December)\b(?!\s+\d|['’])",
+        group=1,
+        check=_personal_month_check,
+    )
+    add(
+        EntityType.DATE,
+        r"\b(?i:in|for|since|until|till|by|from|before|after|during|around|about|next|this)[\s\-]+(May)\b(?!\s+[\dA-Z]|['’])",
+        group=1,
+        check=_personal_month_check,
+    )
+    # French month after a cue: "pour juillet", "avant mars".
+    add(
+        EntityType.DATE,
+        r"\b(?:pour|vers|avant|apr[èe]s|d[èe]s)\s+"
+        r"(janvier|f[ée]vrier|mars|mai|avril|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)\b(?!\s+\d|['’])",
+        I,
+        group=1,
+        check=_personal_month_check,
+    )
+
     # Short numeric dates like 3/14 (no year).
     add(EntityType.DATE, r"(?<![\d/])\b(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\d|3[01])\b(?![/\d])", check=_short_date_check)
 
@@ -2081,6 +2403,38 @@ def _build_rules() -> list[_Rule]:
         I,
         group="n",
     )
+    # A second relative after a life verb: "lived to 96 and her sister to 93".
+    add(
+        EntityType.AGE,
+        rf"\b(?:her|his|my|their|our)\s+(?:sister|brother|mother|father|aunt|uncle|cousin|grand\w+)\s+to\s+(?P<n>{_AGE_OLD})(?![\w\-]){_AGE_NOT_UNIT}",
+        I,
+        group="n",
+        check=lambda m: bool(_AGE_LIFE.search(m.string[max(0, m.start() - 150) : m.start()])) and _not_street_after(m),
+    )
+    # The age in brackets with a word for years, the relative named after it: "Anna Nowak (lat 91), to babcia",
+    # "חנה (בת 92)".
+    add(
+        EntityType.AGE,
+        r"\([^\S\n]{0,3}(?:lat|wiek|ans|años|a\.|בת|בן|בגיל|גיל)[^\S\n]{1,3}(?P<n>9\d|1[01]\d)[^\S\n]{0,3}\)",
+        I,
+        group="n",
+    )
+    # "She lived to 93", "lived until 93", "lived to be 93", "vivió hasta los 93", "vécu jusqu'à 93": a life verb is the cue.
+    add(
+        EntityType.AGE,
+        rf"\b(?:lived|living|live|vivi[óo]|vivida|v[ée]cu|v[ée]cut|do[żz]y[łl][aoy]?)\s+(?:(?:up\s+)?(?:to|until|till)(?:\s+be)?|hasta(?:\s+los)?|jusqu['’]à|jusqu['’]a|aż\s+do)\s+(?P<n>{_AGE_OLD})(?![\w\-]){_AGE_NOT_UNIT}",
+        I,
+        group="n",
+        check=_not_street_after,
+    )
+    add(
+        EntityType.AGE,
+        rf"\b(?:do[żz]y[łl][aoy]?|vivi[óo]|v[ée]cu)\s+(?P<n>{_AGE_OLD})\s+(?:lat|años|ans)\b",
+        I,
+        group="n",
+    )
+    # Hebrew, no relative named: "היא בת 92", "הוא בן 93".
+    add(EntityType.AGE, r"(?<![א-ת])(?:היא|הוא)\s+(?:בת|בן)\s+(?P<n>9\d|1[01]\d)(?!\d)", group="n")
     # Russian and Ukrainian: "умерла в 93 года", "93 роки".
     add(EntityType.AGE, r"(?<![\w.])(?:9\d|1[01]\d)\s*(?:лет|года|роки|років|рік)(?!\w)", I)
     add(
@@ -2429,6 +2783,114 @@ def _build_rules() -> list[_Rule]:
         group="org",
     )
 
+    # v13: a driver or courier "for" a named firm: "he drives for Cedar Ridge Freight".
+    add(
+        EntityType.EMPLOYER,
+        rf"\b(?:drives|driving|drove|delivers|delivering|volunteer(?:s|ed|ing)?)[ \t]+(?:for|at|with)[ \t]+(?:the[ \t]+)?(?P<org>{_org})",
+        I,
+        group="org",
+        check=_org_check,
+    )
+    # v13: a Hebrew workplace after the noun "work": "הביטוח דרך העבודה באלון תעשיות" (the firm word ends it),
+    # and a school: "עובדת בבית ספר אורנים".
+    _he_sp = r"[^\S\n]"
+    _he_w = r"(?!ו|(?:לא|את|של|עם|על|כי|אבל|גם|שלי|שלה|אני|הוא|היא|אותי|אותה)(?![א-ת]))[א-ת][א-ת\"״'׳\-]{0,24}"
+    # A name word: not a continuation word ("since", "already", "now") and not a generic descriptor.
+    _he_nw = (
+        r"(?!(?:מאז|כבר|כרגע|עכשיו|מזה|בתור|אז|קשה|קשים|נוח|נעים|טוב|רע|מעייף|מאוד|מדי|הרבה|בערך|ממש|בלבד|רק|גם|או|ואז|כי|אבל|שם|פה|בבקשה|תודה|היום|אתמול|מחר|השבוע|כל|לכן|ולכן|וגם|יסודי|יסודית|תיכון|תיכונית|ממלכתי|ממלכתית|"
+        r"פרטי|פרטית|דתי|דתית|מקומי|מקומית|שכונתי|שכונתית|ציבורי|ציבורית|עירוני|עירונית|לילדים|לבנות|לבנים|שלי|שלה|שלו|שלנו|"
+        r"הקרוב|הקרובה|כללי|כללית|רפואי|רפואית|חדש|חדשה|ישן|ישנה|גדול|גדולה|קטן|קטנה)(?![א-ת]))" + _he_w
+    )
+    _he_gen = r"(?:[^\S\n]+(?:יסודי|יסודית|תיכונית|ממלכתי|ממלכתית|פרטי|פרטית|דתי|דתית|מקומי|מקומית|עירוני|עירונית|ציבורי|ציבורית)(?![א-ת]))*"
+    _he_head = (
+        r"(?:בית" + _he_sp + r"+(?:ה?חולים|ה?ספר)|משרד" + _he_sp + r"+עורכי" + _he_sp + r"+ה?דין|משרד|מרכז" + _he_sp + r"+רפואי|"
+        r"קופת" + _he_sp + r"+חולים|בנק|חברת|רשת|מפעלי|מפעל|עיריית|מכון|מכללת|אוניברסיטת|ישיבת|סטודיו|מסעדת|קבוצת|אחזקות|"
+        r"מרפאת|קליניקת|קיבוץ|גן" + _he_sp + r"+ילדים)"
+    )
+    # A generic head and then a proper name ("בית חולים הדסה", "בנק לאומי"), or one unknown word ("גוגל").
+    _he_org = r"(?:" + _he_head + _he_gen + r"(?:" + _he_sp + r"+" + _he_nw + r"){1,3}|[א-ת][א-ת\"״'׳\-]{2,19})"
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:ה?עבודה|העבודה)[^\S\n]+ב(?P<org>(?:" + _he_w + r"[^\S\n]+)?" + _he_w
+        + r"[^\S\n]+(?:תעשיות|תעשיית|טק|טכנולוגיות|בע[\"״]מ|גרופ|סיסטמס|סולושנס|דיגיטל|לוגיסטיקה|מערכות|פלסט|ציוד))(?![א-ת])",
+        group="org",
+        check=_he_org_check,
+    )
+    # "העבודה בבנק לאומי", "העבודה בבית חולים הדסה": a generic head with a proper name.
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:מקום" + _he_sp + r"+)?ה?עבודה(?:" + _he_sp + r"+(?:שלי|שלה|שלו))?" + _he_sp + r"+ב(?P<org>" + _he_head + _he_gen
+        + r"(?:" + _he_sp + r"+" + _he_nw + r"){1,3})(?![א-ת])",
+        group="org",
+        check=_he_org_check,
+    )
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:עובדת|עובד|לומדת|לומד|מלמדת|מלמד|מורה|מועסקת|מועסק)[^\S\n]+ב(?P<org>בית[^\S\n]+ספר" + _he_gen + r"(?:[^\S\n]+" + _he_nw + r"){1,2})(?![א-ת])",
+        group="org",
+        check=_he_org_check,
+    )
+    # "אני עובד בגוגל", "אני עובדת במשרד עורכי דין לוי", "אני מועסקת באלביט".
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])ו?(?:עובדת|עובד|עובדים|מועסקת|מועסק|מועסקים)[^\S\n]+ב(?P<org>" + _he_org + r")(?![א-ת\"״'׳\-])",
+        group="org",
+        check=_he_org_check,
+    )
+    # v13: "workplace:" in a Hebrew form, the rest of the line (up to four words).
+    # "המעסיק שלי: אלביט", "מקום העבודה שלי: חברת אלביט", "מקום העבודה שלי הוא אלביט".
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:מקום[^\S\n]+(?:ה)?עבודה|מעסיק|המעסיק|המעסיקה)(?:[^\S\n]+(?:שלי|שלה|שלו|שלנו))?"
+        r"(?:[^\S\n]*:|[^\S\n]+(?:הוא|היא)(?![א-ת])[^\S\n]*:?)[^\S\n]*(?P<org>" + _he_w + r"(?:[^\S\n]+" + _he_w + r"){0,3})(?=[^\S\n]*(?:[,.;\n]|$))",
+        group="org",
+        check=_he_org_check,
+    )
+    # "מקום העבודה שלי באלביט" (not "המעסיק בטנסי": that is where, not who).
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])(?:מקום[^\S\n]+(?:ה)?עבודה)(?:[^\S\n]+(?:שלי|שלה|שלו|שלנו))?[^\S\n]+ב(?P<org>" + _he_org + r")(?![א-ת\"״'׳\-])",
+        group="org",
+        check=_he_org_check,
+    )
+    # v13: the employer in an employment letter, after the employee number: "מספר עובד EMP-1, ברמת פלסט,",
+    # "מספר עובד 4421 במכבי", "מספר עובד 4421 בבנק לאומי".
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])מספר[^\S\n]+עובד[^\S\n]+[\w\-]{1,20}[^\S\n]*,[^\S\n]*ב(?P<org>" + _he_w + r"(?:[^\S\n]+" + _he_w + r"){0,3})(?=[^\S\n]*,)",
+        group="org",
+        check=_he_org_check,
+    )
+    add(
+        EntityType.EMPLOYER,
+        r"(?<![א-ת])מספר[^\S\n]+עובד[^\S\n]+[\w\-]{1,20}[^\S\n]+ב(?P<org>" + _he_org + r")(?![א-ת\"״'׳\-])",
+        group="org",
+        check=_he_org_check,
+    )
+    # v13: a small town written in Hebrew after a residence cue: "וגרה בהנדרסונוויל".
+    add(
+        EntityType.ADDRESS,
+        r"(?<![א-ת])ו?(?:גר|גרה|גרים|גרות|מתגורר|מתגוררת|מתגוררים|התגוררנו)[^\S\n]+ב(?P<place>(?!(?:בית|ביתי|דירה|בניין|שכונה|רחוב|עיר|העיר|כפר|הכפר|קיבוץ|מושב|הבית|הדירה|הבניין|השכונה|הרחוב|מקום|חו\"ל|ישראל|הארץ|האזור|אזור|צפון|דרום|מרכז|המרכז|הצפון|הדרום|קרבת|סביבת|סביבה|הסביבה|יחד|לבד|מרתף|חדר|קומה)(?![א-ת]))[א-ת]{5,20})(?![א-ת\-])",
+        group="place",
+    )
+
+    # v13: a named settlement after a residence cue: "אני גר בקיבוץ גבעת ברנר".
+    add(
+        EntityType.ADDRESS,
+        r"(?<![א-ת])ו?(?:גר|גרה|גרים|גרות|מתגורר|מתגוררת|מתגוררים)[^\S\n]+ב(?P<place>(?:קיבוץ|מושב|ישוב|יישוב|שכונת|כפר|מצפה|קריית|קרית)"
+        r"(?:[^\S\n]+" + _he_nw + r"){1,3})(?![א-ת\"״'׳\-])",
+        group="place",
+    )
+    # v13: a street and house number after a residence or address cue: "אני גר בהרצל 12", "הכתובת שלי היא הרצל 12".
+    _he_street = r"(?:רחוב[^\S\n]+)?" + _he_nw + r"(?:[^\S\n]+" + _he_nw + r")?[^\S\n]+\d{1,4}[א-ת]?(?:/\d{1,3})?(?![\d\w])"
+    add(
+        EntityType.ADDRESS,
+        r"(?<![א-ת])(?:ו?(?:גר|גרה|גרים|גרות|מתגורר|מתגוררת|מתגוררים)[^\S\n]+ב|"
+        r"(?:הכתובת|כתובתי|הכתובת[^\S\n]+שלי|כתובת[^\S\n]+מגורים|הכתובת[^\S\n]+שלי[^\S\n]+היא|הכתובת[^\S\n]+היא|כתובתי[^\S\n]+היא)[^\S\n]*:?[^\S\n]*)"
+        r"(?P<a>" + _he_street + r")(?![^\S\n]+(?:שנים|שנה|חודשים|חודש|ימים|יום|שנות|פעמים))",
+        group="a",
+    )
+
     # A relative's workplace: "His wife is Dr. Anita Lee, a paediatrician at Children's North Clinic",
     # "my husband works for Hennepin Roofing".
     add(
@@ -2488,6 +2950,234 @@ def _build_rules() -> list[_Rule]:
         check=_name_check,
     )
     add(EntityType.PROVIDER, r"ד[״\"']ר\s+\S+")
+    # ---- v13 identifiers: every rule below needs its own cue; none removes an earlier match. ----
+    # A personal site after a first-person cue in French, Spanish or Polish: "mon blogue au amy-et-bob.example.com".
+    add(
+        EntityType.URL,
+        r"(?<![\w])(?i:mon|ma|mi|m[óo]j|moja)[ \t]{1,2}(?i:site(?:[ \t]web)?|blogue?|page|sitio(?:[ \t]web)?|p[áa]gina(?:[ \t]web)?|strona|witryna)"
+        r"(?:[ \t]{1,2}(?i:est|es|is|to|au|[àa]|en|at|na|sur))?(?:[ \t]{0,2}:[ \t]{0,2}|[ \t]{1,2})"
+        rf"((?:[a-z0-9][a-z0-9\-]{{0,40}}\.){{1,4}}(?:com|org|net|ca|io|me|co|blog|fr|es|pl|mx|il|info|us)(?:/{_U}|/)?)(?![\w@\-]|\.\w)",
+        I,
+        group=1,
+        check=_personal_cue_site_check,
+    )
+    # Forum and chat handles after a post cue: "Posted by nashville_nana_74", "Reply from BlueberryBabyDust:".
+    add(
+        EntityType.ID,
+        r"\b(?i:posted[ \t]{1,3}by|reply[ \t]{1,3}(?:from|by)|replied[ \t]{1,3}by|submitted[ \t]{1,3}by|comment(?:ed)?[ \t]{1,3}by|"
+        r"quote[ \t]{1,3}from|quoted[ \t]{1,3}from|thread[ \t]{1,3}started[ \t]{1,3}by|started[ \t]{1,3}by)"
+        rf"(?:[ \t]{{1,3}}|[ \t]{{0,3}}:[ \t]{{0,3}})[\"“”'‘’]?@?({_FORUM_HANDLE})(?![\w@\-]|\.\w)",
+        group=1,
+    )
+    # A handle before a post verb: "sunflower_mom82 replied:", "> TTC_in_TN wrote:".
+    add(
+        EntityType.ID,
+        rf"(?<![\w@.\-])({_FORUM_HANDLE})[\"”'’]?[ \t]{{1,3}}(?i:replied|wrote|said|writes|commented|responded|posted|asked)\b",
+        group=1,
+    )
+    # A chat speaker label with a dot or underscore, in a transcript whose other speakers are "@handle:".
+    add(
+        EntityType.ID,
+        r"(?m)^[ \t]{0,3}([A-Za-z][A-Za-z0-9]{0,20}(?:[._][A-Za-z0-9]{1,20}){1,4}):(?=[ \t])",
+        group=1,
+        check=_handle_speakers,
+    )
+    # A second passport number, a letter and seven or eight digits, in the clause after a passport was named.
+    add(
+        EntityType.ID,
+        r"(?<![\w\-])([A-Za-z][ \t]?\d{7,8}[A-Za-z]?)(?![\w\-])",
+        group=1,
+        check=_passport_before,
+    )
+    # v13 final review: a second passport number after and/et/y/i/ו in the same sentence as a passport word and a first
+    # number: "passeport 12AB34567 et 98ZY76543", "pasaporte PAB123456 y PCD654321", "paszport AB1234567 i CD7654321".
+    add(
+        EntityType.ID,
+        r"(?:\b(?:and|und|et|y|e|i|oraz)\b|(?<![א-ת])ו-?)[^\n\d.;!?]{0,40}?(?<![\w\-])"
+        r"(?P<v>(?=[A-Za-z0-9]{6,14}(?![\w\-]))(?=[A-Za-z]{0,6}\d)[A-Za-z0-9]{6,14})(?![\w\-])",
+        I,
+        group="v",
+        check=_second_passport_ok,
+    )
+    # A plate after a plate word, with the make or colour in between: "Plate on his gray truck TN 8K4 2217".
+    add(
+        EntityType.ID,
+        r"(?i:\b(?:licen[cs]e[ \t]plate|number[ \t]plate|plates?|placas?|plaque|tablic\w*|matr[íi]cula)\b)[^\n.!?;\d]{0,50}?"
+        r"(?<![\w\-])((?-i:(?=[A-Z0-9 \-]{0,30}\d)(?=[A-Z0-9 \-]{0,30}[A-Z])[A-Z0-9]{2,4}(?:[ \-][A-Z0-9]{2,8}){1,2}))(?![\w\-])",
+        group=1,
+        check=lambda m: sum(c.isalnum() for c in m.group(1)) >= 6,
+    )
+    # v13 review: a second or later plate in the same sentence, a state or province code and its plate
+    # ("plates CA 7ABC123 and ON BXRT 482"), with a plate word in the 120 characters before and no sentence end between.
+    add(
+        EntityType.ID,
+        r"(?<![\w\-])((?-i:(?:A[LKZRB]|BC|C[AOT]|D[EC]|F[L]|G[A]|H[I]|I[ADLN]|K[SY]|L[A]|M[ABDEINOST]|N[BCDEHJLMSTUVY]|O[HKNR]|P[AE]|QC|R[I]|S[CDK]|T[NX]|U[T]|V[AT]|W[AIVY]|YT)"
+        r"[ \t\-](?=[A-Z0-9 \-]{0,13}\d)[A-Z0-9]{2,8}(?:[ \-][A-Z0-9]{2,5})?))(?![\w\-])",
+        group=1,
+        check=_plate_context,
+    )
+    # A second plate named by its owner in the same sentence: "his plate is 8K4 2217 and hers is 9K4 3318".
+    add(
+        EntityType.ID,
+        r"(?i:(?:,|;|&|\band\b)[ \t]{1,3}(?:hers|his|theirs|mine|ours|the[ \t]{1,3}other(?:[ \t]{1,3}one)?|the[ \t]{1,3}second(?:[ \t]{1,3}one)?)"
+        r"(?:[ \t]{1,3}(?:is|are|was|:))?[ \t:]{1,3})"
+        r"(?<![\w\-])((?-i:(?=[A-Z0-9 \-]{0,16}\d)(?=[A-Z0-9 \-]{0,16}[A-Z])[A-Z0-9]{2,4}(?:[ \-][A-Z0-9]{2,8}){1,2}(?:-[A-Z0-9]{1,3})?))(?![\w\-])",
+        group=1,
+        check=_plate_context,
+    )
+    # Brazilian CPF in its printed form, or after "CPF".
+    add(EntityType.ID, r"(?<![\d.\-])\d{3}\.\d{3}\.\d{3}-\d{2}(?![\d\-]|\.\d)")
+    add(
+        EntityType.ID,
+        r"\bCPF\b[^\n\d]{0,15}?(?<![\d.\-])(\d{3}[. \t]?\d{3}[. \t]?\d{3}[. \t\-]?\d{2})(?!\d|[.\-]\d)",
+        group=1,
+    )
+    # An ITIN or other tax number in SSN shape, whatever its first digits: "me piden un ITIN y es 912-70-5531".
+    add(
+        EntityType.SSN,
+        r"(?:\bitin\b|\b(?-i:TIN)\b|\btax[ \t]{1,3}(?:id|identification)(?:[ \t]{1,3}(?:number|no\.?))?\b|"
+        r"\btaxpayer[ \t]{1,3}(?:id|identification)(?:[ \t]{1,3}(?:number|no\.?))?\b|"
+        r"\bssn\b|\bsocial[ \t]{1,3}security(?:[ \t]{1,3}(?:number|no\.?))?\b|\bsocial\b)"
+        r"[^\n\d]{0,30}?(?<![\d\-./])(\d{3}(?P<s>[ \t.\-/])\d{2}(?P=s)\d{4}|\d{4}[ \t]\d{5}|\d{5}[ \t]\d{4})(?![\d\-/]|[ \t.]\d)",
+        I,
+        group=1,
+    )
+    # A second or later tax number in the list after the cue ("SSN 123-45-6789 and 987-65-4321",
+    # "TIN 912-70-5531 and spouse's 913-71-5532"), with the cue in the same sentence before it.
+    add(
+        EntityType.SSN,
+        r"(?:,|;|&|\band\b|\bor\b|\bplus\b)[^\n\d]{0,30}?(?<![\d\-./])(\d{3}(?P<s>[ \t.\-/])\d{2}(?P=s)\d{4})(?![\d\-/]|[ \t.]\d)",
+        I,
+        group=1,
+        check=_tax_list_context,
+    )
+    # The last four digits right after the cue, with no noun: "los últimos cuatro, 4417", "ostatnie cztery cyfry: 4417".
+    add(
+        EntityType.ID,
+        r"(?<!\w)(?i:(?:los[ \t]{1,3})?[úu]ltimos[ \t]{1,3}(?:4|cuatro)(?:[ \t]{1,3}(?:d[íi]gitos|n[úu]meros|cifras))?|"
+        r"ostatnie[ \t]{1,3}(?:4|cztery)[ \t]{1,3}cyfry|(?:les[ \t]{1,3})?(?:4|quatre)[ \t]{1,3}derniers(?:[ \t]{1,3}(?:chiffres|num[ée]ros))?|"
+        r"(?:les[ \t]{1,3})?derniers[ \t]{1,3}(?:4|quatre)(?:[ \t]{1,3}(?:chiffres|num[ée]ros))?|"
+        r"last[ \t]{1,3}(?:4|four)(?:[ \t]{1,3}(?:digits|numbers))?)"
+        r"(?:[ \t]{0,3}[,:?\-][ \t]{0,3}|[ \t]{1,3})(?:(?i:es|son|is|are|to|est|sont)[ \t]{1,3})?(\d{4})(?![\d\-/.]\d|\d)",
+        group=1,
+    )
+    # v13 final review: the national-id noun after the French word order: "derniers quatre chiffres de mon NAS: 1234".
+    add(
+        EntityType.ID,
+        r"(?i:(?:les[ \t]{1,3})?derniers[ \t]{1,3}(?:4|quatre)(?:[ \t]{1,3}(?:chiffres|num[ée]ros))?[ \t]{1,3}(?:de|du|des)"
+        r"(?:[ \t]{1,3}(?:mon|ma|ton|votre|le|la))?[ \t]{1,3}"
+        rf"{_NATIONAL_ID_NOUN}\b)"
+        r"[ \t]{0,3}[:,?\-]?[ \t]{0,3}(?:(?i:est|c['’]est)[ \t]{1,3})?(\d{4})(?![\d\-/.]\d|\d)",
+        group=1,
+    )
+    # v13 final review: every further 4-digit group in a list right after a last-four cue ("the last four digits? 1234
+    # and 5678", "last four of my SSN: 1234, 5678"). The groups before it must all be 4-digit groups.
+    add(
+        EntityType.ID,
+        r"(?:,|;|&|/|\band\b|\bor\b|\bet\b|\bou\b|\by\b|\bo\b|\bi\b|\blub\b|\bund\b|(?<![א-ת])ו-?)[ \t]{0,3}"
+        r"(?<![\d\-/.:$])(\d{4})(?![\d\-/:]|[.,]\d|\d)",
+        I,
+        group=1,
+        check=_last4_list_context,
+    )
+    # A partial MRN after its own cue in Spanish and Polish: "MRN termina en 4417", "MRN kończy się na 4417",
+    # "ostatnie cyfry MRN: 4417".
+    add(
+        EntityType.MRN,
+        r"(?:\bmrn\b|\bhistoria[ \t]{1,3}cl[íi]nica\b|\bexpediente\b|\bnumer[ \t]{1,3}(?:pacjenta|karty)\b)[^\n\d]{0,25}?"
+        r"(?:termina[ \t]{1,3}(?:en|con)|ko[ńn]cz[ąay][ \t]{1,3}si[ęe][ \t]{1,3}na|ends?[ \t]{1,3}(?:in|with)|finit[ \t]{1,3}par)"
+        r"[ \t]{0,3}[:,]?[ \t]{0,3}(\d{3,4})(?!\d)",
+        I,
+        group=1,
+    )
+    add(
+        EntityType.MRN,
+        r"(?i:ostatnie[ \t]{1,3}(?:4|cztery)[ \t]{1,3}cyfry|[úu]ltimos[ \t]{1,3}(?:4|cuatro)[ \t]{1,3}(?:d[íi]gitos[ \t]{1,3})?de|"
+        r"last[ \t]{1,3}(?:4|four)[ \t]{1,3}(?:digits[ \t]{1,3})?of)(?:[ \t]{1,3}(?i:my|your|the|mi|tu|el|twojego|swojego))?[ \t]{1,3}"
+        r"(?i:mrn|n[úu]mero[ \t]{1,3}de[ \t]{1,3}(?:historia|expediente)|numeru[ \t]{1,3}pacjenta)\b[ \t]{0,3}[:,\-]?[ \t]{0,3}"
+        r"(?:(?i:es|son|is|are|to|jest)[ \t]{1,3})?(\d{3,4})(?!\d)",
+        group=1,
+    )
+    # A last-four question quoted in a reply, the answer on a short line after it: "...last four digits of your MRN.\n\nDuong, 4417".
+    add(
+        EntityType.MRN,
+        r"(?i:\b(?:last|final)[ \t]{1,3}(?:4|four)[ \t]{1,3}(?:digits?[ \t]{1,3})?of[ \t]{1,3}(?:your|the|my|her|his)[ \t]{1,3}"
+        r"(?:mrn|medical[ \t]{1,3}record(?:[ \t]{1,3}number)?|chart[ \t]{1,3}number|health[ \t]{1,3}card(?:[ \t]{1,3}number)?)\b)"
+        r"[^\d]{0,100}?(?<![\d/.\-:$])(\d{4})(?=[ \t]{0,3}[.,;!)]?[ \t]{0,3}(?:\n|\Z))",
+        group=1,
+    )
+    # v13 review: the same last-four question quoted for a social or tax number, the answer on a short line after it.
+    add(
+        EntityType.ID,
+        r"(?i:\b(?:last|final)[ \t]{1,3}(?:4|four)[ \t]{1,3}(?:digits?[ \t]{1,3})?of[ \t]{1,3}(?:your|the|my|her|his)[ \t]{1,3}"
+        rf"{_NATIONAL_ID_NOUN}\b)"
+        r"[^\d]{0,100}?(?<![\d/.\-:$])(\d{4})(?=[ \t]{0,3}[.,;!)]?[ \t]{0,3}(?:\n|\Z))",
+        group=1,
+    )
+    # v13 review: a partial social, national or health-card number after its cue in English, Spanish, French, Polish.
+    add(
+        EntityType.ID,
+        rf"(?i:(?:(?:last|final)[ \t]{{1,3}}(?:4|four)(?:[ \t]{{1,3}}(?:digits|numbers))?[ \t]{{1,3}}of|"
+        r"[úu]ltimos[ \t]{1,3}(?:4|cuatro)(?:[ \t]{1,3}(?:d[íi]gitos|n[úu]meros|cifras))?[ \t]{1,3}(?:de|del)|"
+        r"(?:les[ \t]{1,3})?(?:4|quatre)[ \t]{1,3}derniers(?:[ \t]{1,3}(?:chiffres|num[ée]ros))?[ \t]{1,3}(?:de|du|des)|"
+        r"ostatnie[ \t]{1,3}(?:4|cztery)[ \t]{1,3}cyfry(?:[ \t]{1,3}(?:numeru|z|od))?)"
+        r"(?:[ \t]{1,3}(?:my|your|the|mi|tu|su|el|la|mon|ma|ton|votre|mojego|twojego|swojego))?[ \t]{1,3}"
+        rf"{_NATIONAL_ID_NOUN}\b)"
+        r"[ \t]{0,3}[:,\-]?[ \t]{0,3}(?:(?i:es|son|is|are|to|jest|est|c['’]est)[ \t]{1,3})?(\d{4})(?![\d\-/.]\d|\d)",
+        group=1,
+    )
+    # v13 review: employee, badge, participant and matricule numbers in plain digits after their cue and a number word,
+    # in English, French, Spanish, Polish and Hebrew: "employee # 48213", "numéro d'employé: 48213", "מספר עובד: 48213".
+    add(
+        EntityType.ID,
+        r"(?:\b(?:employee|emp|employ[ée]e?|badge|payroll|participant|participante|matricule|matr[ií]cula|emplead[oa]|pracownika|uczestnika)\b|"
+        r"(?<![א-ת])(?:עובד|עובדת|משתתף|משתתפת)(?![א-ת]))"
+        r"(?:[ \t]{1,3}(?i:number|num|no\.?|nr\.?|#|n[°º]))?[ \t]{0,3}[:#=\-]?[ \t]{0,3}(?:(?i:is|es|est|jest|to)[ \t]{1,3})?"
+        r"(?<![\d\-/.])(\d{4,8})(?![\d\-/]|[.,]\d)",
+        I,
+        group=1,
+        check=_plain_emp_check,
+    )
+    # Short employee, badge, participant, claim, dossier and consular numbers after their cue.
+    add(
+        EntityType.ID,
+        r"(?:\b(?:employee|employ[ée]e?|badge|payroll|participant|claim|dossier|matricule|matr[ií]cula|pracownik\w*|uczestni\w*|"
+        r"reclam\w*|sinistre)\b|(?<![א-ת])(?:עובד|עובדת|משתתפת?|תביעה)(?![א-ת]))[^\n\d]{0,35}?" + _SHORT_ID_VALUE,
+        I,
+        group="v",
+        check=_short_id_check,
+    )
+    # Policy and group numbers in the same short shapes: "numéro de police 774512-08", "el grupo es el G 77412".
+    add(
+        EntityType.ACCOUNT,
+        r"(?:\b(?:p[óo]liza|polisa|police|policy|grupo|groupe|group|grupa)\b|(?<![א-ת])קבוצה(?![א-ת]))[^\n\d]{0,25}?" + _SHORT_ID_VALUE,
+        I,
+        group="v",
+        check=_short_id_check,
+    )
+    # A health card made of capitals and digits after an insurance or member cue, also in Polish and Hebrew text:
+    # "ID członka XJK884201", "מספר חבר XJK884201".
+    add(
+        EntityType.HEALTH_CARD,
+        r"(?:\b(?:member|membre|miembro|insurance|assurance|seguro|health|sant[ée]|salud|ubezpiecz\w*|cz[łl]on\w*|zdrowot\w*)\b|"
+        r"חבר|ביטוח|בריאות)[^\n\d]{0,40}?(?<![\w\-])((?-i:[A-Z]{2,4}\d{6,10}))(?![\w\-])",
+        I,
+        group=1,
+    )
+    # A ZIP after a P.O. box and its city: "PO Box 7719, Nashville 37202".
+    add(
+        EntityType.ZIP,
+        r"\b(?i:p\.?[ \t]?o\.?[ \t]?box|post[ \t]{1,3}office[ \t]{1,3}box)[ \t]{1,3}#?[A-Za-z0-9]{1,8}(?:[ \t]{0,3},[ \t]{0,3}|[ \t]{1,3})"
+        r"(?:[A-Z][a-z]+[ \t]?){1,3}(?:,[ \t]{0,3}|[ \t]{0,3})(?:[A-Z]{2}[ \t]{1,3})?(\d{5}(?:-\d{4})?)(?!\d)",
+        group=1,
+    )
+    # A ZIP after a unit designator, with or without the city: "Apt 4, 37212", "Apt 6B, Nashville 37211".
+    add(
+        EntityType.ZIP,
+        r"\b(?i:apt|apartment|unit|suite|ste|#)\.?[ \t]{0,3}[A-Za-z0-9\-]{1,6}(?:[ \t]{0,3},[ \t]{0,3}|[ \t]{1,3})"
+        r"(?:(?:[A-Z][a-z]+[ \t]?){1,3}(?:,[ \t]{0,3}|[ \t]{0,3}))?(?:[A-Z]{2}[ \t]{1,3})?(\d{5}(?:-\d{4})?)(?!\d|[ \t]{0,3}(?i:units?|iu|mg|mcg|ml|cc|%|x\b|times))",
+        group=1,
+    )
     return R
 
 

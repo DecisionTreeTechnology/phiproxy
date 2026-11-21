@@ -230,8 +230,10 @@ class StaffList:
         spans = list(spans)
         out: set[str] = set()
         for e in spans:
-            words = [w for w in _name_words(e.text)[0] if w in self._words]
-            if words and self._has_cue(text, e.start, e.end):
+            # Every word must be a staff word: "Cc: Marcus Reed" (not on the roster) must not
+            # make a bare "Marcus" elsewhere pass because a "Marcus Bell" works at the clinic.
+            words = [w for w in _name_words(e.text)[0] if not _CUE_WORDS.match(w)]
+            if words and all(w in self._words for w in words) and self._has_cue(text, e.start, e.end):
                 out.update(words)
         confirmed = list(anchors) + [e for e in spans if self.passes(text, e, out)]
         pending = [e for e in spans if e not in confirmed]

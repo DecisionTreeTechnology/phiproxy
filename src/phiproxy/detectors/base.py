@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 from typing import Iterable, Protocol, Sequence
 
 from ..entities import Entity
@@ -34,32 +35,50 @@ def merge_entities(entities: Iterable[Entity]) -> list[Entity]:
         key=lambda e: (e.length, SOURCE_PRIORITY.get(e.source, 0), e.type.value != "ACCOUNT", e.score),
         reverse=True,
     )
-    kept: list[Entity] = []
+    # Kept spans never overlap each other, so they are held sorted by start and the spans that clash
+    # with a candidate are found by bisection (linear-ish instead of comparing every pair). ``rank``
+    # keeps the priority order of the original list-based version: a widened winner goes first.
+    starts: list[int] = []
+    items: list[tuple[Entity, int]] = []
+    next_rank = 0
+    front_rank = -1
+    empty: list[Entity] = []  # zero-width spans overlap nothing
     for cand in ordered:
-        clash = [k for k in kept if k.overlaps(cand)]
-        if not clash:
-            kept.append(cand)
+        if cand.start >= cand.end:
+            empty.append(cand)
             continue
-        # Widen the strongest overlapping winner to the union so no character
-        # of the loser (or of other winners it bridges) leaks.
-        winner = clash[0]  # kept is in priority order, so the first clash is strongest
-        start = min([cand.start] + [k.start for k in clash])
-        end = max([cand.end] + [k.end for k in clash])
+        i = bisect.bisect_left(starts, cand.end)
+        j = i - 1
+        while j >= 0 and items[j][0].overlaps(cand):
+            j -= 1
+        lo, hi = j + 1, i
+        if lo == hi:
+            pos = bisect.bisect_right(starts, cand.start)
+            starts.insert(pos, cand.start)
+            items.insert(pos, (cand, next_rank))
+            next_rank += 1
+            continue
+        clash = items[lo:hi]
+        winner = min(clash, key=lambda t: t[1])[0]
+        start = min([cand.start] + [c.start for c, _ in clash])
+        end = max([cand.end] + [c.end for c, _ in clash])
         if len(clash) == 1 and (start, end) == (winner.start, winner.end):
             continue
-        for k in clash:
-            kept.remove(k)
-        kept.insert(
-            0,
-            Entity(
-                type=winner.type,
-                start=start,
-                end=end,
-                text="?",  # placeholder; fill_text() re-attaches real text
-                source=winner.source,
-                score=winner.score,
-            ),
+        del starts[lo:hi]
+        del items[lo:hi]
+        widened = Entity(
+            type=winner.type,
+            start=start,
+            end=end,
+            text="?",  # placeholder; fill_text() re-attaches real text
+            source=winner.source,
+            score=winner.score,
         )
+        pos = bisect.bisect_right(starts, start)
+        starts.insert(pos, start)
+        items.insert(pos, (widened, front_rank))
+        front_rank -= 1
+    kept = [e for e, _ in items] + empty
     return sorted(kept, key=lambda e: e.start)
 
 

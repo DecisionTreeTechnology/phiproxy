@@ -1019,6 +1019,70 @@ def spelled_letter_names_ok(m: re.Match[str], spell_cue: re.Pattern[str]) -> boo
     return sum(len(w) >= 2 and w not in ("doble", "double", "gri") for w in words) >= 3 and len(words) >= 5
 
 
+# English names of the letters ("gee you zed em ay en"). Several are ordinary words ("you", "are", "oh", "why",
+# "see"), so the run needs five words, two of them letter names that are rarely a word, and a spelling or name cue.
+_EN_L_STRONG = r"gee|zed|zee|jay|kay|cue|ess|eff|dee|cee|tee|pee|vee|aitch|double[ \t]+you"
+_EN_L = rf"{_EN_L_STRONG}|ay|bee|ee|eye|el|em|en|oh|ar|are|ex|why|you"
+# The run ends on a letter name that is rarely an ordinary word, so a trailing "you are" stays outside it unless
+# more letter names follow.
+_EN_L_END = rf"{_EN_L_STRONG}|ay|bee|ee|el|em|en"
+SPELLED_LETTER_NAMES_EN = (
+    rf"(?<![\w\-'’])(?:{_EN_L})(?:[ \t]+(?:{_EN_L})){{3,58}}[ \t]+(?:{_EN_L_END})(?![\w\-'’])"
+)
+_EN_L_STRONG_RE = re.compile(rf"(?:{_EN_L_STRONG})(?![\w])", re.IGNORECASE)
+
+
+# A name cue right after the run: "gee you zed zed ee tee tee ee, that's my name", "..., is my name", "... my last name".
+_EN_NAME_AFTER = re.compile(
+    r"[ \t]{0,3}[,.;:\-]?[ \t]{0,3}(?i:(?:(?:that|this|it)(?:['’]s|[ \t]+is)|is|was)[ \t]{1,3}(?:my|the|her|his|our)[ \t]{1,3}"
+    r"(?:(?:last|first|full|sur|family|married|maiden)[ \t]{1,3})?name\b|(?:my|the)[ \t]{1,3}(?:last|first|full|family|sur)[ \t]{1,3}name\b)"
+)
+
+
+def spelled_letter_names_en_ok(m: re.Match[str], spell_cue: re.Pattern[str]) -> bool:
+    """Five or more English letter names, two of them strong, right after a spelling or name cue, or right before one."""
+    if not (spell_cue.search(m.string[max(0, m.start() - 40) : m.start()]) or _EN_NAME_AFTER.match(m.string, m.end())):
+        return False
+    return len(_EN_L_STRONG_RE.findall(m.group(0))) >= 2
+
+
+# Right after an explicit spelling cue the run may be short, end on a weak letter name ("eye", "oh", "you", "tea") and
+# use commas, full stops or "and" between the letters: "spelled ar, oh, ess, ee", "spelled gee you zed em ay en oh".
+_EN_L_X = rf"{_EN_L}|tea|see"
+SPELLED_LETTER_NAMES_EN_CUED = (
+    rf"(?<![\w\-'’])(?:{_EN_L_X})(?P<sep>[ \t]*[,.][ \t]+|[ \t]+)(?:and[ \t]+)?(?:{_EN_L_X})"
+    rf"(?:(?P=sep)(?:and[ \t]+)?(?:{_EN_L_X})){{0,58}}(?![\w\-'’])"
+)
+_EN_SPELL_CUE = re.compile(
+    r"(?i:\b(?:spell(?:ed|ing|s)?|spelt)(?:[ \t]+(?:it|that|out|this))?(?:[ \t]+(?:as|is|like))?[ \t:,\-–]{0,4})$"
+)
+_NAME_COMMA_BEFORE = re.compile(rf"(?<![{_UP}{_LO}'’])[{_UP}][{_LO}'’]{{1,20}}[ \t]{{0,3}},[ \t]{{1,3}}$")
+# "my name is Jan, jay ay en ee, doe: dee oh ee": a name cue earlier in the sentence and a lowercase word or letters
+# run before this run, separated by a comma or colon.
+_NAME_SENTENCE_BEFORE = re.compile(
+    r"(?i:\bname\b)[^\n.!?]{1,60}?[A-Za-z][ \t]{0,3}[,:][ \t]{1,3}$"
+)
+_EN_L_END_RE = re.compile(r"gee|zed|zee|jay|kay|cue|ess|eff|dee|cee|tee|pee|vee|aitch|ay|bee|ee|el|em|en")
+_EN_L_WEAK_RE = re.compile(rf"(?:{_EN_L_STRONG}|tea|see)(?![\w])", re.IGNORECASE)
+
+
+def spelled_letter_names_en_cued_ok(m: re.Match[str]) -> bool:
+    """Two or more letter names right after "spelled" / "spelling": one rarely an ordinary word, or four letters."""
+    before = m.string[max(0, m.start() - 80) : m.start()]
+    words = re.findall(r"[a-z]+", m.group(0).lower())
+    words = [w for w in words if w != "and"]
+    strong = len(_EN_L_STRONG_RE.findall(m.group(0)))
+    if not _EN_SPELL_CUE.search(before[-40:]):
+        if not _EN_L_END_RE.fullmatch(words[-1]):
+            return False
+        # Four or more letter names with one strong, right before "that's my name" / "my last name", or right after a
+        # capitalised word and a comma ("Jan, jay ay en ee"), or after a name cue in the same sentence ("doe: dee oh ee").
+        if len(words) >= 4 and strong >= 1 and (_EN_NAME_AFTER.match(m.string, m.end()) or _NAME_COMMA_BEFORE.search(before)):
+            return True
+        return len(words) >= 3 and strong >= 1 and bool(_NAME_SENTENCE_BEFORE.search(before))
+    return len(words) >= 4 or (len(words) >= 2 and strong >= 1)
+
+
 _CY_U = "А-ЯЁІЇЄҐ"
 _CY_L = "а-яёіїєґ"
 _CY_W = rf"[{_CY_U}][{_CY_L}'’ʼ]+(?:-[{_CY_U}][{_CY_L}'’ʼ]+)?"
@@ -1058,6 +1122,111 @@ _HE_AGE_RELATIONS = r"אמא|אימא|אבא|סבתא|סבא|דודה|דוד|א�
 _SAYS = r"says|thinks|insists|suggests"
 
 
+# Devanagari (Hindi, Nepali, Marathi): letters and vowel signs, not the danda or the digits.
+_DV = "\u0900-\u0963\u0971-\u097f"
+# Words that end or interrupt a name: "is", "am", "and", "I", "my", function words, predicates after "I am", field
+# words ("age", "today", "me"), closing words of a sign-off. A name stops at the first of them.
+_DV_STOP = (
+    "हो|हुँ|हुं|हूँ|हूं|है|हैं|छ|छन्|हुन्|थियो|थिए|था|थी|थे|र|और|तथा|या|वा|म|मैं|मैंने|हम|तर|मेरो|मेरा|मेरी|मेरे|नाम|को|ले|लाई|का|की|के|ने|से|में|मा|पर|भी|तो|कि|यह|यो|वह|त्यो|"
+    "मुझे|मलाई|मेरो|हमें|आपको|आपका|आपकी|आपके|तपाईं|तपाईंको|उम्र|उमेर|उमर|आयु|वर्ष|साल|वर्षको|आज|कल|अब|अहिले|आजको|बहुत|धेरै|थोरै|सब|सबै|कृपया|कृपा|"
+    "ठीक|ठिक|ठीकै|खुसी|खुश|दुखी|परेशान|चिंतित|चिन्तित|तनाव|थकित|थकी|थका|बिमार|बीमार|बिरामी|गर्भवती|तैयार|उत्साहित|घबराई|आभारी|अच्छा|अच्छी|राम्रो|"
+    "अस्पताल|अस्पतालमा|क्लिनिक|डॉक्टर|डाक्टर|डा|डॉ|श्री|श्रीमती|सुश्री|अपॉइंटमेंट|अपोइन्टमेन्ट|समय|मिति|तारिख|तारीख|जन्म|फोन|फ़ोन|नम्बर|नंबर|ईमेल|इमेल|पता|ठेगाना|"
+    "आना|आई|आया|आए|गई|गया|गए|आउने|आउँछु|लागि|लिए|साथ|संग|बारे|बारेमा|चाहिए|चाहियो|चाहती|चाहता|चाहन्छु|"
+    "धन्यवाद|नमस्ते|नमस्कार|शुभकामना|शुभकामनाएँ|सादर|भवदीय|भवदीया|आभार|"
+    # team, centre, clinic and medical words: a sign-off line or a label that is not a person
+    "टीम|केंद्र|केन्द्र|सेंटर|सेन्टर|क्लिनिक|क्लीनिक|आईवीएफ|आइवीएफ|आईयूआई|परीक्षण|परिणाम|नतीजा|नतीजे|रिपोर्ट|प्रोटोकल|प्रोटोकॉल|प्रोटोकोल|दवा|दवाई|दवाइयाँ|औषधि|औषधी|"
+    "उर्वरता|प्रजनन|फर्टिलिटी|उपचार|इलाज|जाँच|जांच|विभाग|सेवा|सहायता|स्टाफ|कर्मचारी|नर्स|नर्सहरू|परामर्श|कार्यालय|आयीं|आयी|आइन्|आइन|आयो|गयो|गइन|श्रीमान|"
+    "पति|पत्नी|श्रीमानको|श्रीमतीको|बेटा|बेटी|छोरा|छोरी|बच्चा|बच्ची"
+)
+_DV_TITLE = r"(?:(?:डा|डॉ|डाक्टर|डॉक्टर)\.?|श्रीमती|श्रीमान|श्री|सुश्री|कुमारी)(?![" + _DV + r"])\.?"
+_DV_W = rf"(?<![{_DV}])(?!(?:{_DV_STOP})(?![{_DV}]))[{_DV}]+(?:[\-\u2010\u2011](?!(?:{_DV_STOP})(?![{_DV}]))[{_DV}]+){{0,2}}"
+_DV_TITLES = rf"(?:{_DV_TITLE}[ \t]{{1,3}}){{0,2}}"
+_DV_NAME = rf"{_DV_TITLES}(?P<name>{_DV_W}(?:[ \t]{{1,3}}{_DV_W}){{0,6}})(?![{_DV}])"
+_DV_NAME2 = rf"{_DV_TITLES}(?P<name>{_DV_W}(?:[ \t]{{1,3}}{_DV_W}){{0,1}})(?![{_DV}])"
+_DV_NAME3 = rf"{_DV_TITLES}(?P<name>{_DV_W}(?:[ \t]{{1,3}}{_DV_W}){{0,2}})(?![{_DV}])"
+# A sign-off: closing words on their own lines, then the name on the next non-empty line.
+_DV_CLOSE = r"(?:धन्यवाद|शुभकामनाएँ|शुभकामना|सादर|आपका[ \t]{1,3}विश्वासी|आपकी[ \t]{1,3}विश्वासी|आपका|आपकी|भवदीया|भवदीय)[,।]?"
+# A relative before a name: "पति", "पत्नी", "श्रीमान", "श्रीमती" ("मेरो श्रीमानको नाम", "मेरे पति का नाम").
+_DV_REL = r"(?:पति|पत्नी|श्रीमान्?|श्रीमती|बेटा|बेटी|पुत्र|पुत्री|छोरा|छोरी|बाबा|आमा|माँ|पिता|भाई|बहन|बहिनी|दिदी|दाजु|दाजू)(?:को|का|की|के)?"
+# A second person on the same line: the connector and the relative ("र मेरो श्रीमान् राम बहादुर थापा", "अनि मेरी पत्नी सीता थापा").
+_DV_CONN = r"(?:र|और|तथा|अनि|अनी|साथै|साथ)"
+# A name that goes on over consecutive short lines (a sign-off: "सीता" / "कुमारी"): up to two more lines of one to three words.
+_DV_NAME_LINES = (
+    rf"{_DV_TITLES}(?P<name>{_DV_W}(?:[ \t]{{1,3}}{_DV_W}){{0,3}}(?:[ \t]{{0,10}}\r?\n[ \t]{{0,10}}{_DV_W}(?:[ \t]{{1,3}}{_DV_W}){{0,2}}){{1,2}})(?![{_DV}])"
+)
+_DV_BR = r"(?:[ \t]{0,10}\r?\n){1,4}"
+# Lao script: letters, vowels and tone marks, not the digits.
+_LO_R = "\u0e80-\u0ecf\u0edc-\u0edf"
+_LAO_STOP = (
+    "ແລະ|ແມ່ນ|ຂອງ|ເປັນ|ແລ້ວ|ຄື|ກັບ|ອາຍຸ|ປີ|ເບີ|ໂທ|ເບີໂທ|ອີເມວ|ທີ່ຢູ່|ວັນເກີດ|ຂ້ອຍ|ຂ້າພະເຈົ້າ|ມີ|ຢູ່|ຈາກ|ທີ່|ໄດ້|ນີ້|ນັ້ນ|ວ່າ|ຕ້ອງການ|"
+    "ຄົນເຈັບ|ໝໍ|ຫມໍ|ນາງ|ທ້າວ|ທ່ານ|ຄຸນ|ຂໍ|ຂອບໃຈ|ສະບາຍດີ|ວັນນີ້|ມື້ນີ້|ຫຼາຍ|ສຸຂະພາບ|ໂຮງໝໍ|ຄລີນິກ|ນັດ|ເວລາ|"
+    # medicine, team, centre, test and result words, and common verbs after a relative
+    "ຢາ|ທີມ|ສູນ|ຜົນ|ກວດ|ການກວດ|ຜົນກວດ|ໂປຣໂຕຄອນ|ໄອວີເອັຟ|ແພດ|ພະຍາບານ|ບໍລິການ|ຫ້ອງ|ເລືອດ|ການປິ່ນປົວ|ປິ່ນປົວ|ໄປ|ມາ|ບໍ່|ຢາກ|ກໍ|ຍັງ|ຈະ|ເຈັບ|ປ່ວຍ|ເມື່ອຍ|ສະບາຍ|ກິນ|ນອນ|ຜົວ|ເມຍ"
+)
+_LAO_W = rf"(?<![{_LO_R}])(?!(?:{_LAO_STOP})(?![{_LO_R}]))[{_LO_R}]+"
+# The first word of a name glued to the cue ("ຂ້ອຍຊື່ມະນີ"): no look-behind for the cue letters.
+_LAO_W0 = rf"(?!(?:{_LAO_STOP})(?![{_LO_R}]))[{_LO_R}]+"
+_LAO_NAME0 = rf"{_LAO_W0}(?:[ \t]{{1,3}}{_LAO_W}){{0,4}}(?![{_LO_R}])"
+_LAO_NAME2 = rf"{_LAO_W}(?:[ \t]{{1,3}}{_LAO_W}){{0,1}}(?![{_LO_R}])"
+_LAO_NAME = rf"{_LAO_W}(?:[ \t]{{1,3}}{_LAO_W}){{0,4}}(?![{_LO_R}])"
+# A page header or footer of a form: "Page 2 of 3 / PHAM, LINH T / DOB ...", all or part in capitals. The name is
+# the whole span: particle and compound surnames, a suffix before the comma, up to three given names or initials.
+_VI_UP = "".join(chr(c) for c in range(0x1EA0, 0x1EFA, 2))
+_HU = _UP + _VI_UP
+_HE_END = rf"(?![{_HU}{_LO}'’\-])"
+# Form and document words that are never a surname or given name (this rule only).
+_HDR_STOP = (
+    "FORM|FORMS|SECTION|PART|CONSENT|PAGE|REPORT|SUMMARY|RESULTS?|NOTES?|PATIENT|CONFIDENTIAL|INFORMATION|INTAKE|HISTORY|MEDICAL|RECORDS?|CHART|DATE|NAME|"
+    "DOB|MRN|ID|AGE|SEX|FAX|PHONE|TEL|ADDRESS|DOCUMENT|AGREEMENT|ASSESSMENT|PLAN|LAB|LABORATORY|CLINIC|CENTRE|CENTER|HOSPITAL|DEPARTMENT|STATEMENT|"
+    "AUTHORI[ZS]ATION|RELEASE|DISCLOSURE|PRIVACY|POLICY|INSTRUCTIONS?|DISCHARGE|ADMISSION|REFERRAL|REQUEST|ORDERS?|PROCEDURE|TREATMENT|PRINTED|SIGNED|"
+    "ACCT|ACCOUNT|DOS|FIN|HCN|OHIP|PT|OF|THE|AND|FOR|WITH|FROM|INC|LLC|LLP|LTD|CORP|CO|PLLC|PC|TERMS|CONDITIONS|"
+    "FORMULAIRE|PARTIE|CONSENTEMENT|RAPPORT|R[EÉ]SUM[EÉ]|PATIENTE?|CONFIDENTIEL|RENSEIGNEMENTS|DOSSIER|NIP|NAS|DDN|FN|"
+    "FORMULARIO|SECCI[OÓ]N|PARTE|CONSENTIMIENTO|INFORME|RESUMEN|RESULTADOS|PACIENTE|CONFIDENCIAL|HISTORIA|CL[IÍ]NICA|P[AÁ]GINA|"
+    "FORMULARZ|ZGODA|WYNIKI|PACJENT(?:KA)?|POUFNE|STRONA|PESEL|WYWIAD|KARTA"
+)
+# Analyte, specimen and procedure words of a lab or clinic test-name header ("HORMONE PANEL, SERUM"): a header
+# whose words are mostly these is a test name, not a person (this rule only).
+_HDR_TEST_TERMS = frozenset(
+    """hormone hormones panel panels serum plasma semen urine blood frozen fresh female male cycle cycles day days
+    analysis transfer embryo embryos sperm oocyte oocytes egg eggs retrieval test tests testing screen screening profile
+    level levels result results estradiol estrogen progesterone luteinizing stimulating follicle thyroid mullerian
+    müllerian anti amh fsh lh tsh hcg beta prolactin testosterone glucose insulin vitamin cbc ultrasound sono hsg ivf iui
+    icsi pgt pgta ecg count morphology motility antral baseline basic comprehensive complete culture cultures swab
+    free total fasting random rapid quantitative qualitative scan monitoring stim trigger lining endometrial
+    ovarian uterine cervical vaginal pelvic abdominal transvaginal genetic carrier karyotype chromosome chromosomes
+    hemoglobin hematocrit platelet platelets ferritin iron cortisol dhea shbg sex binding globulin antibody antibodies
+    chlamydia gonorrhea hiv hepatitis syphilis rubella varicella immune titer titers thyroglobulin peroxidase
+    cholesterol lipid metabolic renal liver hepatic""".split()
+)
+_HDR_NOSTOP = rf"(?!(?i:{_HDR_STOP})(?![\w'’\-]))"
+_HC2 = rf"{_HDR_NOSTOP}[{_HU}][{_HU}'’]*[{_HU}](?:-[{_HU}][{_HU}'’]*[{_HU}])*{_HE_END}"
+_HDR_CRED = r"(?!(?:MD|DO|RN|NP|PA|MA|MS|PHD|DDS|LPN|CNM|RD|FRCSC|MBBS|MPH|BSN|CMA|RMT)(?![\w]))"
+_HDR_XTRA = rf"(?:{_HDR_NOSTOP}{_HDR_CRED}(?:{_HC2}|[{_HU}](?:\.|(?![\w'’\-]))))"
+_HDR_SURN_CAPS = rf"(?:{_HC2}[ \t]){{0,3}}{_HC2}"
+_HDR_SURN = rf"(?:{_HDR_SURN_CAPS}|{_HDR_NOSTOP}{_CW})"
+_HDR_GIVEN = rf"(?:{_HC2}|{_HDR_NOSTOP}{_CW})(?:[ \t]{_HDR_XTRA}){{0,3}}"
+_HDR_PARTICLES = r"DE|LA|LAS|LOS|DEL|DI|DA|DAS|DOS|DO|LE|EL|AL|VAN|VON|DER|DEN|TER|BIN|BEN|ST|SAINT|MC|MAC|O"
+_HDR_NAME = rf"{_HDR_SURN},[ \t]?{_HDR_GIVEN}"
+_HDR_NAME_CAPS = rf"{_HDR_SURN_CAPS},[ \t]?{_HC2}(?:[ \t]{_HDR_XTRA}){{0,3}}"
+_HDR_CREDS = r"(?:[ \t]{1,2}(?:MD|DO|RN|NP|PA|MA|MS|PHD|DDS|LPN|CNM|RD|MPH|BSN))?"
+_HDR_PAGE = (
+    r"(?i:\b(?:page|p[aá]gina|pagina|strona)[ \t]+\d{1,3}(?:[ \t]+(?:of|sur|de|z)[ \t]+|[ \t]{0,2}/[ \t]{0,2})\d{1,3})"
+)
+_HDR_SEP = r"[ \t]{0,3}[/|\-–—][ \t]{0,3}"
+_HDR_NL = r"[ \t]{0,3}\r?\n[ \t]{0,3}"
+_HDR_FIELD = (
+    r"(?:MRN|DOB|D\.O\.B|DOS|ID|ACCT|ACCOUNT|PATIENT|PT|FIN|HCN|OHIP|SEX|AGE|DATE|CHART|NIP|NAS|PESEL|DDN|FN|NHC|DNI|NSS|"
+    r"DATA[ \t]+UR(?:\.|ODZENIA)?|FECHA)(?![\w])"
+)
+# A first-name list on the line of a sign-off: "Love,\nMom, Cody and Josie".
+# Up to eight names, joined by commas, "and", "&", "+" or "/", a small word before a name ("little Mia"), a full name
+# last, and a trailing "xo", "x", "<3" or an emoji: "Cody, Josie, Mia", "Mom, Cody + Josie and little Mia xo".
+_NL_ITEM = rf"(?:(?i:little|baby|big|lil|dear)[ \t]+)?{_CW}"
+_NL_SEP = r"(?:[ \t]*,[ \t]*(?i:and[ \t]+|&[ \t]+)?|[ \t]+(?i:and|y|et|und)[ \t]+|[ \t]*[/+&][ \t]*)"
+_NL_TAIL = r"(?:[ \t]+(?i:xo+|xx+|x|<3|[\u2600-\u27bf\U0001f300-\U0001faff\u2764\ufe0f]+)){0,3}"
+_NAME_LIST = rf"{_NL_ITEM}(?:{_NL_SEP}{_NL_ITEM}){{1,7}}(?:[ \t]+{_CW})?"
+
+
 def script_rules(
     not_names: frozenset[str] | set[str],
 ) -> list[tuple[str, int, Optional[Callable[[re.Match[str]], bool]]]]:
@@ -1065,12 +1234,121 @@ def script_rules(
 
     Every rule needs a cue: a name label, an introduction, a relation, a greeting or thanks before the name
     (the vocative), a Japanese humble "と申します" after it, or an age after a relative's first name."""
-    check, *_ = make_checks(not_names)
+    check, check_caps, *_ = make_checks(not_names)
 
     def check_cyr(m: re.Match[str]) -> bool:
         return m.group("name").split()[0].lower() not in _CY_NOT_NAMES
 
+    def check_hdr(m: re.Match[str]) -> bool:
+        name = m.group("name")
+        surn, _, given = name.partition(",")
+        sw = [w for w in re.findall(r"[^\W\d_]+", surn) if len(w) > 1]
+        gw = [w for w in re.findall(r"[^\W\d_]+", given) if len(w) > 1]
+        # "IVF, ICSI", "SMITH, MD": a clinical abbreviation as a surname of three letters or more, or as the first
+        # given word. Two-letter surnames (Ma, Do, Pa) are names here: the page marker is the gate.
+        if (sw and all(w.upper() in CLINICAL_ABBREVIATIONS and len(w) > 2 for w in sw)) or (
+            gw and gw[0].upper() in CLINICAL_ABBREVIATIONS
+        ):
+            return False
+        hw = sw + gw
+        if hw and 2 * sum(w.lower() in _HDR_TEST_TERMS for w in hw) >= len(hw):
+            return False  # "HORMONE PANEL, SERUM", "IVF CYCLE, DAY": a test-name header
+        lead = re.match(r"(?:(?:" + _HDR_PARTICLES + r")[ \t]+)+(?=\S)", name, re.IGNORECASE)
+        if lead and len(name) > lead.end():
+            # "DE LA CRUZ, MARIA": particles are not judged as the first word of the name.
+            class _Shim:
+                string = m.string
+
+                def group(self, _k: str) -> str:
+                    return name[lead.end():]
+
+                def start(self, _k: str) -> int:
+                    return m.start("name") + lead.end()
+
+                def end(self, _k: str) -> int:
+                    return m.end("name")
+
+            return check_caps(_Shim())  # type: ignore[arg-type]
+        return check_caps(m)
+
+    def check_list(m: re.Match[str]) -> bool:
+        blocked = (set(not_names) | _NOT_NAME_EXTRA | STOP_WORDS) - _NAME_LIKE_STOP
+        words = re.findall(r"[^\W\d_][^\W\d_'’\-]*", m.group("name"))
+        skip = ("and", "et", "und", "y", "xo", "x", "xx", "little", "baby", "big", "lil", "dear")
+        names = [w for w in words if w.lower() not in skip and not re.fullmatch(_RELATIONS, w, re.IGNORECASE)]
+        # A relative word ("Mom") in the list is not a name; two or more real names are needed.
+        return len(names) >= 2 and all(w.lower() not in blocked and w.lower() not in _NOT_ADDRESSEE for w in names)
+
     return [
+        # A name in a page header or footer: "Page 1 of 1 / ABERNATHY, CLAIRE M / MRN 0058127".
+        (rf"{_HDR_PAGE}{_HDR_SEP}(?P<name>{_HDR_NAME})", 0, check_hdr),
+        (rf"(?<![\w'’\-])(?P<name>{_HDR_NAME}){_HDR_CREDS}{_HDR_SEP}(?:{_HDR_FIELD}|{_HDR_PAGE})", 0, check_hdr),
+        # The same header on its own line, the page marker or the record field on the line before or after.
+        (rf"{_HDR_PAGE}{_HDR_NL}(?P<name>{_HDR_NAME_CAPS})(?=[ \t]{{0,3}}(?:\r?\n|$|[/|\-–—]))", 0, check_hdr),
+        (rf"(?<![^\n])[ \t]{{0,3}}(?P<name>{_HDR_NAME_CAPS}){_HDR_NL}(?:{_HDR_FIELD}|{_HDR_PAGE})", 0, check_hdr),
+        # "Love,\nWhit, Cody and Josie": a list of first names on the line after a sign-off.
+        (rf"(?i:\b(?:{_VALEDICTION}))(?:[ \t]*,[ \t]*\n?|[ \t]*[,!.]?[ \t]*\n)[ \t]*(?P<name>{_NAME_LIST}){_NL_TAIL}(?=[ \t]*(?:\n|$))", 0, check_list),
+        # "wife's name was heard as 'Eleaf'": a speech-to-text note quoting the name it got wrong.
+        (
+            rf"(?i:\bnames?\b)[^\n'\"‘“]{{0,40}}?(?i:\b(?:heard|misheard|transcribed|recorded|captured|typed|written|spelled|spelt)[ \t]+as)[ \t]+['\"‘“](?P<name>[{_UP}][{_LO}]{{2,20}})(?=['\"’”])",
+            0,
+            check,
+        ),
+        # "Rob works at Kincaid Roofing": a person, then where they work, with the employer capitalized.
+        (rf"(?<![\w'’\-])(?P<name>{_CW}(?:{_SP}{_CW}){{0,2}})[ \t]+(?i:works|worked)[ \t]+(?i:at|for)[ \t]+[{_UP}]", 0, check),
+        # A real-name byline: "Posted by: Jane D.", "Submitted by: Jane Doe", "Posted by Jane D.".
+        (
+            rf"(?i:\b(?:posted|submitted|written|authored|commented|asked)[ \t]{{1,3}}by)[ \t]{{0,3}}:[ \t]{{0,3}}"
+            rf"(?P<name>{_CW}(?:[ \t]+(?:[{_UP}]\.(?![{_UP}{_LO}])|{_CW})){{1,2}})",
+            0,
+            check,
+        ),
+        (
+            rf"(?i:\b(?:posted|submitted|written|authored|commented|asked)[ \t]{{1,3}}by)[ \t]{{1,3}}"
+            rf"(?P<name>{_CW}(?:[ \t]+{_CW})?[ \t]+[{_UP}]\.(?![{_UP}{_LO}]))",
+            0,
+            check,
+        ),
+        # Devanagari: "मेरो नाम प्रकाश राई हो", "नाम: डा. सरिता गुरुङ", "म सरिता गुरुङ हुँ", a sign-off line.
+        (rf"(?:मेरो|मेरा|मेरी|मेरे)[ \t]+(?:पूरा[ \t]+)?नाम[ \t]{{0,3}}[:\-]?[ \t]{{0,3}}(?:\r?\n[ \t]{{0,3}})?(?:है[ \t]+)?{_DV_NAME}", 0, None),
+        # A relative's name: "मेरे पति का नाम राजेश गुरुङ है", "मेरो श्रीमानको नाम ...", "पति: राजेश गुरुङ", "श्रीमती मीना थापा".
+        (rf"(?<![{_DV}])(?:मेरो|मेरा|मेरी|मेरे)[ \t]+{_DV_REL}(?:[ \t]+(?:का|की|के|को))?[ \t]+(?:पूरा[ \t]+)?नाम[ \t]{{0,3}}[:\-]?[ \t]{{0,3}}(?:\r?\n[ \t]{{0,3}})?(?:है[ \t]+)?{_DV_NAME}", 0, None),
+        (rf"(?<![{_DV}])(?:{_DV_REL})[ \t]{{0,3}}[:：][ \t]{{0,3}}{_DV_NAME}", 0, None),
+        (rf"(?<![{_DV}])(?:श्रीमान्?|श्रीमती)[ \t]{{1,3}}{_DV_NAME3}", 0, None),
+        (rf"(?<![{_DV}]){_DV_CONN}[ \t]{{1,3}}(?:मेरो|मेरा|मेरी|मेरे)[ \t]{{1,3}}{_DV_REL}(?:[ \t]{{1,3}}(?:का|की|के|को))?[ \t]{{1,3}}{_DV_NAME3}", 0, None),
+        (rf"(?<![{_DV}]){_DV_CONN}[ \t]{{1,3}}(?:मेरो|मेरा|मेरी|मेरे)[ \t]{{1,3}}{_DV_REL}(?:[ \t]{{1,3}}(?:का|की|के|को))?[ \t]{{1,3}}(?:पूरा[ \t]{{1,3}})?नाम[ \t]{{0,3}}[:\-]?[ \t]{{0,3}}(?:है[ \t]{{1,3}})?{_DV_NAME3}", 0, None),
+        (rf"(?<![{_DV}])नाम[ \t]*[:：][ \t]*{_DV_NAME}", 0, None),
+        (rf"(?<![{_DV}])(?:म|मैं)[ \t]+{_DV_NAME3}[ \t]+(?:हुँ|हुं|हूँ|हूं)(?![{_DV}])", 0, None),
+        (
+            rf"(?<![{_DV}]){_DV_CLOSE}(?:{_DV_BR}[ \t]{{0,10}}{_DV_CLOSE}){{0,2}}{_DV_BR}[ \t]{{0,10}}{_DV_NAME}[ \t]{{0,10}}(?=\r?\n|$)",
+            0,
+            None,
+        ),
+        (rf"(?<![{_DV}])(?:धन्यवाद|सादर|शुभकामना)[,।][ \t]{{1,3}}{_DV_NAME3}[ \t]{{0,10}}(?=\r?\n|$)", 0, None),
+        # A sign-off name split over consecutive short lines: "धन्यवाद\n\n सीता\nकुमारी".
+        (
+            rf"(?<![{_DV}]){_DV_CLOSE}(?:{_DV_BR}[ \t]{{0,10}}{_DV_CLOSE}){{0,2}}{_DV_BR}[ \t]{{0,10}}{_DV_NAME_LINES}[ \t]{{0,10}}(?=\r?\n|$)",
+            0,
+            None,
+        ),
+        # Lao: "ຂ້ອຍຊື່ ນາງ ມະນີ ສີສຸວັນ", "ຊື່: ...".
+        (rf"(?<![{_LO_R}])(?:ຂ້ອຍ|ຂ້າພະເຈົ້າ)?ຊື່(?:ຂອງຂ້ອຍ(?:ແມ່ນ)?)?[ \t]{{0,3}}[:：]?[ \t]{{0,3}}(?:(?:ນາງ|ທ້າວ|ທ່ານ)[ \t]{{1,3}})?(?P<name>{_LAO_NAME})", 0, None),
+        # Lao: a name glued to a first-person cue ("ຂ້ອຍຊື່ມະນີ", "ຊື່ຂອງຂ້ອຍແມ່ນມະນີ"), and a second person after a relative.
+        (rf"(?<![{_LO_R}])(?:(?:ຂ້ອຍ|ຂ້າພະເຈົ້າ)ຊື່|ຊື່ຂອງຂ້ອຍ(?:ແມ່ນ)?)(?:ວ່າ)?[ \t]{{0,3}}(?:(?:ນາງ|ທ້າວ|ທ່ານ)[ \t]{{0,3}})?(?P<name>{_LAO_NAME0})", 0, None),
+        (rf"(?<![{_LO_R}])(?:ແລະ|ກັບ)[ \t]{{0,3}}(?:ຜົວ|ເມຍ|ສາມີ|ພັນລະຍາ|ແຟນ|ລູກຊາຍ|ລູກສາວ)(?:ຂອງຂ້ອຍ)?[ \t]{{0,3}}(?:ຊື່[ \t]{{0,3}})?(?:(?:ນາງ|ທ້າວ|ທ່ານ)[ \t]{{1,3}})?(?P<name>{_LAO_NAME2})", 0, None),
+        # A Hebrew-script form of the name given in the same sentence: "Nazywam się Alina Szwarc, po hebrajsku שוורץ".
+        (
+            rf"(?i:\b(?:name\s+is|name['’]s|nazywam\s+si[eę]|me\s+llamo|je\s+m['’ ]?appelle|i['’]?m|i\s+am|soy))[^\n.!?]{{0,60}}?"
+            rf"(?i:\b(?:in|po|en|auf|בעברית)\s+(?:hebrew|hebrajsku|hebreo|h[ée]breu|hebr[äa]isch)\b|בעברית)(?:[ \t]+(?i:it[ \t]+is|is))?[ \t]*[,:\-–]?[ \t]*(?P<name>{_HWORD}(?:[ \t]+{_HWORD}){{0,2}})",
+            0,
+            None,
+        ),
+        # "In Hebrew it is X", "In Hebrew: X Y": the cue alone, with "it is", "is" or a colon.
+        (
+            rf"(?i:\b(?:in|po|en|auf)\s+(?:hebrew|hebrajsku|hebreo|h[ée]breu|hebr[äa]isch)\b)(?:[ \t]+(?i:it[ \t]+is|is)[ \t]*[,:\-–]?|[ \t]*[:\-–])[ \t]*(?P<name>{_HWORD}(?:[ \t]+{_HWORD}){{0,2}})",
+            0,
+            None,
+        ),
         # "Мене звати Оксана Мельник", "Фамилия: Громова", "Пацієнтка: Ірина Коваленко".
         (rf"(?<![\w])(?i:{_CY_LABELS})[ \t]*[:\-—]?[ \t]*(?P<name>{_CY_NAME}){_CY_END}", 0, check_cyr),
         # "Это Наталья Громова", "Це Ірина".

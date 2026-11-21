@@ -353,12 +353,12 @@ def test_v10_review2_echo_ordinary_word_names_in_person_context():
 
 
 def test_v10_review2_social_handle_clinic_and_staff():
-    m = Masker(policy=Policy(staff=["Jen Alvarez"], allow=["Fertiligent Fertility Clinic"]))
-    out = m.mask("Follow @fertiligent on Instagram, @fertiligentai too, thanks @dr_jen_alvarez and @jen_alvarez88", "s").text
-    assert "@fertiligent on" in out and "@fertiligentai" in out and "@dr_jen_alvarez" in out and "@jen_alvarez88" in out
+    m = Masker(policy=Policy(staff=["Jen Alvarez"], allow=["Brightwell Fertility Clinic"]))
+    out = m.mask("Follow @brightwell on Instagram, @brightwellivf too, thanks @dr_jen_alvarez and @jen_alvarez88", "s").text
+    assert "@brightwell on" in out and "@brightwellivf" in out and "@dr_jen_alvarez" in out and "@jen_alvarez88" in out
     # Not the clinic's and not staff: stays masked, and so does everything without a configured list.
     assert "@thaolee_ttc" not in m.mask("dm me @thaolee_ttc", "s2").text
-    assert "@fertiligent_mom" not in m.mask("dm me @fertiligent_mom", "s3").text
+    assert "@brightwell_mom" not in m.mask("dm me @brightwell_mom", "s3").text
     assert "@nurse_jen" not in Masker().mask("thanks @nurse_jen", "s4").text
     assert "@nurse_jen" not in m.mask("thanks @nurse_jen", "s5").text  # one name word is not the whole name
 
@@ -1455,3 +1455,192 @@ def test_v12_review1_hebrew_school_stops_at_locative():
     assert [e.text for e in ents] == ["תיכון הרצל"], ents
     ents = [e for e in RegexDetector().detect("בית הספר: תיכון בן גוריון לבנות") if e.type.name == "EMPLOYER"]
     assert [e.text for e in ents] == ["תיכון בן גוריון"], ents
+
+
+def test_v13_cc_non_staff_full_name_does_not_cue_shared_first_name():
+    # "Cc:" is a staff cue, but "Marcus Reed" is not on the roster (Marcus Bell is):
+    # the husband's bare "Marcus" later must stay masked.
+    text = (
+        "From: Dani Reed <dani@example.com>\nCc: Marcus Reed <marcus.reed@example.org>\n\n"
+        "Dr. Hill,\nMarcus has gone back to work but I can't.\nDani"
+    )
+    out = Masker(policy=Policy(staff=["Marcus Bell", "Sarah Hill"])).mask(text, "s").text
+    assert "Marcus has" not in out
+    # A real staff full name after Cc still lets the bare first name through later.
+    text2 = "Cc: Marcus Bell\n\nThanks. Marcus will call you tomorrow."
+    out2 = Masker(policy=Policy(staff=["Marcus Bell"])).mask(text2, "s").text
+    assert "Marcus will call" in out2
+
+
+def test_v13_review1_couple_second_name_is_masked():
+    from phiproxy import Masker, Policy
+
+    m = Masker(policy=Policy())
+    for other in ("Marcus", "Rob", "Priya"):
+        out = m.mask(f"Help Hannah and {other} have a baby.\nMy name is Hannah Weir.", "s").text
+        assert other not in out and "Hannah" not in out
+    out = m.mask("Help Marcus and Hannah have a baby.\nMy name is Hannah Weir.", "s2").text
+    assert "Marcus" not in out
+    # Calendar words, brands, titles, facilities and firms next to a found name stay.
+    for tail in ("Monday", "Johnson LLP", "Ross Memorial Hospital"):
+        out = Masker(policy=Policy()).mask(f"My name is Hannah Weir. Hannah and {tail} are busy.", "s3").text
+        assert tail.split()[0] in out
+    assert "Dr Patel" in Masker(policy=Policy()).mask("My name is Hannah Weir. Hannah and Dr Patel", "s4").text
+
+
+def test_v13_final1_own_site_narrow():
+    m = Masker(policy=Policy(allow=["brightwell.example.org"]))
+    for t in ("Visit jane.brightwell.example.org", "Visit portal.brightwell.example.org/u/jane.cole",
+              "Visit brightwell.example.org/jane", "Visit brightwell.example.org/portal/MRN-4455667",
+              "Visit brightwell.example.org/booking/jane"):
+        assert "[URL_" in m.mask(t, "s").text, t
+    for t in ("Visit brightwell.example.org", "Visit portal.brightwell.example.org", "visit www.brightwell.example.org/contact-us"):
+        assert "[URL_" not in m.mask(t, "s").text, t
+
+
+def test_v13_final1_own_site_path_allow_value_gives_no_host():
+    for allow, t in (("reddit.com/user/cedarline", "Find me at reddit.com/user/janecole88 ok"),
+                     ("calendly.com/cedarline", "Find me at calendly.com/janecole88 ok"),
+                     ("t.me/cedarline", "Find me at t.me/janecole88 ok")):
+        assert "[URL_" in Masker(policy=Policy(allow=[allow])).mask(t, "s").text, t
+    m = Masker(policy=Policy(allow=["info@cedarline.example.net"]))
+    assert "[URL_" not in m.mask("Visit portal.cedarline.example.net", "s").text
+
+
+def _v13b(text: str) -> str:
+    return Masker(policy=Policy()).mask(text, "s").text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "FSH PROFILE, URINE\nPage 1 of 1",
+        "LUTEINIZING HORMONE, PLASMA\nPage 2 of 2",
+        "PROGESTERONE, SERUM\nPage 1 of 2\nID: 4455",
+        "ANTI MULLERIAN, HORMONE\nPage 1 of 2\nMRN: 1",
+        "THYROID STIMULATING, HORMONE\nPage 1 of 2\nPatient ID: 55",
+        "SPERM ANALYSIS, SEMEN\nPage 1 of 2\nDOB: 1/1/1980",
+        "EMBRYO TRANSFER, FROZEN\nPage 1 of 2",
+        "IVF CYCLE, DAY\nPage 1 of 5\nMRN: 77",
+        "ESTRADIOL, FEMALE\nPage 1 of 2\nMRN: 9",
+    ],
+)
+def test_v13_final1_header_test_names_not_masked(text):
+    out = _v13b(text)
+    assert out.split("\n")[0] == text.split("\n")[0]
+
+
+def test_v13_final1_header_person_still_masked():
+    assert _v13b("SMITH, JANE\nPage 1 of 2").startswith("[NAME_1]")
+    assert _v13b("ABERNATHY, CLAIRE M\nPage 1 of 2\nMRN: 5").startswith("[NAME_1]")
+    out = _v13b("ESTRADIOL, FEMALE\nPage 1 of 2\nPATIENT: SMITH, JANE")
+    assert out.startswith("ESTRADIOL, FEMALE") and "SMITH" not in out
+
+
+def test_v13_final1_couple_names_not_drugs_or_orgs():
+    out = _v13b("My name is Sarah Lee. Sarah and Progesterone. Sarah and Letrozole are ok. Sarah and Lupron. Sarah and Tylenol.")
+    for w in ("Progesterone", "Letrozole", "Lupron", "Tylenol"):
+        assert w in out
+    assert "Menopur" in _v13b("Mi nombre es Ana Ruiz. Ana y Menopur.")
+    out = _v13b("My name is Sarah Lee. Sarah and Brightwell staff called. Sarah and Cedarline team replied.")
+    assert "Brightwell" in out and "Cedarline" in out
+    out = _v13b("My name is Hannah Cole. Hannah and Marcus and Hannah and Rob are coming.")
+    assert "Marcus" not in out and "Rob" not in out
+
+
+@pytest.mark.parametrize(
+    "text,kept",
+    [
+        ("धन्यवाद\nआईवीएफ टीम", "आईवीएफ"),
+        ("धन्यवाद\nउर्वरता केंद्र", "केंद्र"),
+        ("नाम: परीक्षण परिणाम", "परिणाम"),
+        ("नाम: आईवीएफ", "आईवीएफ"),
+        ("मेरो नाम प्रोटोकल हो", "प्रोटोकल"),
+        ("नाम: दवा", "दवा"),
+        ("ຊື່ ຢາ", "ຢາ"),
+        ("ຊື່ ທີມ", "ທີມ"),
+        ("ຊື່ ຄລີນິກ", "ຄລີນິກ"),
+    ],
+)
+def test_v13_final1_script_team_words_not_names(text, kept):
+    assert kept in _v13b(text)
+
+
+def test_v13_final1_devanagari_lao_names():
+    assert "प्रकाश" not in _v13b("मेरो नाम प्रकाश राई श्रेष्ठ थापा मगर लामा हो") and "लामा" not in _v13b("मेरो नाम प्रकाश राई श्रेष्ठ थापा मगर लामा हो")
+    assert "गुरुङ" not in _v13b("मेरो नाम सरिता-गुरुङ हो")
+    assert "सरिता" not in _v13b("मेरो नाम\nसरिता गुरुङ")
+    assert "राजेश" not in _v13b("मेरे पति का नाम राजेश गुरुङ है")
+    assert "मीना" not in _v13b("मेरी पत्नी का नाम मीना थापा है")
+    assert "राम" not in _v13b("मेरो श्रीमानको नाम राम थापा हो")
+    assert "राजेश" not in _v13b("पति: राजेश गुरुङ")
+    assert "मीना" not in _v13b("मेरो नाम सरिता गुरुङ र मेरी श्रीमती मीना गुरुङ")
+    assert "मीना" not in _v13b("श्रीमती मीना थापा आयीं")
+    assert "मणि" not in _v13b("ຂ້ອຍຊື່ມະນີ") and "ມະນີ" not in _v13b("ຂ້ອຍຊື່ມະນີ")
+    out = _v13b("ຊື່ຂອງຂ້ອຍແມ່ນ ມະນີ ສີສຸວັນ ແລະ ຜົວ ສົມຊາຍ ວົງວິໄລ")
+    assert "ສົມຊາຍ" not in out and "ວົງວິໄລ" not in out and "ມະນີ" not in out
+    # lookalikes: ordinary sentences stay
+    assert _v13b("ຂ້ອຍແລະຜົວ ໄປ ຄລີນິກ") .count("ຄລີນິກ") == 1
+    assert "बीमार" in _v13b("मेरी पत्नी बीमार है")
+
+
+def test_v13_final1_english_letter_names_after_spelled():
+    for text in [
+        "spelled bee ay ar ar aitch oh el oh em ee you",
+        "spelled tee ay why el oh ar",
+        "first name spelled ay en en ay",
+        "spelled kay ay ar ee en",
+        "last name spelled em ay ar tee eye en",
+        "Name spelling: kay oh vee ay el ee double you ess kay eye",
+        "spelled gee you zed em ay en oh",
+        "spelled gee you zed em ay en and ar oh ess ee",
+        "spelled gee. you. zed. em. ay. en.",
+        "spelled gee, you, zed, em, ay, en",
+        "spelled ar, oh, ess, ee",
+    ]:
+        out = _v13b(text)
+        rest = out.split("spelled")[-1] if "spelled" in out else out.split("spelling:")[-1]
+        assert rest.strip(" .").startswith("[NAME_1]") and not any(
+            w in rest for w in ("zed", "ess", "kay", "aitch", "tee", "eye", "oh ", "you")
+        ), (text, out)
+    for text in ["I will see you are the best", "she spelled it wrong", "did you see oh are you ok", "spelled it out for you"]:
+        assert "[NAME" not in _v13b(text), text
+
+
+def test_v13_final1_signoff_name_lists():
+    for text in [
+        "Best,\nSam, Alex, Jordan and Chris Taylor",
+        "Love,\nMom, Cody, Josie, Anna, Tom and Lee",
+        "Love,\nCody, Josie and Mia xo",
+        "Love,\nCody + Josie + Mia",
+        "Love,\nCody/Josie/Mia",
+        "Love,\nCody, Josie and little Mia",
+        "Love,\nCody, Josie, Mia",
+        "Love,\nCody, Josie & Mia <3",
+    ]:
+        out = _v13b(text)
+        for w in ("Sam", "Alex", "Jordan", "Chris", "Taylor", "Cody", "Josie", "Mia", "Anna", "Tom", "Lee"):
+            assert w not in out, (text, out)
+    for text in ["Thanks,\nThe Care Team", "Thanks,\nBest, Regards", "Love,\nMom"]:
+        assert "[NAME" not in _v13b(text), text
+
+
+def test_v13_final1_hebrew_surname_after_in_hebrew():
+    assert "שוורץ" not in _v13b("I'm Alina Schwartz and in Hebrew it is שוורץ")
+    out = _v13b("name is Alina Schwartz. In Hebrew: אלינה שוורץ")
+    assert "אלינה" not in out and "שוורץ" not in out
+    out = _v13b("My name is Alina Schwartz, in Hebrew שוורץ כהן")
+    assert "שוורץ" not in out and "כהן" not in out
+    assert "שוורץ" not in _v13b("In Hebrew it is שוורץ")
+    assert "[NAME" not in _v13b("I wrote the note in Hebrew yesterday")
+
+
+def test_v13_final2_repeated_name_stays_linear():
+    import time
+
+    for pre in ("Posted by: ", "My name is Jane Doe. "):
+        text = pre + "Jane " * 20000
+        t0 = time.time()
+        out = Masker().mask(text, "s").text
+        assert time.time() - t0 < 15  # was ~90 s (byline) and ~20 s (echo) before the merge and echo fixes
+        assert "Jane" not in out

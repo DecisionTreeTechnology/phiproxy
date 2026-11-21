@@ -108,6 +108,28 @@ def _date_variants(d: date) -> list[str]:
 DateLike = Union[date, str]
 
 
+_LAST4_CUE = re.compile(
+    r"(?i)(?:last|final|ends?|ending|[úu]ltimos|derniers|ostatnie|cuatro|quatre|cztery|four|termina|finit|kończ)"
+    r"|(?<![\d])4[ \t]+(?:digits?|d[íi]gitos|chiffres|cyfry|de|of)|\b(?:ssn|sin|nas|mrn|pesel|social)\b"
+)
+_YEAR_WORD = re.compile(
+    r"(?i)(?:\b(?:in|born|since|during|until|by|from|year|circa|c\.|en|desde|durante|hasta|an|depuis|vers|"
+    r"w|od|do|roku|rok|im|jahr|nació|nacio|née|nee|né)|"
+    r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|"
+    r"september|october|november|december|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|"
+    r"noviembre|diciembre|janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|"
+    r"novembre|décembre|decembre)\.?)[ \t]{1,3}(?:of[ \t]{1,3}|de[ \t]{1,3}|el[ \t]{1,3}|año[ \t]{1,3})?\Z"
+)
+
+
+def _year_in_context(text: str, start: int) -> bool:
+    """A bare 4-digit number right after a year or month word, with no last-four cue in the 60 characters before."""
+    before = text[max(0, start - 60) : start]
+    if _LAST4_CUE.search(before):
+        return False
+    return bool(_YEAR_WORD.search(text[max(0, start - 25) : start]))
+
+
 @dataclass
 class KnownEntities:
     """Identifiers the application already holds for the people in this conversation.
@@ -181,6 +203,15 @@ class KnownEntityDetector:
             if len(re.sub(r"[\s\-.]", "", ident)) >= 4:
                 out += self._find(text, r"(?<![A-Za-z0-9])" + _flex_pattern(ident) + r"(?![A-Za-z0-9])",
                                   EntityType.ID, re.IGNORECASE)
+            # The last four digits alone ("los últimos cuatro, 4417"): a part of a known number is still the patient's.
+            tail = re.sub(r"\D", "", ident)[-4:]
+            if len(re.sub(r"\D", "", ident)) >= 6:
+                found = self._find(text, r"(?<![\d.,/:\-$])" + tail + r"(?!\d|[.,]\d)", EntityType.ID)
+                if re.fullmatch(r"(?:19|20)\d\d", tail):
+                    # v13: a tail that looks like a year is masked (a real last-four answer, "los últimos cuatro, 1987")
+                    # unless it is a bare year in an explicit year context and no last-four cue is near.
+                    found = [e for e in found if not _year_in_context(text, e.start)]
+                out += found
         for a in k.addresses:
             pat = r"\s+".join(re.escape(w) for w in a.split())
             out += self._find(text, pat, EntityType.ADDRESS, re.IGNORECASE)
