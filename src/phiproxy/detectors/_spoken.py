@@ -472,7 +472,7 @@ _ASKED = [
         r"health\s+(?:card\s+)?number|member\s+(?:id|number)|rx\s+number|prescription\s+number|"
         r"social\s+(?:security|insurance)|(?-i:\bSIN\b)|\bsin\s+(?:number|no\b)|\bssn\b|s[ée]curit[ée]\s+sociale|seguro\s+social|"
         r"\bpesel\b|תעודת\s+זהות|ת\.ז|מספר\s+חבר|account|policy|claim|chart\s+number|\bmrn\b|medical\s+record|record\s+number|"
-        r"group\s+(?:number|no\b|id)|\bgrup[ao]\b|\bgroupe\b|קבוצה|"
+        r"group\s+(?:number|no\b|id)|\bgrup[ao]\b|\bgroupe\b|קבוצה|(?:health|insurance)\s+card|כרטיס\s+(?:ה)?(?:ביטוח|בריאות)|"
         r"num[ée]ro\s+de\s+dossier|n[úu]mero\s+de\s+(?:expediente|tarjeta|socio)|numer\s+(?:karty|polisy)", re.IGNORECASE)),
 ]
 _TIME_AFTER = re.compile(r"^\s*(?:a\.?m\b|p\.?m\b|o['’]?clock|h\b|heures?|horas?|godzin)", re.IGNORECASE)

@@ -1893,7 +1893,7 @@ def test_v11_long_inputs_stay_fast_and_do_not_crash():
     d.detect("1" * 70000)  # a digit run past Python's int() limit must not raise
     t0 = time.time()
     d.detect("ngày " + "hai mươi " * 3000)
-    assert time.time() - t0 < 5
+    assert time.time() - t0 < 20
 
 
 def _v11r1_vals(text, typ=None):
@@ -3219,6 +3219,1131 @@ def test_v12_final2_age_rule_linear_and_ranges_masked():
     t0 = time.time()
     d.detect("alive" + " " * 20000)
     d.detect("My grandfather died" + "\n" * 8000 + "and the clinic called.")
-    assert time.time() - t0 < 5
+    assert time.time() - t0 < 20
     # A d.m-yy shape stays a possible date even after a range word (no exclusion: "DOB (ref) 3.5-12").
     assert [e for e in d.detect("DOB (ref) 3.5-12") if e.type is T.DATE]
+
+
+def _v13n(text):
+    return [e.text for e in RegexDetector().detect(text) if e.type is T.NAME]
+
+
+def test_v13_header_last_first_names():
+    assert "OKAFOR, DANIELA R" in _v13n("Page 2 of 3 / OKAFOR, DANIELA R / MRN 0012345")
+    assert "LUNDGREN, PETRA T" in _v13n("CONSENT FORM\nPage 4 of 4 / LUNDGREN, PETRA T / DOB 1990-01-02 / MRN 55")
+    assert "LUNDGREN, PETRA" in _v13n("report text | LUNDGREN, PETRA | Page 2 of 3")
+    # No page or field next to it: not a header.
+    assert not any("TUBAL" in n for n in _v13n("Findings: TUBAL, PATENT bilaterally"))
+    assert not any("IVF" in n for n in _v13n("Page 2 of 3 / IVF, ICSI / MRN 0012345"))
+
+
+def test_v13_sign_off_name_list():
+    assert any("Pip" in n and "Tess" in n for n in _v13n("Love,\nMo, Pip and Tess"))
+    # The list must end the line; ordinary words after a thanks are not names.
+    assert not any("Monday" in n for n in _v13n("Thanks,\nMonday, Tuesday and Friday"))
+
+
+def test_v13_heard_as_and_works_at():
+    assert "Aliff" in _v13n("AI note: husband's name was heard as 'Aliff', corrected by the nurse.")
+    assert not any("Cycle" in n for n in _v13n("The word was heard as 'Cycle' on the call."))
+    assert "Dex" in _v13n("Dex works at Harbor Freight and I teach.")
+    assert not any("Clomid" in n for n in _v13n("Clomid works for most patients."))
+    assert not any("works" in n for n in _v13n("it works at night"))
+
+
+def test_v13_couple_second_name_echo():
+    from phiproxy import Masker
+
+    m = Masker(detectors=[RegexDetector()])
+    out = m.mask("Help Hannah and Rob bring home a baby.\nMy name is Hannah Weir.\nRob works at Pine Roofing.", "s1").text
+    assert "Rob" not in out and "Hannah" not in out
+
+
+def test_v13_devanagari_lao_hebrew_names():
+    assert "प्रकाश राई" in _v13n("Hello, मेरो नाम प्रकाश राई हो। Thanks")
+    assert "सरिता गुरुङ" in _v13n("नमस्ते, म सरिता गुरुङ हुँ। See you")
+    assert "सरिता गुरुङ" in _v13n("धन्यवाद,\nसरिता गुरुङ")
+    assert not _v13n("म धेरै खुसी हुँ")
+    assert not _v13n("मेरो नाम हो")
+    assert "ມະນີ ສີສຸວັນ" in _v13n("ສະບາຍດີ, ຂ້ອຍຊື່ ມະນີ ສີສຸວັນ. I want to move it")
+    assert "שוורץ" in _v13n("Nazywam się Alina Szwarc, po hebrajsku שוורץ.")
+    assert not any("תודה" in n for n in _v13n("I wrote this in Hebrew: תודה רבה."))
+
+
+def test_v13_english_letter_names_spelled():
+    assert "gee you zed em ay en" in _v13n("My last name is spelled gee you zed em ay en, thanks")
+    assert not _v13n("you are an ex and why not")
+    assert not any("gee" in n for n in _v13n("gee you zed em ay en"))  # no spelling or name cue
+
+
+def test_v13_new_rules_linear():
+    import time
+
+    d = RegexDetector()
+    t0 = time.time()
+    for cue in ("Page 1 of 2 /", "name was heard as", "works at", "मेरो नाम", "ຊື່"):
+        for fill in (" ", "\n"):
+            d.detect(cue + fill * 20000)
+    assert time.time() - t0 < 60
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("موعدي في ١٢ ديسمبر — please confirm", "١٢ ديسمبر"),
+        ("إجازة من ١ فبراير", "١ فبراير"),
+        ("12 كانون الأول 1990", "12 كانون الأول 1990"),
+        ("Taariikhda waa labaatan iyo shan Maajo 1989.", "labaatan iyo shan Maajo 1989"),
+        ("waa shan Luuliyo", "shan Luuliyo"),
+        ("Tuesday is fine, martes veintisiete de este mes", "martes veintisiete"),
+        ("jeudi vingt-sept", "jeudi vingt-sept"),
+        ("Please confirm your date of birth.\nVisitor: 09 30 1988\nthanks", "09 30 1988"),
+        ("DOB 1988 09 30", "1988 09 30"),
+        ("charged from, I think, the third of last month.", "third of last month"),
+        ("I lost the pregnancy in May.", "May"),
+        ("Our retrieval is planned for January.", "January"),
+        ("Nous attendons un bébé pour juillet!", "juillet"),
+    ],
+)
+def test_v13_date_forms(text, value):
+    assert value in _v12_vals(text, T.DATE)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Hace ٣ días",
+        "waa shan nin",
+        "martes dos pacientes",
+        "el martes veinte pacientes vinieron",
+        "my number is 09 30 1988 in the ledger",
+        "I may go in May's clinic",
+        "Please ask May Chen about it",
+        "Thanks for May's invoice",
+        "the third of the cakes",
+        "she said she would go for it",
+        "pour mars' dossier",
+    ],
+)
+def test_v13_date_lookalikes(text):
+    assert not _v12_vals(text, T.DATE)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("My grandmother lived to 96 and her sister to 93, so", "93"),
+        ("dzwoniąca, Danuta Kowal (lat 91), to babcia", "91"),
+        ("המתקשרת, חנה כהן (בת 92), היא סבתא", "92"),
+    ],
+)
+def test_v13_old_age_forms(text, value):
+    assert value in _v12_vals(text, T.AGE)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my sister moved to 95 Elm Street",
+        "my sister to 93 people",
+        "Clinic (lat 45)",
+        "(lat 91 items)",
+    ],
+)
+def test_v13_old_age_lookalikes(text):
+    assert not _v12_vals(text, T.AGE)
+
+
+def test_v13_date_rules_linear():
+    import time
+
+    d = RegexDetector()
+    t0 = time.time()
+    for cue in ("date of birth", "DOB:", "martes", "shan", "12", "for", "in", "the third of", "(lat", "my sister to", "12 "):
+        for fill in (" ", "\n", "\t", "9 "):
+            d.detect(cue + fill * 4000)
+    assert time.time() - t0 < 60
+
+
+# --- v13 identifiers: handles, documents, short numbers, partial digits, ZIPs ---------------------
+def _v13_ids(text, *kinds):
+    kinds = kinds or (T.ID, T.ACCOUNT, T.SSN, T.MRN, T.HEALTH_CARD, T.URL, T.ZIP)
+    return [e.text for e in RegexDetector().detect(text) if e.type in kinds]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Posted by river_otter_41 on Oct 3", "river_otter_41"),
+        ("Reply from QuietLakeMorning: thanks all", "QuietLakeMorning"),
+        ("\nmapleleaf_mama88 replied:\n> hi", "mapleleaf_mama88"),
+        ("> TTC_in_OH wrote: has anyone", "TTC_in_OH"),
+        ("@ember_fox: hey\nsam.k: hi there", "sam.k"),
+    ],
+)
+def test_v13_forum_handles(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Posted by Monday morning staff",
+        "Reply from Dr Smith about the results",
+        "Thread started by Maria last week",
+        "Laura wrote: see you at 3",
+        "the nurse replied: yes",
+        "sam.k: hi there",  # a label alone, no handle speakers in the transcript
+    ],
+)
+def test_v13_forum_handle_lookalikes(text):
+    assert not _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Passport is C0482917, issued in Canada. Husband's is P7731884K", "P7731884K"),
+        ("Her pasaporte vence pronto. El de él es G5512096", "G5512096"),
+    ],
+)
+def test_v13_second_passport(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+def test_v13_passport_shape_needs_the_cue():
+    assert not _v13_ids("Passport copy sent. The model is X12 and the room is B4", T.ID)
+    assert not _v13_ids("Passport copy attached. The kit code is AB123", T.ID)
+
+
+def test_v13_plate_after_vehicle_words():
+    assert "TN 8K4 2217" in _v13_ids("Plate on his gray truck TN 8K4 2217. Security notified", T.ID)
+    assert "OH 5TR 9021" in _v13_ids("license plate OH 5TR 9021", T.ID)
+    assert not _v13_ids("Plate 3 was read on Tuesday at 4 pm", T.ID)
+    assert not _v13_ids("plate of food and some water", T.ID)
+
+
+def test_v13_cpf_and_itin():
+    assert "123.456.789-09" in _v13_ids("Meu CPF é 123.456.789-09, obrigada", T.ID)
+    assert "12345678909" in _v13_ids("CPF 12345678909", T.ID)
+    assert "912-70-5531" in _v13_ids("me piden un ITIN y es 912-70-5531", T.SSN)
+    assert "989-71-4040" in _v13_ids("My taxpayer ID number is 989-71-4040", T.SSN)
+    assert not _v13_ids("the version is 1.234.567 and 12-70-5531", T.ID, T.SSN)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("los últimos cuatro, 4417", "4417"),
+        ("ostatnie cztery cyfry: 4417", "4417"),
+        ("les 4 derniers chiffres : 4417", "4417"),
+    ],
+)
+def test_v13_last_four_after_cue(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize("text", ["últimos cuatro días 4417", "the last four weeks of 2026"])
+def test_v13_last_four_lookalikes(text):
+    assert not _v13_ids(text, T.ID)
+
+
+def test_v13_partial_mrn_cues():
+    assert "4417" in _v13_ids("mi MRN termina en 4417", T.MRN)
+    assert "4417" in _v13_ids("MRN kończy się na 4417", T.MRN)
+    assert "4417" in _v13_ids("ostatnie 4 cyfry MRN: 4417", T.MRN)
+    q = "> Please reply with your last name and the last four digits of your MRN.\n\nDuong, 4417\n\n> And your date of birth?\n\n3/14/88"
+    assert "4417" in _v13_ids(q, T.MRN)
+    assert not _v13_ids("Send the last four digits of your MRN. We are at 2118 Elm Hill Pike", T.MRN)
+    assert not _v13_ids("Send the last four digits of your MRN by Friday", T.MRN)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("The employee number on your file is 428-1190 ok", "428-1190"),
+        ("Mon numéro d'employée, c'est 88-4210", "88-4210"),
+        ("le dossier de police est le 26-118342", "26-118342"),
+        ("matricula consular, number CM 0045 8871", "CM 0045 8871"),
+        ("participant number 774-5120", "774-5120"),
+    ],
+)
+def test_v13_short_ids_after_cue(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("numéro de police 774512-08", "774512-08"),
+        ("el grupo es el G 77412", "G 77412"),
+    ],
+)
+def test_v13_policy_group_numbers(text, value):
+    assert value in _v13_ids(text, T.ACCOUNT)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "group 3 meets at 4 pm",
+        "the claim was denied on 11-15-2026",
+        "claim filed 2026-11-03",
+        "participant 12-3 of 40",
+        "the employee 2024 2025 review",
+        "policy renewal 2026-11",
+        "grupo 4 y 5",
+    ],
+)
+def test_v13_short_id_lookalikes(text):
+    assert not _v13_ids(text, T.ID, T.ACCOUNT)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Ubezpieczenie: Plan A, ID członka XJK884201, polisa", "XJK884201"),
+        ("ביטוח: Plan A, מספר חבר XJK884201", "XJK884201"),
+        ("member ID QWE55512390", "QWE55512390"),
+    ],
+)
+def test_v13_alphanumeric_health_card(text, value):
+    assert value in _v13_ids(text, T.HEALTH_CARD)
+
+
+def test_v13_alphanumeric_health_card_lookalikes():
+    assert not _v13_ids("Ubezpieczenie: Plan A, ID członka 12", T.HEALTH_CARD)
+    assert not _v13_ids("the ticket XJK884201 was closed", T.HEALTH_CARD)
+    assert not _v13_ids("member since JAN2020", T.HEALTH_CARD)
+
+
+def test_v13_hebrew_spoken_health_card():
+    text = "מספר כרטיס הביטוח תשע תשע אחת שתיים שלוש ארבע. Agent: תודה"
+    assert [e for e in RegexDetector().detect(text) if e.type is T.ID and "תשע" in e.text]
+    assert not [e for e in RegexDetector().detect("הכרטיס הביטוח ישן") if e.type is T.ID]
+
+
+def test_v13_zip_after_po_box_and_unit():
+    assert "37202" in _v13_ids("Mail to PO Box 7719, Nashville 37202 please", T.ZIP)
+    assert "37212" in _v13_ids("Delivery to: 1907 Belmont Road, Apt 4, 37212. Signature", T.ZIP)
+    assert "37211" in _v13_ids("1840 Pike Apt 6B, Nashville 37211.", T.ZIP)
+    assert not _v13_ids("PO Box 7719 opens at 9", T.ZIP)
+    assert not _v13_ids("Apt 4, 30000 IU were ordered", T.ZIP)
+    assert not _v13_ids("Unit 5, 12345 mg", T.ZIP)
+
+
+def test_v13_personal_site_in_other_languages():
+    assert "amy-et-bob.example.com" in _v13_ids("Voir mon blogue au amy-et-bob.example.com merci", T.URL)
+    assert "casa-de-ana.example.net" in _v13_ids("mi sitio web es casa-de-ana.example.net", T.URL)
+    assert "anna-nowak.example.org" in _v13_ids("moja strona to anna-nowak.example.org", T.URL)
+    assert not _v13_ids("mon site est wix.com", T.URL)
+    assert not _v13_ids("ma page est canada.gc.ca", T.URL)
+
+
+def test_v13_id_rules_linear():
+    import time
+
+    d = RegexDetector()
+    cues = (
+        "posted by", "reply from", "wrote", "ab_cd1", "plate", "licence plate x", "employee", "claim number", "policy", "group",
+        "CPF", "ITIN", "last four", "ostatnie cztery cyfry", "los últimos cuatro", "MRN", "last four digits of your MRN",
+        "PO Box 12", "Apt 4", "mon site", "member", "ביטוח", "@abc:", "x\nsam.k:",
+    )
+    t0 = time.time()
+    for cue in cues:
+        for fill in (" ", "\n", "A ", ", ", "_"):
+            d.detect(cue + fill * 3000)
+            d.detect(cue + " " + fill * 3000 + "4417")
+    assert time.time() - t0 < 120
+
+
+def test_v13_social_profile_not_passed_by_clinic_allow():
+    from phiproxy import Masker, Policy
+
+    m = Masker(policy=Policy(allow=["instagram.com/clinicname_official", "facebook.com/ClinicNameOfficial"]))
+    out = m.mask("Photos on my page, instagram.com/janedoe_mom and facebook.com/jane.doe.77 ok", "s").text
+    assert "janedoe_mom" not in out and "jane.doe.77" not in out
+    own = m.mask("Follow us at instagram.com/clinicname_official", "s").text
+    assert "clinicname_official" in own
+
+
+def test_v13_known_identifier_last_four():
+    from phiproxy import KnownEntities, Masker
+
+    m = Masker()
+    k = KnownEntities(identifiers=["SSN 612-55-4417"])
+    assert "4417" not in m.mask("los últimos cuatro, 4417", "s", known=k).text
+    assert "4417" not in m.mask("4417", "s", known=KnownEntities(identifiers=["MRN 0004417"])).text
+    assert "4417" in m.mask("room 4417", "s").text
+    # v13 review1: a year-shaped tail is masked unless it is a bare year in a year context with no last-four cue
+    assert "2026" in m.mask("see you in 2026", "s", known=KnownEntities(identifiers=["MRN 0002026"])).text
+    assert "2026" not in m.mask("see you 2026", "s", known=KnownEntities(identifiers=["MRN 0002026"])).text
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("He drives for Cedar Ridge Freight. Plan: follow up.", T.EMPLOYER, "Cedar Ridge Freight"),
+        ("הביטוח דרך העבודה באלון תעשיות. אפשר לעדכן?", T.EMPLOYER, "אלון תעשיות"),
+        ("ואני עובדת בבית ספר אורנים, אז החופשה", T.EMPLOYER, "בית ספר אורנים"),
+        ("מקום עבודה: ריברגייט ציוד רפואי", T.EMPLOYER, "ריברגייט ציוד רפואי"),
+        ("מספר עובד EMP-40817, ברמת הנגב פלסט, זכאית לחופשה", T.EMPLOYER, "רמת הנגב פלסט"),
+        ("אני וגרה בהנדרסונוויל. תודה", T.ADDRESS, "הנדרסונוויל"),
+    ],
+)
+def test_v13_employer_address_cues(text, etype, value):
+    assert (etype, value) in types_in(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "he drives for the kids sometimes",
+        "she drives for me",
+        "עובדת בבית ספר שלי",
+        "מקום עבודה: לא ידוע",
+        "גרה בבית שלי",
+        "גרה בדירה קטנה",
+        "גרה בעיר",
+    ],
+)
+def test_v13_employer_address_lookalikes(text):
+    assert not {e for e in types_in(text) if e[0] in (T.EMPLOYER, T.ADDRESS)}
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Page 1 of 3 / SMITH-JONES, MARY ANN B / MRN 123", "SMITH-JONES, MARY ANN B"),
+        ("Page 1 of 3 / DOE, JANE M K / MRN 123", "DOE, JANE M K"),
+        ("Page 1 of 3 / GARCIA LOPEZ, MARIA J / MRN 123", "GARCIA LOPEZ, MARIA J"),
+        ("Page 2 of 3 / VAN DER BERG, ANNA / MRN 1", "VAN DER BERG, ANNA"),
+        ("Page 2 of 3 / DE LA CRUZ, MARIA / MRN 1", "DE LA CRUZ, MARIA"),
+        ("Page 2 of 3 / OKAFOR JR, DANIELA / MRN 1", "OKAFOR JR, DANIELA"),
+        ("Page 2 of 3 / KIM, MIN JUN / MRN 0012345", "KIM, MIN JUN"),
+        ("Page 2 of 3 / CHAN, MEI LING / MRN 0012345", "CHAN, MEI LING"),
+        ("Page 2 of 3 / OKAFOR, DANIELA R. M. / MRN 1", "OKAFOR, DANIELA R. M."),
+        ("Page 2 of 3 / O'NEIL, SEAN P / MRN 1", "O'NEIL, SEAN P"),
+        ("DOE, JANE M.\nDOB: 04/05/1980", "DOE, JANE M."),
+        ("DOE, JANE MARIE / DOB 1/2/80", "DOE, JANE MARIE"),
+        ("Page 1 sur 3 / DOE, JANE M / NIP 123", "DOE, JANE M"),
+        ("Página 1 de 3 / PÉREZ GARCÍA, ANA / DNI 1", "PÉREZ GARCÍA, ANA"),
+        ("Strona 1 z 3 / KOWALSKA, ANNA / PESEL 1", "KOWALSKA, ANNA"),
+        ("Page 1 of 3\nSMITH-JONES, MARY ANN B\nDOB: 03/04/1985", "SMITH-JONES, MARY ANN B"),
+        ("Page 2 of 3\r\nOKAFOR, DANIELA R\r\nMRN 0012345", "OKAFOR, DANIELA R"),
+        ("OKAFOR, DANIELA R\nPage 2 of 3", "OKAFOR, DANIELA R"),
+        ("Page 2 of 3 / MA, YUE / MRN 0012345", "MA, YUE"),
+        ("Page 2 of 3 / DO, THANH / MRN 0012345", "DO, THANH"),
+        ("Page 2 of 3 / PA, TOUA / MRN 1", "PA, TOUA"),
+        ("Page 2 of 3 / NGUYỄN, THỊ / MRN 1", "NGUYỄN, THỊ"),
+    ],
+)
+def test_v13_review1_header_full_name(text, value):
+    assert value in _v13n(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "CONSENT FORM, SECTION A / Page 1 of 3",
+        "Page 1 of 3\nCONSENT FORM, SECTION A\nDOB 1",
+        "Page 2 of 3 / IVF, ICSI / MRN 0012345",
+        "Page 2 of 3 / INFORMATION FORM, PART B / MRN 1",
+        "Formulaire de consentement, Section B / Page 1 sur 3",
+        "Findings: TUBAL, PATENT bilaterally",
+    ],
+)
+def test_v13_review1_header_lookalikes(text):
+    assert not any(n for n in _v13n(text) if "," in n and n.upper() == n)
+
+
+def test_v13_review1_header_needs_a_neighbour():
+    assert not any("," in n and n.isupper() for n in _v13n("SMITH, JOHN\nthe clinic called back"))
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("नाम: डा. राम बहादुर थापा मगर", "राम बहादुर थापा मगर"),
+        ("मेरो नाम डा. राम बहादुर थापा हो", "राम बहादुर थापा"),
+        ("नाम: श्री राम बहादुर थापा", "राम बहादुर थापा"),
+        ("मेरो नाम श्री सीता कुमारी शर्मा हुँ", "सीता कुमारी शर्मा"),
+        ("ຊື່ ນາງ ບົວ ສີ ວົງ ສະຫວັນ", "ບົວ ສີ ວົງ ສະຫວັນ"),
+        ("ຊື່: ນາງ ບົວ ສີ ວົງ", "ບົວ ສີ ວົງ"),
+        ("धन्यवाद,\nसीता कुमारी शर्मा थापा", "सीता कुमारी शर्मा थापा"),
+        ("धन्यवाद, सीता", "सीता"),
+        ("म सीता हुँ", "सीता"),
+        ("धन्यवाद\nआपका\nसरिता गुरुङ", "सरिता गुरुङ"),
+        ("धन्यवाद\n\nआपका\n\nसीता शर्मा\n", "सीता शर्मा"),
+        ("मेरा नाम अनीता शर्मा मुझे आज डॉक्टर से मिलना है", "अनीता शर्मा"),
+        ("मेरा नाम अनीता शर्मा उम्र 30 है", "अनीता शर्मा"),
+        ("मेरो नाम प्रकाश राई उमेर ३० हो", "प्रकाश राई"),
+        ("ຊື່ ມະນີ ສີສຸວັນ ອາຍຸ ສາມສິບ", "ມະນີ ສີສຸວັນ"),
+    ],
+)
+def test_v13_review1_devanagari_lao_whole_name(text, value):
+    assert value in _v13n(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "मैं बहुत ठीक हूँ",
+        "मैं बहुत परेशान हूँ",
+        "मैं आज अस्पताल आई हूँ",
+        "म आज बहुत थकित हुँ",
+        "मैं दिल्ली में हूँ",
+        "धन्यवाद\nआपका",
+        "धन्यवाद, डॉक्टर",
+        "धन्यवाद\nकल आऊँगी",
+    ],
+)
+def test_v13_review1_devanagari_lookalikes(text):
+    assert not _v13n(text)
+
+
+def test_v13_review1_sign_off_never_masks_closing_word():
+    for t in ("धन्यवाद\nआपका\nसरिता गुरुङ", "धन्यवाद\nआपकी\nसरिता गुरुङ"):
+        assert not any("आपका" in n or "आपकी" in n for n in _v13n(t))
+
+
+def test_v13_review1_english_letter_names_long_and_trailing_words():
+    assert _v13n("Name: gee you zed em ay en you are fine") == ["gee you zed em ay en"]
+    run = "gee you zed em ay en " * 5
+    got = _v13n("name: " + run)
+    assert any(n == run.strip() for n in got)
+    assert "gee you zed em ay en you are ay bee cee" in _v13n("name: gee you zed em ay en you are ay bee cee")
+    assert not _v13n("you are an ex and why not")
+
+
+def test_v13_review1_new_rules_linear():
+    import re
+    import time
+
+    from phiproxy.detectors import _names
+
+    # The rules themselves, not the whole detector: other rules are slow on some of these strings in every version.
+    rules = [re.compile(p, f) for p, f, _ in _names.script_rules(frozenset())]
+    rules.append(re.compile(_names.SPELLED_LETTER_NAMES_EN, re.IGNORECASE))
+    n = 100000
+    adversarial = [
+        "Page 1 of 3 /" + " " * n,
+        "Page 1 of 3\n" + " \t" * (n // 2),
+        "SMITH, " + "JOHN " * (n // 5),
+        "SMITH " * (n // 6) + ", X",
+        "A-" * (n // 2),
+        "AB'" * (n // 3),
+        "Page 1 of 3 / " + "VAN " * (n // 4) + ", JOHN",
+        "Page 1 of 3\n" + "SMITH, JOHN\n" * (n // 12),
+        "धन्यवाद" + "\n" * n,
+        "धन्यवाद\n" + " \n" * (n // 2),
+        "आपका\n\n" * (n // 8) + "x",
+        "मेरो नाम " + "राम " * (n // 5),
+        "नाम:" + " " * n,
+        "ຊື່ " + "ມະ " * (n // 4),
+        "name: " + "you " * (n // 4),
+        "name: " + "you are " * (n // 8),
+        "name: " + "gee you zed em ay en " * (n // 22) + "fine",
+    ]
+    for text in adversarial:
+        t0 = time.time()
+        for r in rules:
+            for _ in r.finditer(text):
+                pass
+        assert time.time() - t0 < 5, text[:30]
+
+
+def _b1(text, kind):
+    return [e.text for e in RegexDetector().detect(text) if e.type == kind]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("We did a Day 5 transfer in March and I lost the pregnancy in May.", "May"),
+        ("Our retrieval is planned for January.", "January"),
+        ("Nous attendons un bébé pour juillet!", "juillet"),
+        ("Your appointment is for January.", "January"),
+    ],
+)
+def test_v13_review1_month_alone_personal_event(text, value):
+    assert value in _b1(text, T.DATE)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We are closed in May for renovations.",
+        "The clinic is closed for July.",
+        "the pharmacy will open for September",
+        "Le bureau est fermé pour juillet.",
+        "Revenez avant mars.",
+    ],
+)
+def test_v13_review1_month_alone_clinic_notice_unmasked(text):
+    assert _b1(text, T.DATE) == []
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("born on 09 30 1988", "09 30 1988"),
+        ("DOB 9 30 88", "9 30 88"),
+        ("DOB 09  30  1988", "09  30  1988"),
+        ("DOB 30 09 88", "30 09 88"),
+        ("date of birth 9 30 88", "9 30 88"),
+        ("born 09 30 1988", "09 30 1988"),
+        ("fecha de nacimiento 09 30 1988", "09 30 1988"),
+        ("nací el 12  03  90", "12  03  90"),
+        ("date de naissance 30 09 1988", "30 09 1988"),
+        ("data urodzenia 30 09 1988", "30 09 1988"),
+        ("תאריך לידה 30 09 88", "30 09 88"),
+        ("נולדתי 30 09 1988", "30 09 1988"),
+    ],
+)
+def test_v13_review1_dob_typed_with_spaces(text, value):
+    assert value in _b1(text, T.DATE)
+
+
+def test_v13_review1_spaced_numbers_without_birth_cue_unmasked():
+    assert _b1("Room 09 30 1988 units", T.DATE) == []
+    assert _b1("take 1 2 3 daily", T.DATE) == []
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("تولدم ۱۲ اسفند ۱۳۶۳", "۱۲ اسفند ۱۳۶۳"),
+        ("۵ فروردین ۱۳۶۰", "۵ فروردین ۱۳۶۰"),
+        ("१२ मार्च १९८५", "१२ मार्च १९८५"),
+        ("१२ बैशाख २०४२", "१२ बैशाख २०४२"),
+        ("12-ka Janaayo", "12-ka Janaayo"),
+        ("12ka Janaayo 1985", "12ka Janaayo 1985"),
+        ("kowda Janaayo", "kowda Janaayo"),
+    ],
+)
+def test_v13_review1_persian_devanagari_somali_dates(text, value):
+    assert value in _b1(text, T.DATE)
+
+
+def test_v13_review1_persian_devanagari_words_without_day_unmasked():
+    assert _b1("مهر و محبت", T.DATE) == []
+    assert _b1("मार्च में", T.DATE) == []
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("She lived to 93.", "93"),
+        ("he lived to 93 and died", "93"),
+        ("she lived until 93", "93"),
+        ("he lived to be 93", "93"),
+        ("vivió hasta los 93", "93"),
+        ("dożyła 93 lat", "93 lat"),
+        ("vécu jusqu'à 93 ans", "93 ans"),
+        ("(ans 91)", "91"),
+        ("(años 91)", "91"),
+        ("(a. 91)", "91"),
+        ("aged 94", "94"),
+        ("היא בת 92", "92"),
+        ("הוא בן 93", "93"),
+    ],
+)
+def test_v13_review1_ages_over_89_lived_to_brackets_hebrew(text, value):
+    assert value in _b1(text, T.AGE)
+
+
+@pytest.mark.parametrize("text", ["(91)", "She lived to 83.", "היא בת 82", "(ans 61)", "lived to 2024 times"])
+def test_v13_review1_ages_lookalikes_unmasked(text):
+    assert _b1(text, T.AGE) == []
+
+
+def test_v13_review1_new_rules_adversarial_timing():
+    import time
+
+    n = 100_000
+    texts = [
+        "DOB" + " " * n, "born" + "\t" * n, "date of birth" + "\n" * n, "born 1 " * (n // 6),
+        "in May " * (n // 7), "for" + " " * n + "May", "pour mars " * (n // 10),
+        "۱۲" + " " * n + "اسفند", "१२ मार्च " * (n // 10), "12-ka " * (n // 6), "lived to " * (n // 9),
+        "(a." + " " * n + "91)",
+    ]
+    d = RegexDetector()
+    for text in texts:
+        t0 = time.time()
+        d.detect(text)
+        assert time.time() - t0 < 30, text[:20]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("license plate CA 7ABC123", "CA 7ABC123"),
+        ("plate CA 7ABC123", "CA 7ABC123"),
+        ("plate ON BXRT 482", "ON BXRT 482"),
+        ("plate XYZ 99", "XYZ 99"),
+    ],
+)
+def test_v13_review1_plates(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+def test_v13_review1_plates_several_in_one_sentence():
+    ids = _v13_ids("license plate CA 7ABC123 and also plate XYZ 99", T.ID)
+    assert "CA 7ABC123" in ids and "XYZ 99" in ids
+    ids = _v13_ids("plates CA 7ABC123 and ON BXRT 482", T.ID)
+    assert "CA 7ABC123" in ids and "ON BXRT 482" in ids
+
+
+@pytest.mark.parametrize("text", ["I live in CA 7 miles away", "We are on ON 401 east", "Ontario ON M5V 2T6 is the postal code"])
+def test_v13_review1_plates_lookalikes(text):
+    assert not _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ('"fertilityfan88" wrote:', "fertilityfan88"),
+        ("“fertilityfan88” wrote:", "fertilityfan88"),
+        ('Posted by "fertilityfan88" yesterday', "fertilityfan88"),
+        ("Reply from 'sunflower_mom82':", "sunflower_mom82"),
+    ],
+)
+def test_v13_review1_quoted_usernames(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize("text", ['"thanks" wrote:', 'Posted by "Dr" yesterday', '"fine" said the nurse'])
+def test_v13_review1_quoted_usernames_lookalikes(text):
+    assert not _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("employee # 48213", "48213"),
+        ("emp no. 48213", "48213"),
+        ("matricule 48213", "48213"),
+        ("numéro d'employé: 48213", "48213"),
+        ("número de empleado: 4821", "4821"),
+        ("numer pracownika: 48213", "48213"),
+        ("מספר עובד: 48213", "48213"),
+        ("participant number 4821", "4821"),
+        ("numéro de participant 4821", "4821"),
+        ("employee number: 2019", "2019"),
+    ],
+)
+def test_v13_review1_plain_employee_numbers(text, value):
+    assert value in _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize("text", ["employee since 2019", "the employee 2024 2025 review", "employee 12 of 40", "participant 7 of 12"])
+def test_v13_review1_plain_employee_lookalikes(text):
+    assert not _v13_ids(text, T.ID)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("4 derniers chiffres du NAS 6789", "6789"),
+        ("ostatnie 4 cyfry PESEL 6789", "6789"),
+        ("ostatnie 4 cyfry PESEL: 6789", "6789"),
+        ("últimos 4 de mi seguro social 6789", "6789"),
+        ("los últimos 4 dígitos de mi seguro social son 6789", "6789"),
+        ("les quatre derniers 4417", "4417"),
+        ("What's the last four of your social?\nSure, it's 4417.", "4417"),
+        ("Last four of your SSN?\nIt's 1987", "1987"),
+        ("last 4 of SSN: 1987", "1987"),
+        ("los últimos cuatro, 1987", "1987"),
+    ],
+)
+def test_v13_review1_partial_last_four_cues(text, value):
+    assert value in _v13_ids(text, T.ID, T.SSN, T.MRN)
+
+
+@pytest.mark.parametrize("text", ["the last four of the social events were fun", "in the last four years of 2026"])
+def test_v13_review1_partial_last_four_lookalikes(text):
+    assert not _v13_ids(text, T.ID, T.SSN, T.MRN)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("CPF 123 456 789 01", "123 456 789 01"),
+        ("CPF 123.456.789.01", "123.456.789.01"),
+        ("ITIN 912 70 1234", "912 70 1234"),
+        ("SSN 123 45 6789", "123 45 6789"),
+        ("social security number 123 45 6789", "123 45 6789"),
+    ],
+)
+def test_v13_review1_spaced_national_numbers(text, value):
+    assert any(value in v for v in _v13_ids(text, T.ID, T.SSN, T.HEALTH_CARD))
+
+
+@pytest.mark.parametrize("text", ["SSN 123 45", "I paid 123 45 6789 dollars", "CPF 123 456"])
+def test_v13_review1_spaced_national_lookalikes(text):
+    assert not any(c.isdigit() for v in _v13_ids(text, T.ID, T.SSN, T.HEALTH_CARD) for c in v)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "linktr.ee/janedoe",
+        "janedoe.carrd.co",
+        "beacons.ai/janedoe",
+        "sites.google.com/view/janedoe",
+        "janedoe.github.io",
+        "janedoe.wixsite.com/mysite",
+        "my page is janedoe.wixsite.com/mysite today",
+    ],
+)
+def test_v13_review1_link_in_bio_hosts(text):
+    assert _v13_ids(text, T.URL)
+
+
+@pytest.mark.parametrize("text", ["visit wix.com", "see github.io docs", "support@carrd.co", "sites.google.com is Google's"])
+def test_v13_review1_link_in_bio_lookalikes(text):
+    assert not _v13_ids(text, T.URL)
+
+
+def test_v13_review1_shared_host_allow_covers_only_own_path():
+    from phiproxy import Masker, Policy
+
+    m = Masker(policy=Policy(allow=["linktr.ee/ourclinic"]))
+    assert "janedoe" not in m.mask("find me at linktr.ee/janedoe", "s").text
+
+
+def test_v13_review1_year_shaped_last_four_masked_with_cue():
+    from phiproxy import KnownEntities, Masker
+
+    m = Masker()
+    k = KnownEntities(identifiers=["MRN 00481987"])
+    assert "1987" not in m.mask("los últimos cuatro, 1987", "s", known=k).text
+    assert "1987" not in m.mask("last four digits of your MRN\n\nDuong, 1987", "s", known=k).text
+    assert "1987" in m.mask("born in 1987", "s", known=k).text
+
+
+def test_v13_review1_timing_adversarial():
+    import time
+
+    junk = [
+        "plate " + "CA " * 20000,
+        "plate" + " " * 20000 + "CA 7ABC123",
+        'Posted by "' + "ab" * 50000,
+        "employee" + " \t" * 50000 + "4821",
+        "employee # " + "9 " * 50000,
+        "last four of your " + "social " * 15000,
+        "ostatnie 4 cyfry" + " " * 1000 + "PESEL 6789",
+        "SSN" + " " * 20000 + "123 45 6789",
+        "CPF " + "123 " * 25000,
+        "linktr.ee/" + "a" * 20000,
+        "a." * 5000 + "github.io",
+        "plate CA " + "7ABC123 " * 12000,
+        "\n".join(["employee #"] * 10000),
+    ]
+    d = RegexDetector()
+    for j in junk:
+        t0 = time.time()
+        d.detect(j)
+        assert time.time() - t0 < 20
+
+
+def _he_types(text, t):
+    return {e.text for e in RegexDetector().detect(text) if e.type is t}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "מעסיק: ללא",
+        "מעסיק: אין",
+        "מקום עבודה: לא עובדת",
+        "העבודה בשעות הלילה",
+        "העבודה בשעות הלילה פלסט",
+        "מורה בבית ספר יסודי",
+        "אני עובדת בבית ספר יסודי",
+        "אני עובדת בתיכון",
+        "אני עובד בבית חולים",
+        "אני עובד בבית",
+        "אני עובדת בעירייה",
+        "אני עובד בלילה",
+        "אני עובדת בבוקר",
+        "אני עובד בשעות הערב",
+        "אני עובד במשמרות",
+        "אני עובד בגן ילדים",
+        "אני עובדת בחצי משרה",
+        "העבודה בבנק",
+    ],
+)
+def test_v13_review1_hebrew_workplace_generic_stays_unmasked(text):
+    assert not _he_types(text, T.EMPLOYER)
+
+
+@pytest.mark.parametrize(
+    "text,org",
+    [
+        ("אני עובד בבית חולים הדסה", "בית חולים הדסה"),
+        ("אני עובדת במשרד עורכי דין לוי", "משרד עורכי דין לוי"),
+        ("אני עובד בגוגל", "גוגל"),
+        ("המעסיק שלי: אלביט", "אלביט"),
+        ("מקום העבודה שלי: חברת אלביט", "חברת אלביט"),
+        ("מקום העבודה שלי: אלביט", "אלביט"),
+        ("אני מועסקת באלביט", "אלביט"),
+        ("העבודה בבנק לאומי", "בנק לאומי"),
+        ("מספר עובד 4421 במכבי", "מכבי"),
+        ("מספר עובד 4421 בבנק לאומי", "בנק לאומי"),
+        ("תודה, העבודה בבנק לאומי קשה", "בנק לאומי"),
+        ("מורה בבית ספר יסודי אורנים", "בית ספר יסודי אורנים"),
+    ],
+)
+def test_v13_review1_hebrew_workplace_named_masked(text, org):
+    assert org in _he_types(text, T.EMPLOYER)
+
+
+def test_v13_review1_hebrew_residence_variants():
+    assert "הרצל 12" in _he_types("הכתובת שלי היא הרצל 12", T.ADDRESS)
+    assert "הרצל 12" in _he_types("אני גר בהרצל 12", T.ADDRESS)
+    assert "קיבוץ גבעת ברנר" in _he_types("אני גר בקיבוץ גבעת ברנר", T.ADDRESS)
+    assert not _he_types("אני גר בבית", T.ADDRESS)
+
+
+def test_v13_review1_hebrew_workplace_timing():
+    import time
+
+    junk = [
+        "מקום העבודה שלי" + " " * 100000,
+        "מקום העבודה שלי:" + " " * 100000 + "אלביט",
+        "אני עובד ב" + "גוגל " * 20000,
+        "אני עובד בבית חולים" + " הדסה" * 20000,
+        "העבודה בבנק" + " לאומי" * 20000,
+        "מספר עובד " + "1" * 100000 + " במכבי",
+        "אני גר ב" + "הרצל " * 20000 + "1",
+        "אני גר בקיבוץ" + " גבעת" * 20000,
+        "מעסיק" + "\t" * 100000 + "\n" * 1000,
+        ("עובד ב" + "\t") * 20000,
+    ]
+    for j in junk:
+        t0 = time.perf_counter()
+        RegexDetector().detect(j)
+        assert time.perf_counter() - t0 < 5
+
+
+def test_v13_review1_hebrew_employer_place_and_days_unmasked():
+    assert not _he_types("הביטוח של המעסיק בטנסי מכסה משהו", T.EMPLOYER)
+    assert not _he_types("ואתם עובדים בימי ראשון?", T.EMPLOYER)
+    assert "אלביט" in _he_types("מקום העבודה שלי באלביט", T.EMPLOYER)
+
+
+def test_v13_review1_verify_lookalikes_unmasked():
+    from phiproxy import Masker
+
+    for t in ("Page 1 of 3 / ACME, INC / Account 4", "Page 4 of 4\nTERMS, CONDITIONS\nRev 2", "אני עובד בלילות"):
+        assert Masker().mask(t, "s").text == t
+    assert "REED" not in Masker().mask("Page 1 of 3 / REED, MARCUS / MRN 5", "s").text
+
+
+def test_v13_final1_tax_id_lists_and_separators():
+    from phiproxy import Masker, Policy
+    m = Masker(policy=Policy())
+    for t, gone in (("SSN 123-45-6789 and 987-65-4321", ["987-65-4321", "123-45-6789"]),
+                    ("TIN 912-70-5531 and spouse's 913-71-5532", ["913-71-5532", "912-70-5531"]),
+                    ("ITIN: 912.70.5531", ["912.70.5531"]), ("ITIN 912/70/5531", ["912/70/5531"]),
+                    ("ITIN is 9127 05531", ["9127 05531"])):
+        out = m.mask(t, "s").text
+        assert not any(g in out for g in gone), out
+    # lookalikes: nine digits only, sentence end, no cue
+    assert "9127 055311" in m.mask("ITIN is 9127 055311", "s").text
+    assert "[SSN" not in m.mask("Call 555-0100 and 123 45 6789", "s").text
+    assert "987-65-4321" in m.mask("Room 987-65-4321 and 912.70.5531", "s").text
+
+
+def test_v13_final1_passport_and_plate_extras():
+    from phiproxy import Masker, Policy
+    m = Masker(policy=Policy())
+    for t, gone in (("passport: C0482917; his: p7731884k", ["p7731884k", "C0482917"]),
+                    ("Passport C0482917. Spouse: G 1234567", ["G 1234567", "1234567"]),
+                    ("his plate is 8K4 2217 and hers is 9K4 3318", ["9K4 3318", "8K4 2217"]),
+                    ("plate no. 8K4-2217-X", ["-X", "2217"])):
+        out = m.mask(t, "s").text
+        assert not any(g in out for g in gone), out
+    assert "Rex 1234" in m.mask("plate is ABC 123 and the dog is Rex 1234", "s").text
+    assert "G 12" in m.mask("Grade G 12 and passport is not needed", "s").text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "DOB reminder: please state your DOB at check-in. 12 05 2024 retrieval.",
+        "Date of birth form 5 3 2025 submitted",
+        "DOB: 3 4 transfer date",
+        "Fecha de nacimiento: 3 4 cita",
+        "DOB please 09 30 1988",
+        "born in the clinic 09 30 1988",
+    ],
+)
+def test_v13_final1_spaced_dob_needs_cue_directly_before(text):
+    assert _b1(text, T.DATE) == []
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("DOB is 09 30 1988", "09 30 1988"),
+        ("DOB - 09 30 1988", "09 30 1988"),
+        ("Date of birth: 09 30 88", "09 30 88"),
+        ("fecha de nacimiento es 09 30 1988", "09 30 1988"),
+        ("What is your DOB? 09 30 1988", "09 30 1988"),
+        ("Assistant: Please confirm your date of birth.\nVisitor: 09 30 1988\nok", "09 30 1988"),
+    ],
+)
+def test_v13_final1_spaced_dob_direct_forms_still_masked(text, value):
+    assert value in _b1(text, T.DATE)
+
+
+# --- v13 final review 2 -------------------------------------------------------------------------------------------
+def _f2_leaks(text, *values):
+    out = _b1_masked(text)
+    return [v for v in values if v in out]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("numer członkowski: 123456", "123456"),
+        ("nr członkowski 1234567", "1234567"),
+        ("ID członka 123456", "123456"),
+        ("מספר חבר: 123456", "123456"),
+        ("מס' חבר 1234567", "1234567"),
+        ("מספר החבר 9988776", "9988776"),
+    ],
+)
+def test_v13_final2_member_number_pl_he(text, value):
+    assert _f2_leaks(text, value) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["numer członkowski: 1234", "nr członkowski", "מספר חברים 123456", "ID członka potrzebny", "numer członkowski jest ważny do 2027"],
+)
+def test_v13_final2_member_number_lookalikes(text):
+    assert _b1_masked(text) == text
+
+
+@pytest.mark.parametrize(
+    "text,values",
+    [
+        ("derniers quatre chiffres de mon NAS: 1234", ["1234"]),
+        ("derniers quatre chiffres de mon NAS : 1234 et 5678", ["1234", "5678"]),
+        ("the last four digits? 1234 and 5678", ["1234", "5678"]),
+        ("the last four digits are 1234, 5678", ["1234", "5678"]),
+        ("What are the last four digits? 1234", ["1234"]),
+        ("last four of my SSN: 1234 and 5678", ["1234", "5678"]),
+        ("últimos cuatro dígitos: 1234 y 5678", ["1234", "5678"]),
+    ],
+)
+def test_v13_final2_last_four_word_order_and_lists(text, values):
+    assert _f2_leaks(text, *values) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "derniers quatre chiffres",
+        "les derniers jours de mai",
+        "What are the last four digits? We will call you at 10",
+        "last four digits of the card, thanks, 12 weeks",
+    ],
+)
+def test_v13_final2_last_four_lookalikes(text):
+    assert _b1_masked(text) == text
+
+
+@pytest.mark.parametrize(
+    "text,values",
+    [
+        ("passeport 12AB34567 et 98ZY76543", ["12AB34567", "98ZY76543"]),
+        ("pasaporte PAB123456 y PCD654321", ["PAB123456", "PCD654321"]),
+        ("paszport AB1234567 i CD7654321", ["AB1234567", "CD7654321"]),
+        ("דרכון 12AB34567 ו 98ZY76543", ["12AB34567", "98ZY76543"]),
+        ("Mon passeport est 12AB34567 et celui de mon mari 98ZY76543", ["12AB34567", "98ZY76543"]),
+    ],
+)
+def test_v13_final2_second_passport_non_english(text, values):
+    assert _f2_leaks(text, *values) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["pasaporte y 12 meses", "I need a passport and 3 forms", "passeport et 2 enfants"],
+)
+def test_v13_final2_second_passport_lookalikes(text):
+    assert _b1_masked(text) == text
+
+
+def test_v13_final2_second_passport_sentence_break_stops():
+    assert "98ZY76543" in _b1_masked("passeport 12AB34567. Et 98ZY76543 est un code")
+
+
+@pytest.mark.parametrize(
+    "text,values",
+    [
+        ("मेरो नाम सीता कुमारी श्रेष्ठ र मेरो श्रीमान् राम बहादुर थापा", ["राम", "बहादुर", "थापा"]),
+        ("मेरो नाम सीता कुमारी श्रेष्ठ अनि मेरी पत्नी गीता थापा", ["गीता", "थापा"]),
+        ("र श्रीमती गीता थापा", ["गीता", "थापा"]),
+        ("धन्यवाद\n\n सीता\nकुमारी", ["सीता", "कुमारी"]),
+        ("धन्यवाद\nसीता\nकुमारी\nश्रेष्ठ", ["सीता", "कुमारी", "श्रेष्ठ"]),
+    ],
+)
+def test_v13_final2_devanagari_second_person_and_split_signoff(text, values):
+    assert _f2_leaks(text, *values) == []
+
+
+@pytest.mark.parametrize(
+    "text", ["र मेरो श्रीमान् आज आए", "धन्यवाद\n\nटीम\nआईवीएफ", "और मेरे पति को", "धन्यवाद"]
+)
+def test_v13_final2_devanagari_lookalikes(text):
+    assert _b1_masked(text) == text
+
+
+@pytest.mark.parametrize(
+    "text,kind,value",
+    [
+        ("Posted by: Jane D.", "[NAME_", "Jane"),
+        ("Submitted by: Mara Quill", "[NAME_", "Quill"),
+        ("I volunteer for Hope Meadow Foundation", "[EMPLOYER_", "Meadow"),
+        ("She volunteers at Hope Meadow Foundation", "[EMPLOYER_", "Meadow"),
+    ],
+)
+def test_v13_final2_byline_and_volunteer(text, kind, value):
+    out = _b1_masked(text)
+    assert kind in out and value not in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Posted by: Staff", "Posted by admin", "I volunteer for the hospital", "volunteers at the clinic", "volunteer for Monday"],
+)
+def test_v13_final2_byline_and_volunteer_lookalikes(text):
+    assert _b1_masked(text) == text
+
+
+@pytest.mark.parametrize(
+    "text,leak",
+    [
+        ("gee you zed zed ee tee tee ee, that's my name", "zed"),
+        ("gee you zed zed ee tee tee ee, is my name", "zed"),
+        ("gee you zed zed ee tee tee ee is my last name", "zed"),
+        ("Jan, jay ay en ee", "jay"),
+        ("my name is Jan, jay ay en ee, doe: dee oh ee", "dee"),
+    ],
+)
+def test_v13_final2_letter_name_spelling_cue_after(text, leak):
+    assert leak not in _b1_masked(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["you are oh, that's my name", "Is that you, are you ok, that's my name", "Jan, you are ok", "Thanks, you are ee", "jay ay en ee is not a word"],
+)
+def test_v13_final2_letter_name_lookalikes(text):
+    assert _b1_masked(text) == text

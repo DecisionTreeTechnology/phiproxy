@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import copy
 import json
 import re
@@ -20,6 +21,53 @@ from .vault import InMemoryVault, Vault
 
 
 _FILE_INITIAL = re.compile(r"_[A-Z](?![^\W_])")
+# Calendar words and a few more that are capitalised in a pair without being a person.
+_COUPLE_NOT = frozenset(
+    """monday tuesday wednesday thursday friday saturday sunday january february march april may june july august
+    september october november december lundi mardi mercredi jeudi vendredi samedi dimanche janvier février fevrier mars
+    avril mai juin juillet août aout septembre octobre novembre décembre decembre lunes martes miércoles miercoles jueves
+    viernes sábado sabado domingo enero febrero marzo abril mayo junio julio agosto septiembre noviembre diciembre
+    poniedziałek wtorek środa czwartek piątek sobota niedziela canada ontario toronto""".split()
+)
+# Name-sized ordinary words that are given names in a pair: "Hannah and Rob".
+_COUPLE_FIRSTS = frozenset(
+    """rob sam jay joe kit lance mike nick ray art guy gene dash drew chase victor miles hope faith grace joy lily daisy
+    iris violet pearl ruby amber jade coral rose holly ivy olive jack dean wade frank mark pat bill clay dale lee""".split()
+)
+# Medicines and brands that are capitalised beside a patient's name ("Sarah and Lupron"): not the other half of a couple.
+_COUPLE_DRUGS = frozenset(
+    """menopur gonal gonalf follistim puregon ovidrel ovitrelle pregnyl novarel cetrotide ganirelix orgalutran lupron
+    lupride leuprolide synarel clomid clomiphene serophene femara letrozole anastrozole arimidex progesterone prometrium
+    crinone endometrin estrace estradiol estrogen provera medrol prednisone dexamethasone tylenol advil motrin aspirin
+    ibuprofen acetaminophen metformin glucophage synthroid levothyroxine cabergoline dostinex bromocriptine doxycycline
+    azithromycin lovenox heparin clexane fragmin orilissa elagolix myfembree oriahnn bravelle fostimon luveris repronex
+    hcg fsh tamoxifen nolvadex viagra cialis zofran benadryl claritin zyrtec nexium prilosec zantac pepcid tums
+    colace miralax gaviscon maalox sudafed mucinex robitussin excedrin aleve naproxen codeine oxycodone valium xanax
+    ativan zoloft prozac lexapro paxil cipralex wellbutrin adderall ritalin ozempic wegovy mounjaro saxenda victoza
+    biotin folgard folic prenatal coq10 inositol myoinositol melatonin ubiquinol""".split()
+)
+_COUPLE_DRUG_SUFFIX = re.compile(r"(?:sterone|estrone|zole|mab|cillin|mycin|floxacin|prazole|statin|formin|pril|sartan|relix)$")
+# An organisation word right after the second name: "Sarah and Brightwell staff", "Ana y Cedarline team".
+_COUPLE_ORG_AFTER = re.compile(
+    r"[ 	]+(?i:staff|team|teams|clinic|clinics|pharmacy|pharmacies|lab|labs|laboratory|office|offices|group|inc|ltd|llc|"
+    r"department|dept|hospital|centre|center|billing|support|nurses?|doctors?|pharma|health|fertility|care|"
+    r"equipo|cl[ií]nica|farmacia|[ée]quipe|zesp[óo][łl]|personnel|hotline|portal|app|website|pharmacy)\b"
+)
+
+
+def _couple_second_ok(text: str, b: int, other: str) -> bool:
+    """The other half of a pair is name-like: a given name, or at least not a medicine, brand or organisation."""
+    lo = other.lower()
+    if lo in _COUPLE_FIRSTS:
+        return True
+    if lo in _COUPLE_DRUGS or _COUPLE_DRUG_SUFFIX.search(lo) or _COUPLE_ORG_AFTER.match(text, b):
+        return False
+    return True
+
+
+_COUPLE = re.compile(
+    r"(?<![\w'’])([A-ZÀ-Þ][^\W\d_'’]{2,24})[ \t]+(?:and|y|et|i|und|ו)[ \t]+(?=([A-ZÀ-Þ][^\W\d_'’]{2,24})(?![\w'’\-]))"
+)
 
 
 class PhiproxyError(Exception):
@@ -60,6 +108,25 @@ class Policy:
     staff: Sequence[str] = ()
     # False: staff first names pass anywhere (unmasks patients who share them).
     staff_need_context: bool = True
+
+
+# Hosts that many people share: an allow-list value on one of them names one account, not the whole host.
+_SHARED_HOSTS = frozenset(
+    "instagram.com facebook.com twitter.com x.com linkedin.com youtube.com tiktok.com threads.net bsky.app "
+    "wix.com wordpress.com blogspot.com gofundme.com medium.com substack.com weebly.com squarespace.com "
+    "linktr.ee beacons.ai carrd.co github.io gitlab.io wixsite.com netlify.app vercel.app webflow.io notion.site "
+    "tumblr.com bio.link lnk.bio ko-fi.com about.me sites.google.com".split()
+)
+
+_SERVICE_LABELS = frozenset(
+    "www portal book booking booknow app my mychart patient patients pay billing shop store blog news careers "
+    "jobs mail info help support forms secure login en fr es pl he".split()
+)
+_GENERIC_PATHS = frozenset(
+    "portal login book booking book-now appointments appointment contact contact-us about about-us services faq faqs "
+    "team our-team locations location hours forms privacy terms blog news careers pricing fees home patient-portal "
+    "patients new-patients resources en fr es pl he".split()
+)
 
 
 def _allow_pattern(value: str) -> Optional[re.Pattern[str]]:
@@ -425,6 +492,7 @@ class Masker:
                 )
             ]
             found = found + [e for e in patient_place if e not in found]
+        cued: set[str] = set()
         if self._staff:
             names = [e for e in found if e.type is EntityType.NAME and e.source != "known"]
             cued = self._staff.cued_words(text, names, anchors=disabled)
@@ -438,7 +506,7 @@ class Masker:
                 )
             ]
         found = self._extend_names(text, found)
-        found = found + self._echoed_names(text, found, disabled, allowed)
+        found = found + self._echoed_names(text, found, disabled, allowed, cued)
         return fill_text(text, merge_entities(found))
 
     _HANDLE_SUFFIX = frozenset("ai clinic fertility ivf official health care hq inc centre center".split())
@@ -448,11 +516,30 @@ class Masker:
         allow list, or the domain of an email on it ("info@maple-fertility.example" allows "portal.maple-fertility.example")."""
         if e.type is not EntityType.URL or e.source != "regex" or "://" in e.text or re.search(r"[?#@]", e.text):
             return False
-        host = e.text.split("/", 1)[0].lower().removeprefix("www.")
+        host, _, path = e.text.lower().partition("/")
+        host = host.removeprefix("www.")
+        # Only a short path of generic site-section words passes: anything else may carry a name or an id.
+        segs = [x for x in path.split("/") if x]
+        if len(segs) > 2 or any(x not in _GENERIC_PATHS for x in segs):
+            return False
         for v in self.policy.allow:
-            for d in re.findall(r"(?:@|\b(?:https?://)?(?:www\.)?)((?:[a-z0-9][a-z0-9\-]*\.)+[a-z]{2,})", v.lower()):
-                if host == d or host.endswith("." + d):
-                    return True
+            v = v.strip().lower()
+            m = re.fullmatch(r"(?:https?://)?(?:www\.)?((?:[a-z0-9][a-z0-9\-]*\.)+[a-z]{2,})/?", v)
+            if m is None:
+                m = re.fullmatch(r"[^\s@/]+@((?:[a-z0-9][a-z0-9\-]*\.)+[a-z]{2,})|@((?:[a-z0-9][a-z0-9\-]*\.)+[a-z]{2,})", v)
+                if m is None:
+                    continue
+                d = m.group(1) or m.group(2)
+            else:
+                d = m.group(1)
+            # A shared platform is never the clinic's whole host.
+            if d in _SHARED_HOSTS:
+                continue
+            if host == d:
+                return True
+            label, dot, rest = host.partition(".")
+            if dot and rest == d and label in _SERVICE_LABELS:
+                return True
         return False
 
     def _own_handle(self, e: Entity) -> bool:
@@ -548,7 +635,8 @@ class Masker:
         return out
 
     def _echoed_names(
-        self, text: str, found: list[Entity], disabled: list[Entity], allowed: list[tuple[int, int]]
+        self, text: str, found: list[Entity], disabled: list[Entity], allowed: list[tuple[int, int]],
+        cued: Optional[set[str]] = None,
     ) -> list[Entity]:
         """A name found once is the same person on its next mention: "Halina Kowalczyk ... Is
         Halina able to come". Capitalized words of 3+ letters from names that a rule or the
@@ -644,7 +732,7 @@ class Masker:
                 continue
             # The whole run of capitalized words around it: "Lawrence Ostrowski, MD", "Ibarra & Wells LLP".
             run_b = b
-            while True:
+            for _ in range(8):  # a short phrase ("Ostrowski, MD", "Ibarra & Wells LLP"); bounded so repeats stay linear
                 nxt = _NEXT_CAP.match(text, run_b)
                 if not nxt:
                     break
@@ -652,6 +740,15 @@ class Masker:
             if any(d.start < b and a < d.end for d in disabled) or _names.is_clinician(text, a, run_b):
                 continue
             repeated = self._repeats_full_name(text, w, a, b, pairs)
+            if not repeated:
+                # A couple written "Hannah and Rob": the second name is a person when the first is a found name.
+                lo = max(0, a - 40)
+                cb = re.search(r"([^\W\d_]+)[ \t]+and[ \t]+$", text[lo:a])
+                if (
+                    cb and cb.group(1)[0].isupper() and cb.group(1).lower() in words and cb.group(1).lower() != w.lower()
+                    and _couple_second_ok(text, b, w)
+                ):
+                    repeated = True
             if (not repeated and self._facility_phrase(text, a, b, run_b)) or self._ordinary_word(
                 text, w, a, b, repeated, possessive
             ):
@@ -664,9 +761,63 @@ class Masker:
             if tail:
                 b = tail.end()  # the same person written "Lopez_M": the initial goes with the surname
             e = Entity(EntityType.NAME, a, b, text[a:b] if tail else m.group(0), "regex")
-            if self._staff and self._staff.on_roster(e):
+            if self._staff and self._staff.passes(text, e, cued or set()):  # an echo of a masked name: staff only in context
                 continue
             out.append(e)
+        # A couple written "Hannah and Marcus": the other half of a pair with a found name is a person when it is a
+        # capitalised word that is not an ordinary word, a brand, a title or a facility.
+        if words:
+            lowers = {x for x in re.findall(r"(?<![^\W_])[^\W\d_]+(?![^\W_])", text) if x.islower()}
+            iv = sorted(taken + [(e.start, e.end) for e in out])
+            starts = [x for x, _ in iv]
+            pmax: list[int] = []
+            for _, y in iv:
+                pmax.append(max(y, pmax[-1]) if pmax else y)
+            claimed: set[tuple[int, int]] = set()
+
+            def hit(a: int, b: int) -> bool:
+                k = bisect.bisect_left(starts, b)
+                return (k > 0 and pmax[k - 1] > a) or (a, b) in claimed  # claims are single words: overlap means the same span
+
+            for m in _COUPLE.finditer(text):
+                w1, w2 = m.group(1), m.group(2)
+                for known, other, span in ((w1, w2, m.span(2)), (w2, w1, m.span(1))):
+                    if span == m.span(2):
+                        known_span = m.span(1)
+                    else:
+                        known_span = m.span(2)
+                    lk = known.lower()
+                    lo = other.lower()
+                    if lk not in words or lo in words or lk in _ECHO_BRANDS or lo == lk:
+                        continue
+                    if not hit(*known_span):
+                        continue  # the known word is not itself masked here
+                    a, b = span
+                    if (
+                        len(other) < 3 or not other[1:].islower() or lo in _ECHO_SKIP or lo in _COUPLE_NOT
+                        or (lo in _ECHO_HOMONYMS and lo not in _COUPLE_FIRSTS) or lo in _ECHO_BRANDS
+                        or lo in lowers or other.upper() in _names.CLINICAL_ABBREVIATIONS or _ROLE_WORD.fullmatch(other)
+                    ):
+                        continue
+                    if hit(a, b) or any(x <= a and b <= y for x, y in allowed):
+                        continue
+                    run_b = b
+                    for _ in range(8):
+                        nxt = _NEXT_CAP.match(text, run_b)
+                        if not nxt:
+                            break
+                        run_b = nxt.end()
+                    if any(d.start < b and a < d.end for d in disabled) or _names.is_clinician(text, a, run_b):
+                        continue
+                    if not _couple_second_ok(text, b, other):
+                        continue
+                    if self._facility_phrase(text, a, b, run_b) or _FIRM_AFTER.match(text, b) or _FIRM_AFTER.match(text, run_b):
+                        continue
+                    e = Entity(EntityType.NAME, a, b, other, "regex")
+                    if self._staff and self._staff.passes(text, e, cued or set()):
+                        continue
+                    out.append(e)
+                    claimed.add((a, b))
         # Polish cases of a surname after "pan/pani": "Roman Gil" ... "pana Gila".
         bases = [w for w in words if len(w) >= 3]
         if bases:
@@ -686,7 +837,7 @@ class Masker:
                     if any(x < b2 and a < y for x, y in taken + [(o.start, o.end) for o in out]) or any(x <= a and b2 <= y for x, y in allowed):
                         continue
                     e = Entity(EntityType.NAME, a, b2, w, "regex")
-                    if self._staff and self._staff.on_roster(e):
+                    if self._staff and self._staff.passes(text, e, cued or set()):  # an echo of a masked name: staff only in context
                         continue
                     out.append(e)
             for m in _PL_TITLE_FORM.finditer(text):
@@ -699,7 +850,7 @@ class Masker:
                 if any(x < b2 and a < y for x, y in taken + [(o.start, o.end) for o in out]) or any(x <= a and b2 <= y for x, y in allowed):
                     continue
                 e = Entity(EntityType.NAME, a, b2, w, "regex")
-                if self._staff and self._staff.on_roster(e):
+                if self._staff and self._staff.passes(text, e, cued or set()):  # an echo of a masked name: staff only in context
                     continue
                 out.append(e)
         # A word that exists only as a title surname or a handle stem keeps one spelling: a case variant
