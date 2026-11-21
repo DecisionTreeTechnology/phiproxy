@@ -4125,7 +4125,9 @@ def test_v13_review1_hebrew_workplace_timing():
     for j in junk:
         t0 = time.perf_counter()
         RegexDetector().detect(j)
-        assert time.perf_counter() - t0 < 5
+        # A guard against quadratic blow-ups (minutes), not a benchmark: the whole detector takes
+        # about 2.5 s on the slowest of these locally (0.1.0a14: 2.4 s), and CI runners are slower.
+        assert time.perf_counter() - t0 < 15
 
 
 def test_v13_review1_hebrew_employer_place_and_days_unmasked():
