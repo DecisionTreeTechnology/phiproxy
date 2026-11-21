@@ -2898,3 +2898,327 @@ def test_v11_final_spoken_plus_pair_grouped_phone():
 )
 def test_v11_final4_non_english_chart_abbreviations_not_initials(text):
     assert not [e for e in RegexDetector().detect(text) if e.type is T.NAME], text
+
+
+def _ids(text):
+    return [e.text for e in RegexDetector().detect(text) if e.type in (T.ID, T.HEALTH_CARD)]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Landing tonight, booking ref ABX7KM, thanks", "ABX7KM"),
+        ("itinerary PNR 4HD8ZT", "4HD8ZT"),
+        ("record locator: QW3R7Y", "QW3R7Y"),
+        ("Hotel reservation LM9P2X for two nights", "LM9P2X"),
+        ("vuelo IB 6123, localizador XT4P8K", "XT4P8K"),
+        ("code de réservation : 7HJ2MQ", "7HJ2MQ"),
+        ("kod rezerwacji 5ZXC3N", "5ZXC3N"),
+        ("קוד הזמנה P8D2QW בבקשה", "P8D2QW"),
+        ("e-ticket 131-5550123456 for Monday", "131-5550123456"),
+        ("bilet elektroniczny 080 5550 1234 56", "080 5550 1234 56"),
+        ("Aadhaar: 5550 1234 5678", "5550 1234 5678"),
+        ("PhilSys ID ko po: 5550-1234-5678-9012", "5550-1234-5678-9012"),
+        ("my NIN is 55501234567", "55501234567"),
+        ("registre national 55.01.23-456.78 merci", "55.01.23-456.78"),
+        ("Counsel for the IPs, WSBA No. 55512", "55512"),
+        ("Attorney bar number is 55512.", "55512"),
+        ("nr w izbie BAR 55512, podpisze", "BAR 55512"),
+        ("numéro de membre du Barreau est le 555123-4", "555123-4"),
+        ("Notary commission no. NP 555123", "NP 555123"),
+        ("Parentage case number is 26-3-05512-1 SEA.", "26-3-05512-1 SEA"),
+        ("expediente del juzgado es FAM-2025/5512", "FAM-2025/5512"),
+        ("PESEL: 8S0555O4531", "8S0555O4531"),
+        ("band number is 0555-1234", "0555-1234"),
+        ("パスポート番号はAB1234567です", "AB1234567"),
+        ("ホテルの予約番号はHB-5512004。", "HB-5512004"),
+    ],
+)
+def test_v12_travel_legal_and_foreign_ids(text, value):
+    assert any(value in v or v in value for v in _ids(text)), _ids(text)
+
+
+@pytest.mark.parametrize(
+    "text,etype,value",
+    [
+        ("insurance card number WXA 4410 2287 on the form", T.HEALTH_CARD, "WXA 4410 2287"),
+        ("subscriber, member ID OH 9921 4420 7.", T.HEALTH_CARD, "OH 9921 4420 7"),
+        ("מספר חבר WAX 2241 8830, פוליסה", T.HEALTH_CARD, "WAX 2241 8830"),
+        ("כרטיס בריאות SK: 555 345 789 |", T.HEALTH_CARD, "555 345 789"),
+    ],
+)
+def test_v12_member_card_in_letter_digit_groups(text, etype, value):
+    assert value in [e.text for e in RegexDetector().detect(text) if e.type is etype]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the bar is open until 11, booking 2 nights, confirmation code sent by email",
+        "booking ref is in the email; confirmation number 1234",
+        "reservation MONDAY for 4 at the bar 5pm",  # no digit in the word, bar cue without a long number
+        "e-ticket sent, flight 131 on 2026-12-01",
+        "member since 2019, insurance plan AB 12",
+        "case number is pending, bar number unknown",
+        "PNR is on the screen",
+        "Aadhaar was requested, phone 555 010 2288",
+        "national ID 12345",
+    ],
+)
+def test_v12_id_lookalikes_not_masked(text):
+    assert not _ids(text), _ids(text)
+
+
+def test_v12_e_ticket_not_a_helpdesk_ticket():
+    # an IT "ticket" number still passes, an airline e-ticket never does
+    assert not _ids("ticket 5551234567890 opened with IT")
+    assert _ids("e-ticket 5551234567890 for the flight")
+
+
+def test_v12_re_ticket_still_helpdesk():
+    # "Re ticket": the "e" belongs to "Re", not to "e-ticket"
+    assert not _ids("Re ticket #XY-20931: escalated")
+
+
+def _v12_vals(text, kind):
+    return [e.text for e in RegexDetector().detect(text) if e.type is kind]
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("- Paternal grandfather: Ed Smith, d. June 2011 at 93, cause unknown", "93"),
+        ("I-2: maternal grandmother, Ann Lee, d. at 92, no cancer", "92"),
+        ("- Grandmother, Rita Jones, alive, 93, diabetes", "93"),
+        ("Maternal grandmother, 91, alive", "91"),
+        ("II-3 mother (94), diabetes", "94"),
+        ("d. 2019 aged 92, grandfather", "92"),
+        ("Grandma died in 1987 at 91 of cancer, so she was 91.", "91"),
+        ("Бабуся померла у 93 роки", "93 роки"),
+    ],
+)
+def test_v12_old_age_in_pedigree(text, value):
+    assert value in _v12_vals(text, T.AGE)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "- Grandfather, Ed Smith, died 1998-11-02 aged 58, heart attack",
+        "Dad d. at 85",
+        "my brother died at 61",
+        "Maternal grandmother, 89, alive",
+        "my brother, 100 mg daily",
+        "Mother Anna 91 Elm Street",
+        "alive 95 days ago",
+        "Patient: I live in unit 95, alive and well",
+    ],
+)
+def test_v12_old_age_lookalikes(text):
+    assert not _v12_vals(text, T.AGE)
+
+
+@pytest.mark.parametrize(
+    "text,value",
+    [
+        ("Прилетимо до міста 14 грудня.", "14 грудня"),
+        ("Мы прилетим 14 декабря 2026, рейс поздно.", "14 декабря 2026"),
+        ("Приём 3-го марта в клинике", "3-го марта"),
+    ],
+)
+def test_v12_cyrillic_dates(text, value):
+    assert value in _v12_vals(text, T.DATE)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "У меня 14 котов",
+    ],
+)
+def test_v12_date_lookalikes(text):
+    assert not _v12_vals(text, T.DATE)
+
+
+def test_v12_real_dates_kept():
+    assert "the 4th" in _v12_vals("Can we do the 4th at noon?", T.DATE)
+    assert "3.5-12" in _v12_vals("seen 3.5-12 ok", T.DATE)
+
+
+def _v12_found(text):
+    return {(e.type.name, e.text) for e in RegexDetector().detect(text)}
+
+
+def test_v12_foreign_addresses_and_postcodes():
+    f = _v12_found("Our address: Lot 7 Block 3 Palm Heights, Davao City, 8000. Thanks")
+    assert ("ADDRESS", "Lot 7 Block 3 Palm Heights, Davao City") in f and ("POSTAL_CODE", "8000") in f
+    assert ("ADDRESS", "9 Elmwood Rise, Leeds") in _v12_found("Please invoice 9 Elmwood Rise, Leeds.")
+    assert ("POSTAL_CODE", "560001") in _v12_found("agency in Bengaluru, pin 560001.")
+    assert ("POSTAL_CODE", "2000") in _v12_found("postcode 2000 for the courier")
+    assert ("ADDRESS", "Calle Mayor 14, 3º B") in _v12_found("vivo en Calle Mayor 14, 3º B, 28013 Madrid")
+    assert ("ADDRESS", "Calle 5 de Mayo 77, Tepic") in _v12_found("Domicilio: Calle 5 de Mayo 77, Tepic, Nayarit")
+    assert ("ADDRESS", "rue Principale nord, au 305") in _v12_found("sur la rue Principale nord, au 305.")
+    assert ("POSTAL_CODE", "03940") in _v12_found("domiciliados en Av. Reforma 12, piso 4, Col. Centro, Ciudad de México, 03940, y la gestante")
+    assert ("ZIP", "98101") in _v12_found("¿Y el código postal?\n[00:00:18] Speaker 2: Nueve ocho uno cero uno, creo. No, espere, 98101, ese.")
+    assert ("ADDRESS", "Tilo") in _v12_found("I live on the reserve near Tilo and drive down")
+    assert ("ADDRESS", "Obolon, Kyiv") in _v12_found("Our home is Obolon, Kyiv if you need to send anything.")
+    assert ("ADDRESS", "Cebu") in _v12_found("I moved to Regina in March from Cebu, I work as an aide.")
+    assert ("ADDRESS", "Pune") in _v12_found("We're from Pune and arrive Monday.")
+
+
+def test_v12_foreign_address_lookalikes_not_masked():
+    for t in [
+        "My pin 4412 for the portal",  # a four-digit PIN is not a postcode
+        "Lot 5512 expires soon, block of 12 vials",  # a product lot, not a lot-and-block address
+        "FSH levels rise in 3 days, then close the cycle",
+        "We moved to Recovery after the procedure.",
+        "I moved from Gonal-f to Menopur 75.",
+        "We are from the Nigerian community.",
+        "We are from Poland.",
+        "I'm from Canada.",
+        "address on file, 2026",  # a year after an address cue is not a postcode
+        "She lives well, 4000 steps a day",
+    ]:
+        assert not {x for x in _v12_found(t) if x[0] in ("ADDRESS", "POSTAL_CODE", "ZIP")}, t
+
+
+def test_v12_school_and_hospital_employer():
+    assert ("EMPLOYER", "Liceum Ogólnokształcącego im. Kopernika") in _v12_found("Chodzi do szkoły Liceum Ogólnokształcącego im. Kopernika. Mam")
+    assert ("EMPLOYER", "Uniwersytecie Jagiellońskim") in _v12_found("Studiuje na Uniwersytecie Jagiellońskim w Krakowie.")
+    assert ("EMPLOYER", "Hospital Infantil Santa Ana") in _v12_found("Mi hijo trabaja en Hospital Infantil Santa Ana hoy.")
+    assert ("EMPLOYER", "תיכון ליד האוניברסיטה") in _v12_found("בית הספר: תיכון ליד האוניברסיטה. שמי")
+    assert ("EMPLOYER", "אוניברסיטת חיפה") in _v12_found("מלמדת באוניברסיטת חיפה, והבעל")
+    # Lowercase words after the institution word are not part of the name.
+    assert ("EMPLOYER", "Hospital Infantil Santa Ana hoy") not in _v12_found("Mi hijo trabaja en Hospital Infantil Santa Ana hoy.")
+    assert not [x for x in _v12_found("Chodzi do szkoły w Gdańsku.") if x[0] == "EMPLOYER"]
+
+
+def test_v12_uk_postcode_and_town_postcode():
+    assert ("POSTAL_CODE", "AB12 3CD") in _v12_found("Postcode AB12 3CD please")
+    assert ("POSTAL_CODE", "M1 1AE") in _v12_found("Send to 4 Rowan Close, Salford M1 1AE.")
+    assert ("POSTAL_CODE", "45600") in _v12_found("Dirección de entrega: Av. Norte 12, Col. Sol, Tlaquepaque 45600. Gracias")
+    assert ("POSTAL_CODE", "06600") in _v12_found("domiciliados en Calle Sur 22, Piso 9, Ciudad de México, 06600 (los padres)")
+    # Capitals and digits in other shapes are not a postcode.
+    assert not [x for x in _v12_found("Lab tube AB123 CD and sample X12 ready") if x[0] == "POSTAL_CODE"]
+    assert not [x for x in _v12_found("Dirección: calle Sur 1, 2026 fue el año") if x[0] == "POSTAL_CODE"]
+
+
+def _b1_found(text):
+    return {(e.type.name, e.text) for e in RegexDetector().detect(text)}
+
+
+def _b1_masked(text):
+    from phiproxy import Masker, Policy
+
+    return Masker(policy=Policy()).mask(text, "s").text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "your portal PIN 123456",
+        "reset your pin 123456",
+        "My PIN: 123456 for the portal",
+        "the bank PIN is 123456",
+        "pin 1234",
+    ],
+)
+def test_v12_review1_pin_secret_not_postcode(text):
+    assert not [x for x in _b1_found(text) if x[0] in ("POSTAL_CODE", "ZIP")]
+
+
+def test_v12_review1_pin_in_address_still_postcode():
+    assert ("POSTAL_CODE", "560001") in _b1_found("agency in Bengaluru, pin 560001.")
+    assert ("POSTAL_CODE", "411001") in _b1_found("Our address: 12 MG Road, Pune pin 411001")
+    assert ("POSTAL_CODE", "560001") in _b1_found("PIN code 560001")
+    assert not _b1_found("reset your PIN code 123456")
+
+
+def test_v12_review1_postal_code_one_type():
+    f = _b1_found("postal code 12345 format")
+    assert [x for x in f if x[0] in ("POSTAL_CODE", "ZIP")] == [("POSTAL_CODE", "12345")]
+    assert ("ZIP", "98101") in _b1_found("¿Y el código postal?\n[00:00:18] Speaker 2: Nueve ocho uno cero uno, creo. No, espere, 98101, ese.")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "va al Hospital Regina",
+        "je vais à l'Hôpital Regina",
+        "je vais à la Clinique de fertilité",
+        "voy a la Clínica Santa Ana mañana",
+        "Pracuje w Szpitalu",
+        "chodzi do szkoły Liceum",
+        "idę do Szpitala Bielańskiego jutro",
+        "trabaja en la Clínica de fertilidad",
+    ],
+)
+def test_v12_review1_employer_no_visit_or_generic(text):
+    assert not [x for x in _b1_found(text) if x[0] == "EMPLOYER" and (len(x[1]) > 7 or " " in x[1])]
+
+
+def test_v12_review1_employer_named_still_masked():
+    assert ("EMPLOYER", "Hospital Infantil Santa Ana") in _b1_found("Mi hijo trabaja en Hospital Infantil Santa Ana hoy.")
+    assert ("EMPLOYER", "Université de Montréal") in _b1_found("elle étudie à l'Université de Montréal")
+    assert ("EMPLOYER", "Liceum Ogólnokształcącego im. Kopernika") in _b1_found("Chodzi do szkoły Liceum Ogólnokształcącego im. Kopernika. Mam")
+    assert not [x for x in _b1_found("trabaja en la Clínica de fertilidad") if "de" in x[1].split()]
+
+
+@pytest.mark.parametrize(
+    "text,age",
+    [
+        ("babcia zmarła mając 92 lata", "92"),
+        ("dziadek zmarł mając 95 lat", "95"),
+        ("Passed away in 2015 at the age of 94", "94"),
+        ("died in 2015 aged 92", "92"),
+        ("Died in 2015 at 94", "94"),
+    ],
+)
+def test_v12_review1_age_after_death_word(text, age):
+    assert ("AGE", age) in _b1_found(text)
+
+
+@pytest.mark.parametrize("text", ["He died at 95 Elm St", "She passed away at 100 mg", "He died on June 3 at 10 pm", "died in 2015 at 5 pm"])
+def test_v12_review1_age_after_death_lookalikes(text):
+    assert not [x for x in _b1_found(text) if x[0] == "AGE"]
+
+
+def test_v12_review1_indian_address_with_pin():
+    assert _b1_masked("House no 45, Sector 21, Gurgaon 122001") == "[ADDRESS_1]"
+    assert _b1_masked("Flat 301, Sunrise Apts, MG Road, Bangalore - 560001") == "[ADDRESS_1]"
+    for t in ["Flat 301 is nice", "House no 45 is fine, call 122001 times", "Bangalore - 560001"]:
+        assert not [x for x in _b1_found(t) if x[0] == "ADDRESS"], t
+
+
+def test_v12_review1_uk_mexico_phone_after_cue():
+    assert _b1_masked("Call me on 07911 123456") == "Call me on [PHONE_1]"
+    assert _b1_masked("phone: 07911 123 456 thanks") == "phone: [PHONE_1] thanks"
+    assert _b1_masked("My number is (55) 1234-5678") == "My number is [PHONE_1]"
+    for t in ["07911 123456", "(55) 1234-5678", "order 07911 123456 shipped"]:
+        assert not [x for x in _b1_found(t) if x[0] == "PHONE"], t
+
+
+def test_v12_review1_philippine_brgy_address():
+    assert _b1_masked("Blk 5 Lot 7 Brgy. San Antonio, Quezon City") == "[ADDRESS_1]"
+    assert _b1_masked("Blk 5 Lot 7 Brgy San Antonio, Quezon City.") == "[ADDRESS_1]."
+    assert not [x for x in _b1_found("Brgy. is a unit") if x[0] == "ADDRESS"]
+
+
+def test_v12_review1_nhs_and_my_number_masked():
+    # The value must be masked; its type may be PHONE (phone rules are never suppressed by a nearby "NHS").
+    assert "943 476 5919" not in _b1_masked("My NHS number is 943 476 5919")
+    assert "1234 5678 9012" not in _b1_masked("My Number 1234 5678 9012")
+    assert "[PHONE" in _b1_masked("my number is 416 555 0147")
+    assert "416-555-0142" not in _b1_masked("I spoke to NHS, my number is 416-555-0142")
+
+
+def test_v12_final2_age_rule_linear_and_ranges_masked():
+    import time
+
+    d = RegexDetector()
+    t0 = time.time()
+    d.detect("alive" + " " * 20000)
+    d.detect("My grandfather died" + "\n" * 8000 + "and the clinic called.")
+    assert time.time() - t0 < 5
+    # A d.m-yy shape stays a possible date even after a range word (no exclusion: "DOB (ref) 3.5-12").
+    assert [e for e in d.detect("DOB (ref) 3.5-12") if e.type is T.DATE]
