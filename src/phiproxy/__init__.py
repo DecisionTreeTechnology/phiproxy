@@ -10,7 +10,7 @@ from .entities import Entity, EntityType
 from .masker import Masker, MaskResult, PhiproxyError, Policy, StreamUnmasker, UnsupportedContentError
 from .vault import InMemoryVault, RedisVault, Vault
 
-__version__ = "0.1.0a12"
+__version__ = "0.1.0a13"
 
 __all__ = [
     "Entity",
